@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      gridTemplateColumns: {
+        '14': 'repeat(14, minmax(0, 1fr))',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,33 +60,58 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        civic: {
+          navy: "hsl(var(--civic-navy))",
+          "navy-light": "hsl(var(--civic-navy-light))",
+          blue: "hsl(var(--civic-blue))",
+          gold: "hsl(var(--civic-gold))",
+          "gold-light": "hsl(var(--civic-gold-light))",
+          red: "hsl(var(--civic-red))",
+          green: "hsl(var(--civic-green))",
+          slate: "hsl(var(--civic-slate))",
+        },
+        score: {
+          excellent: "hsl(var(--score-excellent))",
+          good: "hsl(var(--score-good))",
+          average: "hsl(var(--score-average))",
+          poor: "hsl(var(--score-poor))",
+          bad: "hsl(var(--score-bad))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        serif: ['Playfair Display', 'Georgia', 'serif'],
+      },
+      boxShadow: {
+        'civic-sm': 'var(--shadow-sm)',
+        'civic-md': 'var(--shadow-md)',
+        'civic-lg': 'var(--shadow-lg)',
+        'civic-xl': 'var(--shadow-xl)',
+        'civic-glow': 'var(--shadow-glow)',
+      },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "score-fill": {
+          from: { strokeDashoffset: "100" },
+          to: { strokeDashoffset: "var(--score-offset)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "score-fill": "score-fill 1s ease-out forwards",
       },
     },
   },
