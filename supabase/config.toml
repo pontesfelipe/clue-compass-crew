@@ -1,1 +1,4 @@
 project_id = "ifdorcgbhxzwktjlxqfo"
+
+[functions.sync-congress-members]
+verify_jwt = false

@@ -5,6 +5,7 @@ import { FeatureCard } from "@/components/FeatureCard";
 import { USMap } from "@/components/USMap";
 import { MemberCard } from "@/components/MemberCard";
 import { ScoreRing } from "@/components/ScoreRing";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BarChart3, 
   Scale, 
@@ -17,15 +18,11 @@ import {
   Shield
 } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const featuredMembers = [
-  { id: "A000360", name: "Lamar Alexander", party: "R" as const, state: "TN", chamber: "Senate" as const, score: 78 },
-  { id: "B001230", name: "Tammy Baldwin", party: "D" as const, state: "WI", chamber: "Senate" as const, score: 82 },
-  { id: "C001035", name: "Susan Collins", party: "R" as const, state: "ME", chamber: "Senate" as const, score: 85 },
-  { id: "K000367", name: "Amy Klobuchar", party: "D" as const, state: "MN", chamber: "Senate" as const, score: 79 },
-];
+import { useTopMembers } from "@/hooks/useMembers";
 
 export default function Index() {
+  const { data: topMembers, isLoading } = useTopMembers(4);
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <Header />
@@ -177,15 +174,38 @@ export default function Index() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredMembers.map((member, index) => (
-              <div
-                key={member.id}
-                className="opacity-0 animate-slide-up"
-                style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
-              >
-                <MemberCard {...member} />
-              </div>
-            ))}
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-16 w-16 rounded-full mx-auto" />
+                </div>
+              ))
+            ) : (
+              topMembers?.map((member, index) => (
+                <div
+                  key={member.id}
+                  className="opacity-0 animate-slide-up"
+                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
+                >
+                  <MemberCard
+                    id={member.id}
+                    name={member.full_name}
+                    party={member.party}
+                    state={member.state}
+                    chamber={member.chamber === "senate" ? "Senate" : "House"}
+                    score={member.score ?? 0}
+                    imageUrl={member.image_url}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
