@@ -47,45 +47,35 @@ Deno.serve(async (req) => {
 
     console.log('Starting Congress member sync...')
 
-    // Fetch current members from Congress.gov API
-    const members: CongressMember[] = []
+    // Fetch all current members from Congress.gov API
+    const members: any[] = []
+    let offset = 0
+    const limit = 250
+    let hasMore = true
     
-    // Fetch from both chambers - current Congress (119th)
-    for (const chamber of ['senate', 'house']) {
-      console.log(`Fetching ${chamber} members...`)
+    while (hasMore) {
+      const url = `https://api.congress.gov/v3/member?format=json&currentMember=true&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
+      console.log(`Fetching batch at offset ${offset}...`)
       
-      let offset = 0
-      const limit = 250
-      let hasMore = true
+      const response = await fetch(url)
       
-      while (hasMore) {
-        const url = `https://api.congress.gov/v3/member?format=json&currentMember=true&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
-        console.log(`Fetching: ${url.replace(congressApiKey, 'API_KEY')}`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`Congress API error: ${response.status} - ${errorText}`)
+        throw new Error(`Congress API error: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.members && data.members.length > 0) {
+        members.push(...data.members)
+        console.log(`Fetched ${data.members.length} members (total: ${members.length})`)
         
-        const response = await fetch(url)
-        
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(`Congress API error: ${response.status} - ${errorText}`)
-          throw new Error(`Congress API error: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        
-        if (data.members && data.members.length > 0) {
-          // Filter by chamber
-          const chamberMembers = data.members.filter((m: any) => {
-            const latestTerm = m.terms?.item?.[0]
-            return latestTerm?.chamber?.toLowerCase() === chamber
-          })
-          members.push(...chamberMembers)
-          console.log(`Found ${chamberMembers.length} ${chamber} members in this batch`)
-          
-          offset += limit
-          hasMore = data.members.length === limit
-        } else {
-          hasMore = false
-        }
+        offset += limit
+        // Continue if we got a full batch
+        hasMore = data.members.length === limit
+      } else {
+        hasMore = false
       }
     }
 
