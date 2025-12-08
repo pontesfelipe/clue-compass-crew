@@ -14,7 +14,400 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bill_sponsorships: {
+        Row: {
+          bill_id: string
+          cosponsored_date: string | null
+          created_at: string | null
+          id: string
+          is_original_cosponsor: boolean | null
+          is_sponsor: boolean | null
+          member_id: string
+        }
+        Insert: {
+          bill_id: string
+          cosponsored_date?: string | null
+          created_at?: string | null
+          id?: string
+          is_original_cosponsor?: boolean | null
+          is_sponsor?: boolean | null
+          member_id: string
+        }
+        Update: {
+          bill_id?: string
+          cosponsored_date?: string | null
+          created_at?: string | null
+          id?: string
+          is_original_cosponsor?: boolean | null
+          is_sponsor?: boolean | null
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_sponsorships_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_sponsorships_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bills: {
+        Row: {
+          bill_number: number
+          bill_type: Database["public"]["Enums"]["bill_type"]
+          congress: number
+          created_at: string | null
+          enacted: boolean | null
+          enacted_date: string | null
+          id: string
+          introduced_date: string | null
+          latest_action_date: string | null
+          latest_action_text: string | null
+          policy_area: string | null
+          short_title: string | null
+          subjects: string[] | null
+          summary: string | null
+          title: string
+          updated_at: string | null
+          url: string | null
+        }
+        Insert: {
+          bill_number: number
+          bill_type: Database["public"]["Enums"]["bill_type"]
+          congress: number
+          created_at?: string | null
+          enacted?: boolean | null
+          enacted_date?: string | null
+          id?: string
+          introduced_date?: string | null
+          latest_action_date?: string | null
+          latest_action_text?: string | null
+          policy_area?: string | null
+          short_title?: string | null
+          subjects?: string[] | null
+          summary?: string | null
+          title: string
+          updated_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          bill_number?: number
+          bill_type?: Database["public"]["Enums"]["bill_type"]
+          congress?: number
+          created_at?: string | null
+          enacted?: boolean | null
+          enacted_date?: string | null
+          id?: string
+          introduced_date?: string | null
+          latest_action_date?: string | null
+          latest_action_text?: string | null
+          policy_area?: string | null
+          short_title?: string | null
+          subjects?: string[] | null
+          summary?: string | null
+          title?: string
+          updated_at?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
+      member_scores: {
+        Row: {
+          attendance_score: number | null
+          bills_cosponsored: number | null
+          bills_enacted: number | null
+          bills_sponsored: number | null
+          bipartisan_bills: number | null
+          bipartisanship_score: number | null
+          calculated_at: string | null
+          id: string
+          issue_alignment_score: number | null
+          member_id: string
+          overall_score: number | null
+          productivity_score: number | null
+          user_id: string | null
+          votes_cast: number | null
+          votes_missed: number | null
+        }
+        Insert: {
+          attendance_score?: number | null
+          bills_cosponsored?: number | null
+          bills_enacted?: number | null
+          bills_sponsored?: number | null
+          bipartisan_bills?: number | null
+          bipartisanship_score?: number | null
+          calculated_at?: string | null
+          id?: string
+          issue_alignment_score?: number | null
+          member_id: string
+          overall_score?: number | null
+          productivity_score?: number | null
+          user_id?: string | null
+          votes_cast?: number | null
+          votes_missed?: number | null
+        }
+        Update: {
+          attendance_score?: number | null
+          bills_cosponsored?: number | null
+          bills_enacted?: number | null
+          bills_sponsored?: number | null
+          bipartisan_bills?: number | null
+          bipartisanship_score?: number | null
+          calculated_at?: string | null
+          id?: string
+          issue_alignment_score?: number | null
+          member_id?: string
+          overall_score?: number | null
+          productivity_score?: number | null
+          user_id?: string | null
+          votes_cast?: number | null
+          votes_missed?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_scores_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_votes: {
+        Row: {
+          created_at: string | null
+          id: string
+          member_id: string
+          position: Database["public"]["Enums"]["vote_position"]
+          vote_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          member_id: string
+          position: Database["public"]["Enums"]["vote_position"]
+          vote_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          member_id?: string
+          position?: Database["public"]["Enums"]["vote_position"]
+          vote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_votes_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_votes_vote_id_fkey"
+            columns: ["vote_id"]
+            isOneToOne: false
+            referencedRelation: "votes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      members: {
+        Row: {
+          bioguide_id: string
+          chamber: Database["public"]["Enums"]["chamber_type"]
+          created_at: string | null
+          district: string | null
+          end_date: string | null
+          first_name: string
+          full_name: string
+          id: string
+          image_url: string | null
+          in_office: boolean | null
+          last_name: string
+          party: Database["public"]["Enums"]["party_type"]
+          start_date: string | null
+          state: string
+          twitter_handle: string | null
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          bioguide_id: string
+          chamber: Database["public"]["Enums"]["chamber_type"]
+          created_at?: string | null
+          district?: string | null
+          end_date?: string | null
+          first_name: string
+          full_name: string
+          id?: string
+          image_url?: string | null
+          in_office?: boolean | null
+          last_name: string
+          party: Database["public"]["Enums"]["party_type"]
+          start_date?: string | null
+          state: string
+          twitter_handle?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          bioguide_id?: string
+          chamber?: Database["public"]["Enums"]["chamber_type"]
+          created_at?: string | null
+          district?: string | null
+          end_date?: string | null
+          first_name?: string
+          full_name?: string
+          id?: string
+          image_url?: string | null
+          in_office?: boolean | null
+          last_name?: string
+          party?: Database["public"]["Enums"]["party_type"]
+          start_date?: string | null
+          state?: string
+          twitter_handle?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          display_name: string | null
+          email: string | null
+          home_state: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_name?: string | null
+          email?: string | null
+          home_state?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string | null
+          email?: string | null
+          home_state?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_scoring_preferences: {
+        Row: {
+          attendance_weight: number | null
+          bipartisanship_weight: number | null
+          created_at: string | null
+          id: string
+          issue_alignment_weight: number | null
+          priority_issues: string[] | null
+          productivity_weight: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          attendance_weight?: number | null
+          bipartisanship_weight?: number | null
+          created_at?: string | null
+          id?: string
+          issue_alignment_weight?: number | null
+          priority_issues?: string[] | null
+          productivity_weight?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          attendance_weight?: number | null
+          bipartisanship_weight?: number | null
+          created_at?: string | null
+          id?: string
+          issue_alignment_weight?: number | null
+          priority_issues?: string[] | null
+          productivity_weight?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          bill_id: string | null
+          chamber: Database["public"]["Enums"]["chamber_type"]
+          congress: number
+          created_at: string | null
+          description: string | null
+          id: string
+          question: string | null
+          result: string | null
+          roll_number: number
+          session: number
+          total_nay: number | null
+          total_not_voting: number | null
+          total_present: number | null
+          total_yea: number | null
+          vote_date: string
+        }
+        Insert: {
+          bill_id?: string | null
+          chamber: Database["public"]["Enums"]["chamber_type"]
+          congress: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          question?: string | null
+          result?: string | null
+          roll_number: number
+          session: number
+          total_nay?: number | null
+          total_not_voting?: number | null
+          total_present?: number | null
+          total_yea?: number | null
+          vote_date: string
+        }
+        Update: {
+          bill_id?: string | null
+          chamber?: Database["public"]["Enums"]["chamber_type"]
+          congress?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          question?: string | null
+          result?: string | null
+          roll_number?: number
+          session?: number
+          total_nay?: number | null
+          total_not_voting?: number | null
+          total_present?: number | null
+          total_yea?: number | null
+          vote_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +416,18 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      bill_type:
+        | "hr"
+        | "s"
+        | "hjres"
+        | "sjres"
+        | "hconres"
+        | "sconres"
+        | "hres"
+        | "sres"
+      chamber_type: "house" | "senate"
+      party_type: "D" | "R" | "I" | "L"
+      vote_position: "yea" | "nay" | "present" | "not_voting"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +554,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      bill_type: [
+        "hr",
+        "s",
+        "hjres",
+        "sjres",
+        "hconres",
+        "sconres",
+        "hres",
+        "sres",
+      ],
+      chamber_type: ["house", "senate"],
+      party_type: ["D", "R", "I", "L"],
+      vote_position: ["yea", "nay", "present", "not_voting"],
+    },
   },
 } as const
