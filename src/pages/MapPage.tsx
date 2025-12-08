@@ -3,6 +3,7 @@ import { Footer } from "@/components/Footer";
 import { USMap } from "@/components/USMap";
 import { StatsCard } from "@/components/StatsCard";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Users, 
   FileText, 
@@ -11,8 +12,63 @@ import {
   Filter,
   Download
 } from "lucide-react";
+import { useStateScores, getNationalAverage } from "@/hooks/useStateData";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+function useNationalStats() {
+  return useQuery({
+    queryKey: ["national-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select(`
+          id,
+          member_scores!inner (
+            overall_score,
+            attendance_score,
+            bills_sponsored
+          )
+        `)
+        .eq("in_office", true)
+        .is("member_scores.user_id", null);
+
+      if (error) throw error;
+
+      const members = data || [];
+      const memberCount = members.length;
+
+      if (memberCount === 0) {
+        return { memberCount: 0, avgAttendance: 0, totalBillsSponsored: 0 };
+      }
+
+      let totalAttendance = 0;
+      let totalBillsSponsored = 0;
+
+      members.forEach((m: any) => {
+        const scores = m.member_scores?.[0];
+        if (scores) {
+          totalAttendance += Number(scores.attendance_score) || 0;
+          totalBillsSponsored += Number(scores.bills_sponsored) || 0;
+        }
+      });
+
+      return {
+        memberCount,
+        avgAttendance: Math.round(totalAttendance / memberCount * 10) / 10,
+        totalBillsSponsored,
+      };
+    },
+  });
+}
 
 export default function MapPage() {
+  const { data: stateScores, isLoading: statesLoading } = useStateScores();
+  const { data: nationalStats, isLoading: statsLoading } = useNationalStats();
+  
+  const nationalAvg = stateScores ? getNationalAverage(stateScores) : 0;
+  const isLoading = statesLoading || statsLoading;
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -42,30 +98,38 @@ export default function MapPage() {
 
         {/* Stats Row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <StatsCard
-            icon={Users}
-            value="535"
-            label="Total Members Tracked"
-            trend={{ value: 0, isPositive: true }}
-          />
-          <StatsCard
-            icon={FileText}
-            value="12,847"
-            label="Bills Analyzed"
-            trend={{ value: 8.2, isPositive: true }}
-          />
-          <StatsCard
-            icon={Vote}
-            value="94.2%"
-            label="Avg. Attendance Rate"
-            trend={{ value: -1.3, isPositive: false }}
-          />
-          <StatsCard
-            icon={TrendingUp}
-            value="67"
-            label="National Avg. Score"
-            trend={{ value: 2.1, isPositive: true }}
-          />
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-border bg-card p-5">
+                <Skeleton className="h-10 w-10 rounded-lg mb-4" />
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            ))
+          ) : (
+            <>
+              <StatsCard
+                icon={Users}
+                value={nationalStats?.memberCount ?? 0}
+                label="Total Members Tracked"
+              />
+              <StatsCard
+                icon={FileText}
+                value={nationalStats?.totalBillsSponsored ?? 0}
+                label="Bills Sponsored"
+              />
+              <StatsCard
+                icon={Vote}
+                value={`${nationalStats?.avgAttendance ?? 0}%`}
+                label="Avg. Attendance Rate"
+              />
+              <StatsCard
+                icon={TrendingUp}
+                value={nationalAvg}
+                label="National Avg. Score"
+              />
+            </>
+          )}
         </div>
 
         {/* Map Section */}
@@ -75,7 +139,7 @@ export default function MapPage() {
               State Performance Overview
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              118th Congress · Data updated daily from Congress.gov
+              119th Congress · Data synced from Congress.gov
             </p>
           </div>
           <div className="p-4 lg:p-8">
