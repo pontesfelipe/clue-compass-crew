@@ -1,72 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-
-interface StateData {
-  abbr: string;
-  name: string;
-  score: number;
-}
-
-const statesData: StateData[] = [
-  { abbr: "AL", name: "Alabama", score: 62 },
-  { abbr: "AK", name: "Alaska", score: 71 },
-  { abbr: "AZ", name: "Arizona", score: 68 },
-  { abbr: "AR", name: "Arkansas", score: 55 },
-  { abbr: "CA", name: "California", score: 74 },
-  { abbr: "CO", name: "Colorado", score: 79 },
-  { abbr: "CT", name: "Connecticut", score: 72 },
-  { abbr: "DE", name: "Delaware", score: 65 },
-  { abbr: "FL", name: "Florida", score: 61 },
-  { abbr: "GA", name: "Georgia", score: 63 },
-  { abbr: "HI", name: "Hawaii", score: 77 },
-  { abbr: "ID", name: "Idaho", score: 58 },
-  { abbr: "IL", name: "Illinois", score: 69 },
-  { abbr: "IN", name: "Indiana", score: 57 },
-  { abbr: "IA", name: "Iowa", score: 66 },
-  { abbr: "KS", name: "Kansas", score: 60 },
-  { abbr: "KY", name: "Kentucky", score: 54 },
-  { abbr: "LA", name: "Louisiana", score: 52 },
-  { abbr: "ME", name: "Maine", score: 75 },
-  { abbr: "MD", name: "Maryland", score: 73 },
-  { abbr: "MA", name: "Massachusetts", score: 81 },
-  { abbr: "MI", name: "Michigan", score: 67 },
-  { abbr: "MN", name: "Minnesota", score: 78 },
-  { abbr: "MS", name: "Mississippi", score: 48 },
-  { abbr: "MO", name: "Missouri", score: 59 },
-  { abbr: "MT", name: "Montana", score: 64 },
-  { abbr: "NE", name: "Nebraska", score: 62 },
-  { abbr: "NV", name: "Nevada", score: 65 },
-  { abbr: "NH", name: "New Hampshire", score: 76 },
-  { abbr: "NJ", name: "New Jersey", score: 70 },
-  { abbr: "NM", name: "New Mexico", score: 67 },
-  { abbr: "NY", name: "New York", score: 72 },
-  { abbr: "NC", name: "North Carolina", score: 64 },
-  { abbr: "ND", name: "North Dakota", score: 61 },
-  { abbr: "OH", name: "Ohio", score: 63 },
-  { abbr: "OK", name: "Oklahoma", score: 53 },
-  { abbr: "OR", name: "Oregon", score: 75 },
-  { abbr: "PA", name: "Pennsylvania", score: 68 },
-  { abbr: "RI", name: "Rhode Island", score: 74 },
-  { abbr: "SC", name: "South Carolina", score: 56 },
-  { abbr: "SD", name: "South Dakota", score: 59 },
-  { abbr: "TN", name: "Tennessee", score: 55 },
-  { abbr: "TX", name: "Texas", score: 58 },
-  { abbr: "UT", name: "Utah", score: 69 },
-  { abbr: "VT", name: "Vermont", score: 82 },
-  { abbr: "VA", name: "Virginia", score: 71 },
-  { abbr: "WA", name: "Washington", score: 77 },
-  { abbr: "WV", name: "West Virginia", score: 49 },
-  { abbr: "WI", name: "Wisconsin", score: 70 },
-  { abbr: "WY", name: "Wyoming", score: 57 },
-];
+import { useStateScores } from "@/hooks/useStateData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const getScoreColor = (score: number): string => {
-  if (score >= 80) return "#22c55e";
-  if (score >= 70) return "#84cc16";
-  if (score >= 60) return "#eab308";
-  if (score >= 50) return "#f97316";
-  return "#ef4444";
+  if (score >= 80) return "hsl(var(--score-excellent))";
+  if (score >= 70) return "hsl(var(--score-good))";
+  if (score >= 60) return "hsl(var(--score-average))";
+  if (score >= 50) return "hsl(var(--score-poor))";
+  return "hsl(var(--score-bad))";
 };
 
 interface USMapProps {
@@ -76,6 +19,7 @@ interface USMapProps {
 export function USMap({ onStateClick }: USMapProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
+  const { data: stateScores, isLoading } = useStateScores();
 
   const handleStateClick = (abbr: string) => {
     if (onStateClick) {
@@ -86,7 +30,7 @@ export function USMap({ onStateClick }: USMapProps) {
   };
 
   const hoveredData = hoveredState 
-    ? statesData.find(s => s.abbr === hoveredState) 
+    ? stateScores?.find(s => s.abbr === hoveredState) 
     : null;
 
   // Simplified state grid positions for a clean cartogram
@@ -107,6 +51,21 @@ export function USMap({ onStateClick }: USMapProps) {
     ME: { col: 13, row: 0 }, MA: { col: 13, row: 1 },
   };
 
+  // All 50 states + DC for the grid
+  const allStates = Object.keys(stateGrid);
+
+  if (isLoading) {
+    return (
+      <div className="relative w-full p-4">
+        <div className="grid grid-cols-14 gap-1">
+          {Array.from({ length: 70 }).map((_, i) => (
+            <Skeleton key={i} className="w-full aspect-square rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full">
       {/* Tooltip */}
@@ -122,6 +81,10 @@ export function USMap({ onStateClick }: USMapProps) {
               {hoveredData.score}
             </span>
           </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-xs text-muted-foreground">Members</span>
+            <span className="text-sm font-medium text-foreground">{hoveredData.memberCount}</span>
+          </div>
         </div>
       )}
 
@@ -130,11 +93,11 @@ export function USMap({ onStateClick }: USMapProps) {
         <p className="text-xs font-medium text-muted-foreground mb-2">Average Score</p>
         <div className="flex gap-1">
           {[
-            { color: "#ef4444", label: "<50" },
-            { color: "#f97316", label: "50+" },
-            { color: "#eab308", label: "60+" },
-            { color: "#84cc16", label: "70+" },
-            { color: "#22c55e", label: "80+" },
+            { color: "hsl(var(--score-bad))", label: "<50" },
+            { color: "hsl(var(--score-poor))", label: "50+" },
+            { color: "hsl(var(--score-average))", label: "60+" },
+            { color: "hsl(var(--score-good))", label: "70+" },
+            { color: "hsl(var(--score-excellent))", label: "80+" },
           ].map((item) => (
             <div key={item.label} className="flex flex-col items-center gap-1">
               <div 
@@ -152,31 +115,35 @@ export function USMap({ onStateClick }: USMapProps) {
         {Array.from({ length: 5 }).map((_, rowIndex) => (
           <div key={rowIndex} className="contents">
             {Array.from({ length: 14 }).map((_, colIndex) => {
-              const state = statesData.find(s => {
-                const pos = stateGrid[s.abbr];
+              const stateAbbr = allStates.find(abbr => {
+                const pos = stateGrid[abbr];
                 return pos && pos.row === rowIndex && pos.col === colIndex;
               });
 
-              if (!state) {
+              if (!stateAbbr) {
                 return <div key={`${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
               }
 
+              const stateData = stateScores?.find(s => s.abbr === stateAbbr);
+              const score = stateData?.score ?? 50;
+
               return (
                 <button
-                  key={state.abbr}
-                  onClick={() => handleStateClick(state.abbr)}
-                  onMouseEnter={() => setHoveredState(state.abbr)}
+                  key={stateAbbr}
+                  onClick={() => handleStateClick(stateAbbr)}
+                  onMouseEnter={() => setHoveredState(stateAbbr)}
                   onMouseLeave={() => setHoveredState(null)}
                   className={cn(
                     "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10 shadow-civic-sm",
-                    hoveredState === state.abbr && "ring-2 ring-primary ring-offset-2"
+                    hoveredState === stateAbbr && "ring-2 ring-primary ring-offset-2",
+                    !stateData && "opacity-50"
                   )}
                   style={{ 
-                    backgroundColor: getScoreColor(state.score),
-                    color: state.score >= 60 ? "#1a1a2e" : "#ffffff"
+                    backgroundColor: getScoreColor(score),
+                    color: score >= 60 ? "hsl(var(--background))" : "hsl(var(--foreground))"
                   }}
                 >
-                  {state.abbr}
+                  {stateAbbr}
                 </button>
               );
             })}
