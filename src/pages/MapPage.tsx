@@ -2,15 +2,12 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { USMap } from "@/components/USMap";
 import { StatsCard } from "@/components/StatsCard";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Users, 
   FileText, 
   Vote, 
-  TrendingUp,
-  Filter,
-  Download
+  TrendingUp
 } from "lucide-react";
 import { useStateScores, getNationalAverage } from "@/hooks/useStateData";
 import { useQuery } from "@tanstack/react-query";
@@ -83,16 +80,6 @@ export default function MapPage() {
             <p className="text-muted-foreground">
               Explore performance scores by state. Click any state to view details.
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="civic-outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Filters
-            </Button>
-            <Button variant="civic-ghost" size="sm">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
           </div>
         </div>
 
