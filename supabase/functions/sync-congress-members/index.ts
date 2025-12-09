@@ -83,7 +83,10 @@ Deno.serve(async (req) => {
 
     // Transform and upsert members
     const memberRecords = members.map((member: any) => {
-      const latestTerm = member.terms?.item?.[0]
+      // Find the most recent term by sorting by startYear descending
+      const terms = member.terms?.item || []
+      const sortedTerms = [...terms].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0))
+      const latestTerm = sortedTerms[0]
       
       // Map party code - check partyName which is more reliable
       let party: 'D' | 'R' | 'I' = 'I'
@@ -91,16 +94,32 @@ Deno.serve(async (req) => {
       if (partyStr.includes('democrat')) party = 'D'
       else if (partyStr.includes('republican')) party = 'R'
       
-      // Map chamber
-      const chamber: 'senate' | 'house' = latestTerm?.chamber?.toLowerCase() === 'senate' ? 'senate' : 'house'
+      // Map chamber from latest term
+      const chamberStr = (latestTerm?.chamber || '').toLowerCase()
+      const chamber: 'senate' | 'house' = chamberStr === 'senate' ? 'senate' : 'house'
+      
+      // Parse names correctly - API gives firstName and lastName directly
+      // But also has name in "LastName, FirstName" format as backup
+      let firstName = member.firstName || ''
+      let lastName = member.lastName || ''
+      
+      // If name is in "LastName, FirstName" format, parse it
+      if (member.name && member.name.includes(',')) {
+        const parts = member.name.split(',').map((p: string) => p.trim())
+        if (!lastName) lastName = parts[0] || ''
+        if (!firstName) firstName = parts[1] || ''
+      }
+      
+      // Get state - prefer stateName (full name) over stateCode
+      const state = latestTerm?.stateName || member.state || latestTerm?.stateCode || ''
       
       return {
         bioguide_id: member.bioguideId,
-        first_name: member.firstName || member.name?.split(' ')[0] || '',
-        last_name: member.lastName || member.name?.split(' ').slice(-1)[0] || '',
-        full_name: member.name || `${member.firstName} ${member.lastName}`,
-        state: latestTerm?.stateCode || member.state || '',
-        district: member.district || null,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: member.name || `${firstName} ${lastName}`,
+        state,
+        district: member.district || latestTerm?.district?.toString() || null,
         party,
         chamber,
         image_url: member.depiction?.imageUrl || null,
