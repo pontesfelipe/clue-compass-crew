@@ -30,6 +30,7 @@ import { useMember } from "@/hooks/useMembers";
 import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
 import { MemberFinanceSection } from "@/features/finance";
+import { toast } from "@/hooks/use-toast";
 
 type Party = "D" | "R" | "I";
 
@@ -294,7 +295,34 @@ export default function MemberPage() {
                     <Bookmark className="mr-2 h-4 w-4" />
                     Track
                   </Button>
-                  <Button variant="civic-ghost" size="sm">
+                  <Button 
+                    variant="civic-ghost" 
+                    size="sm"
+                    onClick={async () => {
+                      const shareUrl = window.location.href;
+                      const shareTitle = `${member.fullName} - CivicScore`;
+                      const shareText = `Check out ${member.fullName}'s CivicScore - ${chamberDisplay === "Senate" ? "Senator" : "Representative"} from ${stateName}`;
+                      
+                      if (navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: shareTitle,
+                            text: shareText,
+                            url: shareUrl,
+                          });
+                        } catch (err) {
+                          // User cancelled or share failed silently
+                          if ((err as Error).name !== 'AbortError') {
+                            await navigator.clipboard.writeText(shareUrl);
+                            toast({ title: "Link copied to clipboard" });
+                          }
+                        }
+                      } else {
+                        await navigator.clipboard.writeText(shareUrl);
+                        toast({ title: "Link copied to clipboard" });
+                      }
+                    }}
+                  >
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
                   </Button>
