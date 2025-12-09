@@ -10,14 +10,28 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2 } from "lucide-react";
+import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, UserPlus, UserMinus } from "lucide-react";
 import { Helmet } from "react-helmet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface UserProfile {
   id: string;
   user_id: string;
   email: string | null;
   display_name: string | null;
+  created_at: string | null;
+}
+
+interface UserRole {
+  id: string;
+  user_id: string;
+  role: "admin" | "moderator" | "user";
   created_at: string | null;
 }
 
@@ -35,10 +49,12 @@ export default function AdminPage() {
   const { toast } = useToast();
 
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingSync, setIsLoadingSync] = useState(false);
   const [triggeringSyncId, setTriggeringSyncId] = useState<string | null>(null);
+  const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
 
   // AI Chat state
   const [aiMessages, setAiMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
@@ -65,6 +81,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (isAdmin) {
       fetchUsers();
+      fetchUserRoles();
       fetchSyncProgress();
     }
   }, [isAdmin]);
@@ -88,6 +105,74 @@ export default function AdminPage() {
       });
     } finally {
       setIsLoadingUsers(false);
+    }
+  };
+
+  const fetchUserRoles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("*");
+
+      if (error) throw error;
+      setUserRoles((data || []) as UserRole[]);
+    } catch (error) {
+      console.error("Error fetching user roles:", error);
+    }
+  };
+
+  const getUserRole = (userId: string): "admin" | "moderator" | "user" | null => {
+    const role = userRoles.find((r) => r.user_id === userId);
+    return role?.role || null;
+  };
+
+  const handleRoleChange = async (userId: string, newRole: "admin" | "moderator" | "user" | "none") => {
+    setUpdatingRoleUserId(userId);
+    try {
+      const existingRole = userRoles.find((r) => r.user_id === userId);
+
+      if (newRole === "none") {
+        // Remove the role
+        if (existingRole) {
+          const { error } = await supabase
+            .from("user_roles")
+            .delete()
+            .eq("user_id", userId);
+
+          if (error) throw error;
+        }
+      } else if (existingRole) {
+        // Update existing role
+        const { error } = await supabase
+          .from("user_roles")
+          .update({ role: newRole })
+          .eq("user_id", userId);
+
+        if (error) throw error;
+      } else {
+        // Insert new role
+        const { error } = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: newRole });
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Role Updated",
+        description: `User role has been ${newRole === "none" ? "removed" : `set to ${newRole}`}.`,
+      });
+
+      fetchUserRoles();
+    } catch (error) {
+      console.error("Error updating role:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update user role",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingRoleUserId(null);
     }
   };
 
@@ -286,21 +371,61 @@ export default function AdminPage() {
                     <p className="text-muted-foreground text-center py-8">No users found</p>
                   ) : (
                     <div className="space-y-3">
-                      {users.map((user) => (
-                        <div
-                          key={user.id}
-                          className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                        >
-                          <div>
-                            <p className="font-medium">{user.display_name || "No name"}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Joined: {user.created_at ? new Date(user.created_at).toLocaleDateString() : "Unknown"}
-                            </p>
+                      {users.map((user) => {
+                        const currentRole = getUserRole(user.user_id);
+                        const isUpdating = updatingRoleUserId === user.user_id;
+                        
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center justify-between p-4 rounded-lg border bg-card gap-4"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium">{user.display_name || "No name"}</p>
+                              <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Joined: {user.created_at ? new Date(user.created_at).toLocaleDateString() : "Unknown"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={currentRole || "none"}
+                                onValueChange={(value) => 
+                                  handleRoleChange(user.user_id, value as "admin" | "moderator" | "user" | "none")
+                                }
+                                disabled={isUpdating}
+                              >
+                                <SelectTrigger className="w-32">
+                                  {isUpdating ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <SelectValue placeholder="No role" />
+                                  )}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No role</SelectItem>
+                                  <SelectItem value="user">User</SelectItem>
+                                  <SelectItem value="moderator">Moderator</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {currentRole && (
+                                <Badge 
+                                  variant={
+                                    currentRole === "admin" 
+                                      ? "default" 
+                                      : currentRole === "moderator" 
+                                        ? "secondary" 
+                                        : "outline"
+                                  }
+                                >
+                                  {currentRole}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <Badge variant="secondary">User</Badge>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
