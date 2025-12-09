@@ -2,7 +2,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
-import { USMap } from "@/components/USMap";
+import USMap from "@/components/USMap";
 import { MemberCard } from "@/components/MemberCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Skeleton } from "@/components/ui/skeleton";
