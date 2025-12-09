@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.sync-bills]
 verify_jwt = false
+
+[functions.calculate-member-scores]
+verify_jwt = false
