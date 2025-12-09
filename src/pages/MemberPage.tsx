@@ -31,6 +31,7 @@ import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
 import { MemberFinanceSection } from "@/features/finance";
 import { MemberAISummary } from "@/components/MemberAISummary";
+import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { toast } from "@/hooks/use-toast";
 
 type Party = "D" | "R" | "I";
@@ -433,9 +434,10 @@ export default function MemberPage() {
           </div>
         )}
 
-        {/* AI Summary Section */}
-        <div className="mb-8">
+        {/* AI Summary and Policy Areas */}
+        <div className="grid gap-8 lg:grid-cols-2 mb-8">
           <MemberAISummary memberId={member.id} memberName={member.fullName} />
+          <MemberPolicyAreas memberId={member.id} />
         </div>
 
         {/* Score Breakdown and Bills Grid */}
