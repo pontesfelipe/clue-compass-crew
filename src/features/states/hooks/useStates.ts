@@ -67,6 +67,57 @@ export function usePartyScores() {
 }
 
 /**
+ * Fetch chamber-based score breakdown (House vs Senate)
+ */
+export function useChamberScores() {
+  return useQuery({
+    queryKey: ["chamber-scores"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select(`
+          chamber,
+          member_scores!inner (
+            overall_score
+          )
+        `)
+        .eq("in_office", true)
+        .is("member_scores.user_id", null);
+
+      if (error) throw error;
+
+      const chamberAggregates: Record<string, { total: number; count: number }> = {
+        house: { total: 0, count: 0 },
+        senate: { total: 0, count: 0 },
+      };
+
+      (data || []).forEach((member) => {
+        const chamber = member.chamber as string;
+        const memberScores = member.member_scores as { overall_score: number | null }[];
+        const score = memberScores?.[0]?.overall_score;
+
+        if (chamber && score != null && chamberAggregates[chamber]) {
+          chamberAggregates[chamber].total += Number(score);
+          chamberAggregates[chamber].count += 1;
+        }
+      });
+
+      return {
+        house: {
+          avg: chamberAggregates.house.count > 0 ? Math.round(chamberAggregates.house.total / chamberAggregates.house.count) : 0,
+          count: chamberAggregates.house.count,
+        },
+        senate: {
+          avg: chamberAggregates.senate.count > 0 ? Math.round(chamberAggregates.senate.total / chamberAggregates.senate.count) : 0,
+          count: chamberAggregates.senate.count,
+        },
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Fetch all state scores for the map
  */
 export function useStateScores() {

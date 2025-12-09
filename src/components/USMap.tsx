@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useStateScores, usePartyScores } from "@/hooks/useStateData";
+import { useStateScores, usePartyScores, useChamberScores } from "@/hooks/useStateData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, BarChart3, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Users, Building2 } from "lucide-react";
 
 const getScoreColor = (score: number): string => {
   if (score >= 80) return "hsl(var(--score-excellent))";
@@ -23,6 +23,7 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const { data: stateScores, isLoading } = useStateScores();
   const { data: partyScores } = usePartyScores();
+  const { data: chamberScores } = useChamberScores();
 
   const handleStateClick = (abbr: string) => {
     if (onStateClick) {
@@ -152,7 +153,7 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
 
       {/* Statistics Summary */}
       {showStats && stats && (
-        <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* National Average */}
           <div className="p-4 rounded-lg bg-card border border-border">
             <div className="flex items-center gap-2 mb-2">
@@ -222,6 +223,48 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Chamber Breakdown */}
+          {chamberScores && (
+            <div className="p-4 rounded-lg bg-card border border-border">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">By Chamber</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-amber-500" />
+                    <span className="text-sm text-foreground">House</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">({chamberScores.house.count})</span>
+                    <span 
+                      className="text-sm font-bold"
+                      style={{ color: getScoreColor(chamberScores.house.avg) }}
+                    >
+                      {chamberScores.house.avg}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-purple-500" />
+                    <span className="text-sm text-foreground">Senate</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">({chamberScores.senate.count})</span>
+                    <span 
+                      className="text-sm font-bold"
+                      style={{ color: getScoreColor(chamberScores.senate.avg) }}
+                    >
+                      {chamberScores.senate.avg}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
