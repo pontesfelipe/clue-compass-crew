@@ -81,8 +81,16 @@ Deno.serve(async (req) => {
 
     console.log(`Total members fetched: ${members.length}`)
 
-    // Fetch official website URLs for each member (in batches to avoid rate limits)
-    const memberDetailsMap = new Map<string, string | null>()
+    // Fetch official website URLs and contact info for each member (in batches to avoid rate limits)
+    interface MemberDetails {
+      websiteUrl: string | null;
+      phone: string | null;
+      officeAddress: string | null;
+      officeCity: string | null;
+      officeState: string | null;
+      officeZip: string | null;
+    }
+    const memberDetailsMap = new Map<string, MemberDetails>()
     const detailBatchSize = 10
     
     for (let i = 0; i < members.length; i += detailBatchSize) {
@@ -94,19 +102,34 @@ Deno.serve(async (req) => {
           const detailRes = await fetch(detailUrl)
           if (detailRes.ok) {
             const detailData = await detailRes.json()
+            const memberData = detailData.member
+            
+            // Get the most recent address from addressInformation
+            const addressInfo = memberData?.addressInformation?.[0]
+            
             return { 
               bioguideId: member.bioguideId, 
-              websiteUrl: detailData.member?.officialWebsiteUrl || null 
+              details: {
+                websiteUrl: memberData?.officialWebsiteUrl || null,
+                phone: addressInfo?.phoneNumber || memberData?.directOrderName ? null : null,
+                officeAddress: addressInfo?.officeAddress || null,
+                officeCity: addressInfo?.city || null,
+                officeState: addressInfo?.state || null,
+                officeZip: addressInfo?.zipCode || null,
+              } as MemberDetails
             }
           }
         } catch (e) {
           console.error(`Failed to fetch details for ${member.bioguideId}`)
         }
-        return { bioguideId: member.bioguideId, websiteUrl: null }
+        return { 
+          bioguideId: member.bioguideId, 
+          details: { websiteUrl: null, phone: null, officeAddress: null, officeCity: null, officeState: null, officeZip: null } as MemberDetails 
+        }
       })
       
       const results = await Promise.all(detailPromises)
-      results.forEach(r => memberDetailsMap.set(r.bioguideId, r.websiteUrl))
+      results.forEach(r => memberDetailsMap.set(r.bioguideId, r.details))
       
       if (i + detailBatchSize < members.length) {
         await new Promise(resolve => setTimeout(resolve, 100)) // Small delay between batches
@@ -190,8 +213,8 @@ Deno.serve(async (req) => {
       // Get state - prefer stateName (full name) over stateCode
       const state = latestTerm?.stateName || member.state || latestTerm?.stateCode || ''
       
-      // Get official website URL from details fetch
-      const officialWebsite = memberDetailsMap.get(member.bioguideId) || null
+      // Get official website URL and contact info from details fetch
+      const memberDetails = memberDetailsMap.get(member.bioguideId)
       
       return {
         bioguide_id: member.bioguideId,
@@ -203,7 +226,12 @@ Deno.serve(async (req) => {
         party,
         chamber,
         image_url: member.depiction?.imageUrl || null,
-        website_url: officialWebsite,
+        website_url: memberDetails?.websiteUrl || null,
+        phone: memberDetails?.phone || null,
+        office_address: memberDetails?.officeAddress || null,
+        office_city: memberDetails?.officeCity || null,
+        office_state: memberDetails?.officeState || null,
+        office_zip: memberDetails?.officeZip || null,
         in_office: true,
         start_date: latestTerm?.startYear ? `${latestTerm.startYear}-01-03` : null,
         updated_at: new Date().toISOString(),

@@ -362,7 +362,12 @@ export type Database = {
           image_url: string | null
           in_office: boolean | null
           last_name: string
+          office_address: string | null
+          office_city: string | null
+          office_state: string | null
+          office_zip: string | null
           party: Database["public"]["Enums"]["party_type"]
+          phone: string | null
           start_date: string | null
           state: string
           twitter_handle: string | null
@@ -381,7 +386,12 @@ export type Database = {
           image_url?: string | null
           in_office?: boolean | null
           last_name: string
+          office_address?: string | null
+          office_city?: string | null
+          office_state?: string | null
+          office_zip?: string | null
           party: Database["public"]["Enums"]["party_type"]
+          phone?: string | null
           start_date?: string | null
           state: string
           twitter_handle?: string | null
@@ -400,7 +410,12 @@ export type Database = {
           image_url?: string | null
           in_office?: boolean | null
           last_name?: string
+          office_address?: string | null
+          office_city?: string | null
+          office_state?: string | null
+          office_zip?: string | null
           party?: Database["public"]["Enums"]["party_type"]
+          phone?: string | null
           start_date?: string | null
           state?: string
           twitter_handle?: string | null

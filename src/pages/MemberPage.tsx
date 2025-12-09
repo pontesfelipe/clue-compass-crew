@@ -21,7 +21,9 @@ import {
   Scale,
   Check,
   AlertCircle,
-  Twitter
+  Twitter,
+  Phone,
+  MapPin
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
@@ -362,6 +364,45 @@ export default function MemberPage() {
             label="Next Election"
           />
         </div>
+
+        {/* Contact Section */}
+        {(member.phone || member.officeAddress) && (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md mb-8">
+            <h2 className="font-serif text-xl font-semibold text-foreground mb-4">
+              Contact Information
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {member.phone && (
+                <div className="flex items-start gap-3">
+                  <Phone className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Phone</p>
+                    <a 
+                      href={`tel:${member.phone}`} 
+                      className="text-foreground hover:text-primary transition-colors"
+                    >
+                      {member.phone}
+                    </a>
+                  </div>
+                </div>
+              )}
+              {member.officeAddress && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Office Address</p>
+                    <p className="text-foreground">
+                      {member.officeAddress}
+                      {member.officeCity && member.officeState && (
+                        <><br />{member.officeCity}, {member.officeState} {member.officeZip}</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Score Breakdown and Bills Grid */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">
