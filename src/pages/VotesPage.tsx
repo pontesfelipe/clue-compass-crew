@@ -10,11 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VoteDetailDialog } from "@/components/VoteDetailDialog";
+import { CompactPartyBreakdown } from "@/components/CompactPartyBreakdown";
 import { Vote, Calendar, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { Helmet } from "react-helmet";
 
 const ITEMS_PER_PAGE = 20;
+
+interface PartyVoteData {
+  party: "D" | "R" | "I" | "L";
+  yea: number;
+  nay: number;
+}
 
 export default function VotesPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,9 +33,10 @@ export default function VotesPage() {
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
 
   const { data: votes, isLoading } = useQuery({
-    queryKey: ["all-votes"],
+    queryKey: ["all-votes-with-party"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // First fetch votes
+      const { data: votesData, error: votesError } = await supabase
         .from("votes")
         .select(`
           *,
@@ -42,8 +50,55 @@ export default function VotesPage() {
         `)
         .order("vote_date", { ascending: false });
 
-      if (error) throw error;
-      return data;
+      if (votesError) throw votesError;
+
+      // Then fetch party breakdown for all votes
+      const voteIds = votesData?.map(v => v.id) || [];
+      
+      if (voteIds.length === 0) return [];
+
+      const { data: memberVotes, error: mvError } = await supabase
+        .from("member_votes")
+        .select(`
+          vote_id,
+          position,
+          members (party)
+        `)
+        .in("vote_id", voteIds);
+
+      if (mvError) throw mvError;
+
+      // Aggregate party data per vote
+      const partyDataByVote: Record<string, Record<string, { yea: number; nay: number }>> = {};
+      
+      for (const mv of memberVotes || []) {
+        const party = (mv.members as any)?.party;
+        if (!party || !mv.vote_id) continue;
+        
+        if (!partyDataByVote[mv.vote_id]) {
+          partyDataByVote[mv.vote_id] = {};
+        }
+        if (!partyDataByVote[mv.vote_id][party]) {
+          partyDataByVote[mv.vote_id][party] = { yea: 0, nay: 0 };
+        }
+        
+        if (mv.position === "yea") {
+          partyDataByVote[mv.vote_id][party].yea++;
+        } else if (mv.position === "nay") {
+          partyDataByVote[mv.vote_id][party].nay++;
+        }
+      }
+
+      // Attach party data to votes
+      return votesData?.map(vote => ({
+        ...vote,
+        partyBreakdown: Object.entries(partyDataByVote[vote.id] || {})
+          .map(([party, data]) => ({ party: party as "D" | "R" | "I" | "L", ...data }))
+          .sort((a, b) => {
+            const order = { D: 0, R: 1, I: 2, L: 3 };
+            return (order[a.party] ?? 4) - (order[b.party] ?? 4);
+          })
+      })) || [];
     },
   });
 
@@ -337,6 +392,11 @@ export default function VotesPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* Party Breakdown */}
+                        {vote.partyBreakdown && vote.partyBreakdown.length > 0 && (
+                          <CompactPartyBreakdown partyData={vote.partyBreakdown} />
+                        )}
 
                         {/* Related Bill */}
                         {vote.bills && (
