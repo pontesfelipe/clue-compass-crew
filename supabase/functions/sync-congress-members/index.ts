@@ -104,17 +104,23 @@ Deno.serve(async (req) => {
             const detailData = await detailRes.json()
             const memberData = detailData.member
             
-            // Get the most recent address from addressInformation
-            const addressInfo = memberData?.addressInformation?.[0]
+            // Log first member's structure to understand the API response
+            if (i === 0 && batch.indexOf(member) === 0) {
+              console.log('Sample member detail keys:', Object.keys(memberData || {}))
+              console.log('Sample addressInformation:', JSON.stringify(memberData?.addressInformation))
+            }
+            
+            // Get address info - it's an object, not an array
+            const addressInfo = memberData?.addressInformation
             
             return { 
               bioguideId: member.bioguideId, 
               details: {
-                websiteUrl: memberData?.officialWebsiteUrl || null,
-                phone: addressInfo?.phoneNumber || memberData?.directOrderName ? null : null,
+                websiteUrl: memberData?.officialUrl || null,
+                phone: addressInfo?.phoneNumber || null,
                 officeAddress: addressInfo?.officeAddress || null,
                 officeCity: addressInfo?.city || null,
-                officeState: addressInfo?.state || null,
+                officeState: addressInfo?.district || null,  // DC district code
                 officeZip: addressInfo?.zipCode || null,
               } as MemberDetails
             }
