@@ -582,7 +582,7 @@ export default function MemberPage() {
                   <button 
                     key={vote.id}
                     onClick={() => {
-                      setSelectedVoteId(vote.vote_id);
+                      setSelectedVoteId(vote.id);
                       setSelectedVotePosition(vote.position);
                     }}
                     className="w-full text-left p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors cursor-pointer"
@@ -591,10 +591,10 @@ export default function MemberPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground line-clamp-2">
-                          {vote.question || vote.description || `Roll Call #${vote.roll_number}`}
+                          {vote.question || vote.description || `Roll Call #${vote.rollNumber}`}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {vote.vote_date ? new Date(vote.vote_date).toLocaleDateString() : 'Unknown date'}
+                          {vote.voteDate ? new Date(vote.voteDate).toLocaleDateString() : 'Unknown date'}
                           {vote.result && ` · ${vote.result}`}
                         </p>
                       </div>
@@ -611,9 +611,9 @@ export default function MemberPage() {
                         {vote.position === "not_voting" ? "Not Voting" : vote.position}
                       </Badge>
                     </div>
-                    {(vote.total_yea || vote.total_nay) && (
+                    {(vote.totalYea || vote.totalNay) && (
                       <p className="text-xs text-muted-foreground mt-2">
-                        Yea: {vote.total_yea || 0} · Nay: {vote.total_nay || 0}
+                        Yea: {vote.totalYea || 0} · Nay: {vote.totalNay || 0}
                       </p>
                     )}
                   </button>
