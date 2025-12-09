@@ -4,6 +4,7 @@ import { Footer } from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PartyVoteBreakdown } from "@/components/PartyVoteBreakdown";
 import { 
   ArrowLeft, 
   FileText, 
@@ -280,6 +281,9 @@ export default function BillPage() {
                             <span className="text-muted-foreground">Not Voting: {vote.total_not_voting}</span>
                           )}
                         </div>
+                        
+                        {/* Party Breakdown */}
+                        <PartyVoteBreakdown voteId={vote.id} />
                       </div>
                     </div>
                   ))}
