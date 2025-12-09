@@ -12,6 +12,7 @@ import MemberPage from "./pages/MemberPage";
 import BillPage from "./pages/BillPage";
 import BillsPage from "./pages/BillsPage";
 import ComparePage from "./pages/ComparePage";
+import HowItWorksPage from "./pages/HowItWorksPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/map" element={<MapPage />} />
             <Route path="/bills" element={<BillsPage />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/methodology" element={<HowItWorksPage />} />
             <Route path="/state/:stateAbbr" element={<StatePage />} />
             <Route path="/member/:memberId" element={<MemberPage />} />
             <Route path="/bill/:billId" element={<BillPage />} />
