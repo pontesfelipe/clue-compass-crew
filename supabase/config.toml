@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.calculate-member-scores]
 verify_jwt = false
+
+[functions.sync-votes]
+verify_jwt = false

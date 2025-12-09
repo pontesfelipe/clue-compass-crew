@@ -106,6 +106,7 @@ export function useMember(memberId: string) {
   return useQuery({
     queryKey: ["member", memberId],
     queryFn: async () => {
+      // Fetch member data with scores, sponsorships, and votes
       const { data, error } = await supabase
         .from("members")
         .select(`
@@ -140,6 +141,22 @@ export function useMember(memberId: string) {
               enacted_date,
               policy_area
             )
+          ),
+          member_votes (
+            position,
+            votes (
+              id,
+              congress,
+              chamber,
+              roll_number,
+              vote_date,
+              question,
+              description,
+              result,
+              total_yea,
+              total_nay,
+              bill_id
+            )
           )
         `)
         .eq("id", memberId)
@@ -164,11 +181,35 @@ export function useMember(memberId: string) {
         })
         .slice(0, 5);
 
+      // Get cosponsored bills (most recent first)
+      const cosponsoredBills = sponsorships
+        .filter((s: any) => !s.is_sponsor && s.bills)
+        .map((s: any) => ({ ...s.bills, cosponsored_date: s.cosponsored_date }))
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.cosponsored_date || a.introduced_date || 0);
+          const dateB = new Date(b.cosponsored_date || b.introduced_date || 0);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 5);
+
+      // Get vote history (most recent first)
+      const memberVotes = (memberData.member_votes || [])
+        .filter((v: any) => v.votes)
+        .map((v: any) => ({ ...v.votes, position: v.position }))
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.vote_date || 0);
+          const dateB = new Date(b.vote_date || 0);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 10);
+
       return {
         ...memberData,
         score: scores?.overall_score ?? 0,
         scores,
         sponsoredBills,
+        cosponsoredBills,
+        voteHistory: memberVotes,
       };
     },
     enabled: !!memberId,
