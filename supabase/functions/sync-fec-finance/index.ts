@@ -10,7 +10,6 @@ const corsHeaders = {
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
 const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY";
 
-// State name to abbreviation mapping
 const stateAbbreviations: Record<string, string> = {
   "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
   "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
@@ -26,16 +25,6 @@ const stateAbbreviations: Record<string, string> = {
   "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
 };
 
-interface FecCandidate {
-  candidate_id: string;
-  name: string;
-  party: string;
-  state: string;
-  district: string;
-  office: string;
-  election_years: number[];
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -48,13 +37,45 @@ serve(async (req) => {
 
     let offset = 0;
     let limit = 20;
+    let useProgressTracking = true;
+    
     try {
       const body = await req.json();
-      offset = body.offset || 0;
+      if (body.offset !== undefined) {
+        offset = body.offset;
+        useProgressTracking = false; // Manual offset override
+      }
       limit = body.limit || 20;
+      if (body.reset) {
+        // Reset progress tracking
+        await supabase
+          .from('sync_progress')
+          .update({ current_offset: 0, status: 'idle', total_processed: 0 })
+          .eq('id', 'fec-finance');
+        useProgressTracking = true;
+      }
     } catch {
       // Use defaults if no body
     }
+
+    // Get progress from tracking table if not manually specified
+    if (useProgressTracking) {
+      const { data: progress } = await supabase
+        .from('sync_progress')
+        .select('current_offset, status')
+        .eq('id', 'fec-finance')
+        .single();
+      
+      if (progress) {
+        offset = progress.current_offset || 0;
+      }
+    }
+
+    // Update status to running
+    await supabase
+      .from('sync_progress')
+      .update({ status: 'running', last_run_at: new Date().toISOString() })
+      .eq('id', 'fec-finance');
 
     console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`);
 
@@ -69,16 +90,40 @@ serve(async (req) => {
       throw new Error(`Failed to fetch members: ${membersError.message}`);
     }
 
-    console.log(`Processing ${members?.length || 0} members (${offset + 1} to ${offset + (members?.length || 0)} of ${count})`);
+    const totalMembers = count || 0;
+    
+    // Check if we've processed all members
+    if (!members || members.length === 0) {
+      console.log('All members processed. Resetting offset to 0 for next cycle.');
+      await supabase
+        .from('sync_progress')
+        .update({ 
+          current_offset: 0, 
+          status: 'complete',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 'fec-finance');
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'All members processed. Will restart from beginning on next run.',
+        totalMembers,
+        processedCount: 0,
+        matchedCount: 0,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Processing ${members.length} members (${offset + 1} to ${offset + members.length} of ${totalMembers})`);
 
     let processedCount = 0;
     let matchedCount = 0;
     let errorCount = 0;
     const currentCycle = 2024;
 
-    for (const member of members || []) {
+    for (const member of members) {
       try {
-        // Convert state name to abbreviation
         const stateAbbr = stateAbbreviations[member.state] || member.state;
         if (!stateAbbr || stateAbbr.length !== 2) {
           console.log(`Unknown state for ${member.full_name}: ${member.state}`);
@@ -86,7 +131,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Search by last name with state filter
         const lastName = member.last_name.replace(/[^a-zA-Z\s]/g, '').trim();
         const office = member.chamber === 'house' ? 'H' : 'S';
         
@@ -94,15 +138,15 @@ serve(async (req) => {
         
         console.log(`Searching FEC for: ${member.full_name} (${stateAbbr}, ${office})`);
         
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         const candidateResponse = await fetch(candidateSearchUrl);
         if (!candidateResponse.ok) {
           if (candidateResponse.status === 429) {
-            console.error(`Rate limited. Stopping sync.`);
+            console.error(`Rate limited. Saving progress and stopping.`);
             break;
           }
-          console.log(`FEC search failed for ${member.full_name}: ${candidateResponse.status}`);
+          console.log(`FEC search failed: ${candidateResponse.status}`);
           processedCount++;
           continue;
         }
@@ -110,17 +154,12 @@ serve(async (req) => {
         const candidateData = await candidateResponse.json();
         const candidates = candidateData.results || [];
         
-        console.log(`Found ${candidates.length} FEC candidates for ${lastName} in ${stateAbbr}`);
-
-        // Find best matching candidate
         let matchingCandidate = null;
         const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '');
         const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '');
         
         for (const c of candidates) {
           if (!c.name) continue;
-          
-          // FEC format is typically "LASTNAME, FIRSTNAME MIDDLE"
           const fecName = c.name.toLowerCase();
           const nameParts = fecName.split(',');
           const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || '';
@@ -138,14 +177,13 @@ serve(async (req) => {
           }
         }
         
-        // Fallback: just last name with same office
         if (!matchingCandidate) {
           for (const c of candidates) {
             if (!c.name) continue;
             const fecLastName = c.name.toLowerCase().split(',')[0]?.trim().replace(/[^a-z]/g, '') || '';
             if (fecLastName === memberLastName && c.office === office) {
               matchingCandidate = c;
-              console.log(`Fallback match: ${member.full_name} -> ${c.name} (${c.candidate_id})`);
+              console.log(`Fallback match: ${member.full_name} -> ${c.name}`);
               break;
             }
           }
@@ -160,17 +198,13 @@ serve(async (req) => {
         const candidateId = matchingCandidate.candidate_id;
         matchedCount++;
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Get committees
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=5`;
         const committeesResponse = await fetch(committeesUrl);
         
         if (!committeesResponse.ok) {
-          if (committeesResponse.status === 429) {
-            console.error(`Rate limited at committees. Stopping.`);
-            break;
-          }
+          if (committeesResponse.status === 429) break;
           processedCount++;
           continue;
         }
@@ -179,16 +213,14 @@ serve(async (req) => {
         const committees = committeesData.results || [];
 
         if (committees.length === 0) {
-          console.log(`No committees found for ${member.full_name}`);
           processedCount++;
           continue;
         }
 
         const principalCommittee = committees.find((c: any) => c.committee_type === 'P') || committees[0];
         const committeeId = principalCommittee.committee_id;
-        console.log(`Found committee ${committeeId} for ${member.full_name}`);
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Fetch contributions
         const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=15`;
@@ -197,7 +229,6 @@ serve(async (req) => {
         if (contributionsResponse.ok) {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
-          console.log(`Found ${contributions.length} contributors for ${member.full_name}`);
 
           const contributionRecords = contributions.map((c: any) => ({
             member_id: member.id,
@@ -215,21 +246,17 @@ serve(async (req) => {
               .eq('member_id', member.id)
               .eq('cycle', currentCycle);
 
-            const { error: insertError } = await supabase
+            await supabase
               .from('member_contributions')
               .insert(contributionRecords);
-
-            if (insertError) {
-              console.error(`Failed to insert contributions: ${insertError.message}`);
-            } else {
-              console.log(`Inserted ${contributionRecords.length} contributions for ${member.full_name}`);
-            }
+            
+            console.log(`Inserted ${contributionRecords.length} contributions for ${member.full_name}`);
           }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Fetch candidate totals
+        // Fetch totals
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
         const totalsResponse = await fetch(totalsUrl);
 
@@ -238,8 +265,6 @@ serve(async (req) => {
           const totals = totalsData.results?.[0];
 
           if (totals) {
-            console.log(`Totals for ${member.full_name}: PAC=$${totals.other_political_committee_contributions || 0}`);
-            
             const pacAmount = totals.other_political_committee_contributions || 0;
             if (pacAmount > 0) {
               await supabase
@@ -311,8 +336,21 @@ serve(async (req) => {
       }
     }
 
-    const hasMore = (offset + (members?.length || 0)) < (count || 0);
-    const nextOffset = offset + (members?.length || 0);
+    // Calculate next offset
+    const nextOffset = offset + members.length;
+    const hasMore = nextOffset < totalMembers;
+
+    // Update progress tracking
+    await supabase
+      .from('sync_progress')
+      .update({ 
+        current_offset: hasMore ? nextOffset : 0,
+        last_matched_count: matchedCount,
+        total_processed: offset + processedCount,
+        status: hasMore ? 'idle' : 'complete',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 'fec-finance');
 
     const result = {
       success: true,
@@ -320,10 +358,11 @@ serve(async (req) => {
       processedCount,
       matchedCount,
       errorCount,
-      totalMembers: count || 0,
+      totalMembers,
+      currentOffset: offset,
+      nextOffset: hasMore ? nextOffset : 0,
       hasMore,
-      nextOffset: hasMore ? nextOffset : null,
-      hint: hasMore ? `Call again with {"offset": ${nextOffset}} to continue` : 'All members processed',
+      progress: `${Math.round((nextOffset / totalMembers) * 100)}%`,
     };
 
     console.log("Batch complete:", result);
@@ -335,6 +374,16 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in sync-fec-finance:', error);
+    
+    // Update status to error
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    await supabase
+      .from('sync_progress')
+      .update({ status: 'error', updated_at: new Date().toISOString() })
+      .eq('id', 'fec-finance');
+    
     return new Response(JSON.stringify({ 
       success: false, 
       error: errorMessage 
