@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
-import { stateNames } from "@/hooks/useStateData";
+import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
 
 type Party = "D" | "R" | "I";
@@ -142,7 +142,7 @@ export default function MemberPage() {
         {/* Breadcrumb */}
         <div className="mb-8">
           <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground -ml-2">
-            <Link to={`/state/${member.state}`}>
+            <Link to={`/state/${getStateAbbr(member.state)}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to {stateName}
             </Link>
