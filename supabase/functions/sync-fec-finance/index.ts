@@ -25,6 +25,9 @@ const stateAbbreviations: Record<string, string> = {
   "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
 };
 
+// Threshold for identifying major sponsors (contributors above this are sponsors)
+const SPONSOR_THRESHOLD = 5000;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -43,11 +46,10 @@ serve(async (req) => {
       const body = await req.json();
       if (body.offset !== undefined) {
         offset = body.offset;
-        useProgressTracking = false; // Manual offset override
+        useProgressTracking = false;
       }
       limit = body.limit || 20;
       if (body.reset) {
-        // Reset progress tracking
         await supabase
           .from('sync_progress')
           .update({ current_offset: 0, status: 'idle', total_processed: 0 })
@@ -58,7 +60,6 @@ serve(async (req) => {
       // Use defaults if no body
     }
 
-    // Get progress from tracking table if not manually specified
     if (useProgressTracking) {
       const { data: progress } = await supabase
         .from('sync_progress')
@@ -71,7 +72,6 @@ serve(async (req) => {
       }
     }
 
-    // Update status to running
     await supabase
       .from('sync_progress')
       .update({ status: 'running', last_run_at: new Date().toISOString() })
@@ -92,7 +92,6 @@ serve(async (req) => {
 
     const totalMembers = count || 0;
     
-    // Check if we've processed all members
     if (!members || members.length === 0) {
       console.log('All members processed. Resetting offset to 0 for next cycle.');
       await supabase
@@ -222,24 +221,60 @@ serve(async (req) => {
 
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Fetch contributions
-        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=15`;
+        // Fetch contributions - increased to get more data for sponsor analysis
+        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=30`;
         const contributionsResponse = await fetch(contributionsUrl);
+
+        const allContributions: any[] = [];
+        const sponsors: any[] = [];
+        const industryTotals = new Map<string, { total: number; count: number }>();
 
         if (contributionsResponse.ok) {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
 
-          const contributionRecords = contributions.map((c: any) => ({
-            member_id: member.id,
-            contributor_name: c.contributor_name || 'Unknown',
-            contributor_type: categorizeContributor(c.contributor_employer, c.contributor_occupation),
-            amount: c.total || 0,
-            cycle: currentCycle,
-            industry: inferIndustry(c.contributor_employer, c.contributor_occupation),
-          })).filter((c: any) => c.amount > 0);
+          for (const c of contributions) {
+            const amount = c.total || 0;
+            if (amount <= 0) continue;
 
-          if (contributionRecords.length > 0) {
+            const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation);
+            const industry = inferIndustry(c.contributor_employer, c.contributor_occupation);
+            const contributorName = c.contributor_name || 'Unknown';
+
+            // Add to contributions list
+            allContributions.push({
+              member_id: member.id,
+              contributor_name: contributorName,
+              contributor_type: contributorType,
+              amount: amount,
+              cycle: currentCycle,
+              industry: industry,
+            });
+
+            // Track industry totals for lobbying data
+            if (industry) {
+              const existing = industryTotals.get(industry) || { total: 0, count: 0 };
+              industryTotals.set(industry, { 
+                total: existing.total + amount, 
+                count: existing.count + 1 
+              });
+            }
+
+            // Identify sponsors: large contributors that are PACs, corporations, or unions
+            if (amount >= SPONSOR_THRESHOLD && (contributorType === 'pac' || contributorType === 'corporate' || contributorType === 'union')) {
+              sponsors.push({
+                member_id: member.id,
+                sponsor_name: contributorName,
+                sponsor_type: contributorType,
+                relationship_type: 'major_donor',
+                total_support: amount,
+                cycle: currentCycle,
+              });
+            }
+          }
+
+          // Insert contributions
+          if (allContributions.length > 0) {
             await supabase
               .from('member_contributions')
               .delete()
@@ -248,15 +283,15 @@ serve(async (req) => {
 
             await supabase
               .from('member_contributions')
-              .insert(contributionRecords);
+              .insert(allContributions);
             
-            console.log(`Inserted ${contributionRecords.length} contributions for ${member.full_name}`);
+            console.log(`Inserted ${allContributions.length} contributions for ${member.full_name}`);
           }
         }
 
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Fetch totals
+        // Fetch totals for additional sponsor/lobbying data
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
         const totalsResponse = await fetch(totalsUrl);
 
@@ -265,66 +300,98 @@ serve(async (req) => {
           const totals = totalsData.results?.[0];
 
           if (totals) {
+            // Add PAC total as sponsor if not already captured in detail
             const pacAmount = totals.other_political_committee_contributions || 0;
-            if (pacAmount > 0) {
-              await supabase
-                .from('member_sponsors')
-                .delete()
-                .eq('member_id', member.id)
-                .eq('cycle', currentCycle);
-
-              await supabase
-                .from('member_sponsors')
-                .insert({
-                  member_id: member.id,
-                  sponsor_name: 'Political Action Committees',
-                  sponsor_type: 'pac',
-                  relationship_type: 'contributor',
-                  total_support: pacAmount,
-                  cycle: currentCycle,
-                });
+            const existingPacTotal = sponsors
+              .filter(s => s.sponsor_type === 'pac')
+              .reduce((sum, s) => sum + s.total_support, 0);
+            
+            if (pacAmount > existingPacTotal && pacAmount > 0) {
+              sponsors.push({
+                member_id: member.id,
+                sponsor_name: 'Other PAC Contributions',
+                sponsor_type: 'pac',
+                relationship_type: 'contributor',
+                total_support: pacAmount - existingPacTotal,
+                cycle: currentCycle,
+              });
             }
 
+            // Add party committee contributions as sponsor
             const partyAmount = totals.party_committee_contributions || 0;
             if (partyAmount > 0) {
-              await supabase
-                .from('member_lobbying')
-                .delete()
-                .eq('member_id', member.id)
-                .eq('cycle', currentCycle);
+              sponsors.push({
+                member_id: member.id,
+                sponsor_name: `${member.party === 'D' ? 'Democratic' : member.party === 'R' ? 'Republican' : 'Independent'} Party Committee`,
+                sponsor_type: 'party',
+                relationship_type: 'party_support',
+                total_support: partyAmount,
+                cycle: currentCycle,
+              });
 
+              // Also add to industry totals
+              industryTotals.set('Party Committee Support', { 
+                total: partyAmount, 
+                count: 1 
+              });
+            }
+
+            // Add individual total if no detailed contributions
+            const individualAmount = totals.individual_itemized_contributions || 0;
+            if (individualAmount > 0 && allContributions.length === 0) {
               await supabase
-                .from('member_lobbying')
+                .from('member_contributions')
                 .insert({
                   member_id: member.id,
-                  industry: 'Party Committee Support',
-                  total_spent: partyAmount,
-                  client_count: 1,
+                  contributor_name: 'Individual Contributors (Total)',
+                  contributor_type: 'individual',
+                  amount: individualAmount,
                   cycle: currentCycle,
+                  industry: null,
                 });
             }
+          }
+        }
 
-            const individualAmount = totals.individual_itemized_contributions || 0;
-            if (individualAmount > 0) {
-              const existingContribs = await supabase
-                .from('member_contributions')
-                .select('id')
-                .eq('member_id', member.id)
-                .eq('cycle', currentCycle);
-              
-              if ((existingContribs.data?.length || 0) === 0) {
-                await supabase
-                  .from('member_contributions')
-                  .insert({
-                    member_id: member.id,
-                    contributor_name: 'Individual Contributors (Total)',
-                    contributor_type: 'individual',
-                    amount: individualAmount,
-                    cycle: currentCycle,
-                    industry: null,
-                  });
-              }
-            }
+        // Insert sponsors
+        if (sponsors.length > 0) {
+          await supabase
+            .from('member_sponsors')
+            .delete()
+            .eq('member_id', member.id)
+            .eq('cycle', currentCycle);
+
+          await supabase
+            .from('member_sponsors')
+            .insert(sponsors);
+          
+          console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name}`);
+        }
+
+        // Insert industry lobbying data (aggregated by industry)
+        if (industryTotals.size > 0) {
+          const lobbyingRecords = Array.from(industryTotals.entries())
+            .filter(([_, data]) => data.total >= 1000) // Only significant industries
+            .map(([industry, data]) => ({
+              member_id: member.id,
+              industry: industry,
+              total_spent: data.total,
+              client_count: data.count,
+              cycle: currentCycle,
+            }));
+
+          if (lobbyingRecords.length > 0) {
+            await supabase
+              .from('member_lobbying')
+              .delete()
+              .eq('member_id', member.id)
+              .eq('cycle', currentCycle);
+
+            await supabase
+              .from('member_lobbying')
+              .insert(lobbyingRecords);
+            
+            console.log(`Inserted ${lobbyingRecords.length} industry records for ${member.full_name}`);
           }
         }
 
@@ -336,11 +403,9 @@ serve(async (req) => {
       }
     }
 
-    // Calculate next offset
     const nextOffset = offset + members.length;
     const hasMore = nextOffset < totalMembers;
 
-    // Update progress tracking
     await supabase
       .from('sync_progress')
       .update({ 
@@ -375,7 +440,6 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in sync-fec-finance:', error);
     
-    // Update status to error
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -398,27 +462,56 @@ function categorizeContributor(employer: string | null, occupation: string | nul
   const emp = (employer || '').toLowerCase();
   const occ = (occupation || '').toLowerCase();
 
-  if (emp.includes('self') || emp.includes('retired') || occ.includes('retired')) return 'individual';
-  if (emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || emp.includes('co.')) return 'corporate';
-  if (emp.includes('pac') || emp.includes('committee') || emp.includes('political')) return 'pac';
-  if (emp.includes('union') || emp.includes('workers') || emp.includes('labor')) return 'union';
+  // PACs and political committees
+  if (emp.includes('pac') || emp.includes('committee') || emp.includes('political') || 
+      emp.includes('action committee') || emp.includes('for congress') || emp.includes('for senate')) {
+    return 'pac';
+  }
+  
+  // Unions and labor organizations
+  if (emp.includes('union') || emp.includes('workers') || emp.includes('labor') || 
+      emp.includes('brotherhood') || emp.includes('afl-cio') || emp.includes('teamsters') ||
+      emp.includes('seiu') || emp.includes('afscme')) {
+    return 'union';
+  }
+  
+  // Corporate entities
+  if (emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || 
+      emp.includes('co.') || emp.includes('company') || emp.includes('group') ||
+      emp.includes('holdings') || emp.includes('partners') || emp.includes('capital') ||
+      emp.includes('associates') || emp.includes('industries')) {
+    return 'corporate';
+  }
+
+  // Individual indicators
+  if (emp.includes('self') || emp.includes('retired') || emp.includes('homemaker') ||
+      emp.includes('not employed') || emp.includes('none') || emp === '' ||
+      occ.includes('retired') || occ.includes('homemaker')) {
+    return 'individual';
+  }
+  
   return 'individual';
 }
 
 function inferIndustry(employer: string | null, occupation: string | null): string | null {
   const combined = ((employer || '') + ' ' + (occupation || '')).toLowerCase();
 
-  if (combined.includes('law') || combined.includes('attorney') || combined.includes('legal')) return 'Legal';
-  if (combined.includes('real estate') || combined.includes('realtor') || combined.includes('property')) return 'Real Estate';
-  if (combined.includes('health') || combined.includes('medical') || combined.includes('doctor') || combined.includes('hospital')) return 'Healthcare';
-  if (combined.includes('bank') || combined.includes('financial') || combined.includes('investment') || combined.includes('insurance')) return 'Finance & Insurance';
-  if (combined.includes('tech') || combined.includes('software') || combined.includes('computer') || combined.includes('engineer')) return 'Technology';
-  if (combined.includes('oil') || combined.includes('gas') || combined.includes('energy') || combined.includes('utility')) return 'Energy';
-  if (combined.includes('construction') || combined.includes('builder') || combined.includes('contractor')) return 'Construction';
+  if (combined.includes('law') || combined.includes('attorney') || combined.includes('legal') || combined.includes('lawyer')) return 'Legal';
+  if (combined.includes('real estate') || combined.includes('realtor') || combined.includes('property') || combined.includes('realty')) return 'Real Estate';
+  if (combined.includes('health') || combined.includes('medical') || combined.includes('doctor') || combined.includes('hospital') || combined.includes('physician') || combined.includes('nurse') || combined.includes('pharma')) return 'Healthcare';
+  if (combined.includes('bank') || combined.includes('financial') || combined.includes('investment') || combined.includes('insurance') || combined.includes('hedge') || combined.includes('private equity') || combined.includes('venture')) return 'Finance & Insurance';
+  if (combined.includes('tech') || combined.includes('software') || combined.includes('computer') || combined.includes('engineer') || combined.includes('google') || combined.includes('microsoft') || combined.includes('apple') || combined.includes('meta') || combined.includes('amazon')) return 'Technology';
+  if (combined.includes('oil') || combined.includes('gas') || combined.includes('energy') || combined.includes('utility') || combined.includes('petroleum') || combined.includes('solar') || combined.includes('renewable')) return 'Energy';
+  if (combined.includes('construction') || combined.includes('builder') || combined.includes('contractor') || combined.includes('architect')) return 'Construction';
   if (combined.includes('retired')) return 'Retired';
-  if (combined.includes('education') || combined.includes('teacher') || combined.includes('professor') || combined.includes('university')) return 'Education';
-  if (combined.includes('farm') || combined.includes('agri') || combined.includes('ranch')) return 'Agriculture';
-  if (combined.includes('media') || combined.includes('entertainment') || combined.includes('film') || combined.includes('tv')) return 'Media & Entertainment';
-  if (combined.includes('defense') || combined.includes('military') || combined.includes('aerospace')) return 'Defense & Aerospace';
+  if (combined.includes('education') || combined.includes('teacher') || combined.includes('professor') || combined.includes('university') || combined.includes('school')) return 'Education';
+  if (combined.includes('farm') || combined.includes('agri') || combined.includes('ranch') || combined.includes('cattle')) return 'Agriculture';
+  if (combined.includes('media') || combined.includes('entertainment') || combined.includes('film') || combined.includes('tv') || combined.includes('broadcast') || combined.includes('news')) return 'Media & Entertainment';
+  if (combined.includes('defense') || combined.includes('military') || combined.includes('aerospace') || combined.includes('lockheed') || combined.includes('boeing') || combined.includes('raytheon')) return 'Defense & Aerospace';
+  if (combined.includes('telecom') || combined.includes('communications') || combined.includes('wireless') || combined.includes('verizon') || combined.includes('at&t')) return 'Telecommunications';
+  if (combined.includes('retail') || combined.includes('store') || combined.includes('walmart') || combined.includes('target')) return 'Retail';
+  if (combined.includes('transport') || combined.includes('logistics') || combined.includes('shipping') || combined.includes('airline') || combined.includes('trucking')) return 'Transportation';
+  if (combined.includes('lobby') || combined.includes('government relations') || combined.includes('public affairs')) return 'Lobbying';
+  
   return null;
 }
