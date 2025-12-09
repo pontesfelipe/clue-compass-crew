@@ -1,6 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import USMap from "@/components/USMap";
+import StateGrid from "@/components/StateGrid";
 import { StatsCard } from "@/components/StatsCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -132,7 +132,7 @@ export default function MapPage() {
           )}
         </div>
 
-        {/* Map Section */}
+        {/* State Grid Section */}
         <div className="rounded-2xl border border-border bg-card shadow-civic-lg overflow-hidden">
           <div className="p-6 border-b border-border">
             <h2 className="font-serif text-xl font-semibold text-foreground">
@@ -143,7 +143,7 @@ export default function MapPage() {
             </p>
           </div>
           <div className="p-4 lg:p-8">
-            <USMap />
+            <StateGrid />
           </div>
         </div>
 
