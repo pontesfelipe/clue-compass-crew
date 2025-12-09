@@ -83,10 +83,22 @@ Deno.serve(async (req) => {
 
     // Transform and upsert members
     const memberRecords = members.map((member: any) => {
-      // Find the most recent term by sorting by startYear descending
+      // Get terms array - terms are in chronological order (oldest first)
       const terms = member.terms?.item || []
-      const sortedTerms = [...terms].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0))
-      const latestTerm = sortedTerms[0]
+      
+      // Try multiple approaches to get the most recent term
+      // 1. Sort by startYear descending
+      // 2. If no startYear, use the last item (chronologically most recent per API docs)
+      let latestTerm = null
+      if (terms.length > 0) {
+        const termsWithYear = terms.filter((t: any) => t.startYear)
+        if (termsWithYear.length > 0) {
+          latestTerm = [...termsWithYear].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0))[0]
+        } else {
+          // Fallback: use last item in array (docs say chronological order)
+          latestTerm = terms[terms.length - 1]
+        }
+      }
       
       // Map party code - check partyName which is more reliable
       let party: 'D' | 'R' | 'I' = 'I'
@@ -94,11 +106,34 @@ Deno.serve(async (req) => {
       if (partyStr.includes('democrat')) party = 'D'
       else if (partyStr.includes('republican')) party = 'R'
       
-      // Map chamber from latest term - API returns "Senate" or "House of Representatives"
-      const chamberStr = (latestTerm?.chamber || '').toLowerCase()
-      const chamber: 'senate' | 'house' = chamberStr.includes('senate') ? 'senate' : 'house'
+      // Determine chamber using multiple methods:
+      // 1. From latest term's chamber field
+      // 2. If member has a district number, they're in the House
+      // 3. Check all terms for any Senate service (senators don't have districts)
+      let chamber: 'senate' | 'house' = 'house' // default
       
-      console.log(`Member ${member.name}: chamber=${latestTerm?.chamber}, mapped=${chamber}`)
+      const termChamber = (latestTerm?.chamber || '').toLowerCase()
+      if (termChamber.includes('senate')) {
+        chamber = 'senate'
+      } else if (termChamber.includes('house') || termChamber.includes('representative')) {
+        chamber = 'house'
+      } else {
+        // Fallback: check if ANY term is Senate (for members who switched chambers)
+        // Use the most recent Senate term if they have one
+        const senateTerm = terms.find((t: any) => 
+          (t.chamber || '').toLowerCase().includes('senate')
+        )
+        if (senateTerm && !member.district) {
+          // If they have a senate term and no current district, likely a senator
+          chamber = 'senate'
+        }
+        // If member has a district, they're definitely in the House
+        if (member.district !== undefined && member.district !== null) {
+          chamber = 'house'
+        }
+      }
+      
+      console.log(`Member ${member.name}: termChamber=${latestTerm?.chamber}, district=${member.district}, mapped=${chamber}, terms=${JSON.stringify(terms.slice(-2))}`)
       
       // Parse names correctly - API gives firstName and lastName directly
       // But also has name in "LastName, FirstName" format as backup
