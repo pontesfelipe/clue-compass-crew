@@ -119,11 +119,28 @@ export function useChamberScores() {
 
 /**
  * Fetch all state scores for the map
+ * Uses pre-computed state_scores table when available, falls back to member aggregation
  */
 export function useStateScores() {
   return useQuery({
     queryKey: ["state-scores"],
     queryFn: async (): Promise<StateScore[]> => {
+      // Try to fetch from pre-computed state_scores table first
+      const { data: precomputed, error: precomputedError } = await supabase
+        .from("state_scores")
+        .select("state, avg_member_score, member_count");
+
+      if (!precomputedError && precomputed && precomputed.length > 0) {
+        // Use pre-computed data
+        return precomputed.map((row) => ({
+          abbr: getStateAbbr(row.state),
+          name: row.state,
+          score: Math.round(Number(row.avg_member_score) || 0),
+          memberCount: row.member_count || 0,
+        }));
+      }
+
+      // Fallback: aggregate from members table
       const { data, error } = await supabase
         .from("members")
         .select(`
@@ -137,7 +154,7 @@ export function useStateScores() {
 
       if (error) throw error;
 
-      // Aggregate scores by state (state is stored as full name in DB)
+      // Aggregate scores by state
       const stateAggregates: Record<string, { total: number; count: number }> = {};
       
       (data || []).forEach((member) => {

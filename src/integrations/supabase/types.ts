@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_sources: {
+        Row: {
+          base_url: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          base_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          base_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      api_sync_runs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          items_processed: number | null
+          job_type: string
+          metadata: Json | null
+          source_id: string | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          items_processed?: number | null
+          job_type: string
+          metadata?: Json | null
+          source_id?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          items_processed?: number | null
+          job_type?: string
+          metadata?: Json | null
+          source_id?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_sync_runs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "api_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bill_sponsorships: {
         Row: {
           bill_id: string
@@ -72,6 +143,7 @@ export type Database = {
           latest_action_date: string | null
           latest_action_text: string | null
           policy_area: string | null
+          raw: Json | null
           short_title: string | null
           subjects: string[] | null
           summary: string | null
@@ -91,6 +163,7 @@ export type Database = {
           latest_action_date?: string | null
           latest_action_text?: string | null
           policy_area?: string | null
+          raw?: Json | null
           short_title?: string | null
           subjects?: string[] | null
           summary?: string | null
@@ -110,6 +183,7 @@ export type Database = {
           latest_action_date?: string | null
           latest_action_text?: string | null
           policy_area?: string | null
+          raw?: Json | null
           short_title?: string | null
           subjects?: string[] | null
           summary?: string | null
@@ -266,11 +340,15 @@ export type Database = {
           bipartisan_bills: number | null
           bipartisanship_score: number | null
           calculated_at: string | null
+          finance_influence_score: number | null
+          governance_score: number | null
           id: string
           issue_alignment_score: number | null
+          lobbying_alignment_score: number | null
           member_id: string
           overall_score: number | null
           productivity_score: number | null
+          transparency_score: number | null
           user_id: string | null
           votes_cast: number | null
           votes_missed: number | null
@@ -283,11 +361,15 @@ export type Database = {
           bipartisan_bills?: number | null
           bipartisanship_score?: number | null
           calculated_at?: string | null
+          finance_influence_score?: number | null
+          governance_score?: number | null
           id?: string
           issue_alignment_score?: number | null
+          lobbying_alignment_score?: number | null
           member_id: string
           overall_score?: number | null
           productivity_score?: number | null
+          transparency_score?: number | null
           user_id?: string | null
           votes_cast?: number | null
           votes_missed?: number | null
@@ -300,11 +382,15 @@ export type Database = {
           bipartisan_bills?: number | null
           bipartisanship_score?: number | null
           calculated_at?: string | null
+          finance_influence_score?: number | null
+          governance_score?: number | null
           id?: string
           issue_alignment_score?: number | null
+          lobbying_alignment_score?: number | null
           member_id?: string
           overall_score?: number | null
           productivity_score?: number | null
+          transparency_score?: number | null
           user_id?: string | null
           votes_cast?: number | null
           votes_missed?: number | null
@@ -439,21 +525,27 @@ export type Database = {
           id: string
           member_id: string
           position: Database["public"]["Enums"]["vote_position"]
+          position_normalized: string | null
           vote_id: string
+          weight: number | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           member_id: string
           position: Database["public"]["Enums"]["vote_position"]
+          position_normalized?: string | null
           vote_id: string
+          weight?: number | null
         }
         Update: {
           created_at?: string | null
           id?: string
           member_id?: string
           position?: Database["public"]["Enums"]["vote_position"]
+          position_normalized?: string | null
           vote_id?: string
+          weight?: number | null
         }
         Relationships: [
           {
@@ -577,6 +669,63 @@ export type Database = {
         }
         Relationships: []
       }
+      state_scores: {
+        Row: {
+          avg_attendance: number | null
+          avg_bipartisanship: number | null
+          avg_issue_alignment: number | null
+          avg_member_score: number | null
+          avg_productivity: number | null
+          created_at: string | null
+          democrat_count: number | null
+          house_count: number | null
+          id: string
+          independent_count: number | null
+          last_calculated_at: string | null
+          member_count: number | null
+          republican_count: number | null
+          senate_count: number | null
+          state: string
+          updated_at: string | null
+        }
+        Insert: {
+          avg_attendance?: number | null
+          avg_bipartisanship?: number | null
+          avg_issue_alignment?: number | null
+          avg_member_score?: number | null
+          avg_productivity?: number | null
+          created_at?: string | null
+          democrat_count?: number | null
+          house_count?: number | null
+          id?: string
+          independent_count?: number | null
+          last_calculated_at?: string | null
+          member_count?: number | null
+          republican_count?: number | null
+          senate_count?: number | null
+          state: string
+          updated_at?: string | null
+        }
+        Update: {
+          avg_attendance?: number | null
+          avg_bipartisanship?: number | null
+          avg_issue_alignment?: number | null
+          avg_member_score?: number | null
+          avg_productivity?: number | null
+          created_at?: string | null
+          democrat_count?: number | null
+          house_count?: number | null
+          id?: string
+          independent_count?: number | null
+          last_calculated_at?: string | null
+          member_count?: number | null
+          republican_count?: number | null
+          senate_count?: number | null
+          state?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sync_progress: {
         Row: {
           created_at: string | null
@@ -676,6 +825,7 @@ export type Database = {
           description: string | null
           id: string
           question: string | null
+          raw: Json | null
           result: string | null
           roll_number: number
           session: number
@@ -693,6 +843,7 @@ export type Database = {
           description?: string | null
           id?: string
           question?: string | null
+          raw?: Json | null
           result?: string | null
           roll_number: number
           session: number
@@ -710,6 +861,7 @@ export type Database = {
           description?: string | null
           id?: string
           question?: string | null
+          raw?: Json | null
           result?: string | null
           roll_number?: number
           session?: number
