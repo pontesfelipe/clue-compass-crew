@@ -92,7 +92,7 @@ export default function Index() {
                   <h3 className="font-serif text-lg font-semibold text-foreground">National Overview</h3>
                   <ScoreRing score={67} size="md" />
                 </div>
-                <USMap />
+                <USMap showStats={false} />
               </div>
             </div>
           </div>
