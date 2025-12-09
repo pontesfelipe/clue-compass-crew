@@ -1,9 +1,19 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Header() {
+  const { user, isAuthenticated, signOut } = useAuth();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="civic-container flex h-16 items-center justify-between">
@@ -48,13 +58,41 @@ export function Header() {
           <div className="md:hidden">
             <MemberSearch />
           </div>
-          <Button variant="civic-outline" size="sm" className="hidden sm:flex">
-            <User className="mr-2 h-4 w-4" />
-            Sign In
-          </Button>
-          <Button variant="civic" size="sm">
-            Get Started
-          </Button>
+          
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="civic-outline" size="sm" className="hidden sm:flex">
+                  <User className="mr-2 h-4 w-4" />
+                  {user?.email?.split("@")[0] || "Account"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                  {user?.email}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              <Button variant="civic-outline" size="sm" className="hidden sm:flex" asChild>
+                <Link to="/auth">
+                  <User className="mr-2 h-4 w-4" />
+                  Sign In
+                </Link>
+              </Button>
+              <Button variant="civic" size="sm" asChild>
+                <Link to="/auth">
+                  Get Started
+                </Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
