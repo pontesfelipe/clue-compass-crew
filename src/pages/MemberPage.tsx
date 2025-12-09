@@ -437,7 +437,7 @@ export default function MemberPage() {
         {/* AI Summary and Policy Areas */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">
           <MemberAISummary memberId={member.id} memberName={member.fullName} />
-          <MemberPolicyAreas memberId={member.id} />
+          <MemberPolicyAreas memberId={member.id} memberState={member.state} memberParty={member.party} />
         </div>
 
         {/* Score Breakdown and Bills Grid */}
