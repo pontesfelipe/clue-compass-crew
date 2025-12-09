@@ -34,6 +34,8 @@ import { MemberAISummary } from "@/components/MemberAISummary";
 import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
 import { toast } from "@/hooks/use-toast";
+import { VoteDetailDialog } from "@/components/VoteDetailDialog";
+import { useState } from "react";
 
 type Party = "D" | "R" | "I";
 
@@ -132,6 +134,8 @@ export default function MemberPage() {
   const { memberId } = useParams<{ memberId: string }>();
   const { data: member, isLoading, error } = useMember(memberId || "");
   const { addMember, removeMember, isMemberSelected, canAddMore } = useComparison();
+  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
+  const [selectedVotePosition, setSelectedVotePosition] = useState<string | undefined>();
 
   if (isLoading) {
     return (
@@ -575,9 +579,13 @@ export default function MemberPage() {
             <div className="space-y-4">
               {member.voteHistory && member.voteHistory.length > 0 ? (
                 member.voteHistory.map((vote: any, index: number) => (
-                  <div 
+                  <button 
                     key={vote.id}
-                    className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                    onClick={() => {
+                      setSelectedVoteId(vote.vote_id);
+                      setSelectedVotePosition(vote.position);
+                    }}
+                    className="w-full text-left p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors cursor-pointer"
                     style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -608,7 +616,7 @@ export default function MemberPage() {
                         Yea: {vote.total_yea || 0} · Nay: {vote.total_nay || 0}
                       </p>
                     )}
-                  </div>
+                  </button>
                 ))
               ) : (
                 <p className="text-muted-foreground text-center py-8">
@@ -618,6 +626,16 @@ export default function MemberPage() {
             </div>
           </div>
         </div>
+
+        {/* Vote Detail Dialog */}
+        <VoteDetailDialog 
+          voteId={selectedVoteId} 
+          memberPosition={selectedVotePosition}
+          onClose={() => {
+            setSelectedVoteId(null);
+            setSelectedVotePosition(undefined);
+          }}
+        />
 
         {/* Financial Relationships Section */}
         <div className="mt-8">
