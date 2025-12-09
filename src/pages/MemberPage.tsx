@@ -35,6 +35,9 @@ import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
 import { toast } from "@/hooks/use-toast";
 import { VoteDetailDialog } from "@/components/VoteDetailDialog";
+import { MemberCommittees } from "@/features/members/components/MemberCommittees";
+import { MemberVotingComparison } from "@/features/members/components/MemberVotingComparison";
+import { MemberActivity } from "@/features/members/components/MemberActivity";
 import { useState } from "react";
 
 type Party = "D" | "R" | "I";
@@ -443,6 +446,21 @@ export default function MemberPage() {
         <div className="grid gap-8 lg:grid-cols-2 mb-8">
           <MemberAISummary memberId={member.id} memberName={member.fullName} />
           <MemberPolicyAreas memberId={member.id} memberState={member.state} memberParty={member.party} />
+        </div>
+
+        {/* Committees and Voting Comparison */}
+        <div className="grid gap-8 lg:grid-cols-2 mb-8">
+          <MemberCommittees memberId={member.id} />
+          <MemberVotingComparison 
+            memberId={member.id} 
+            party={member.party as "D" | "R" | "I" | "L"} 
+            state={member.state} 
+          />
+        </div>
+
+        {/* Recent Activity */}
+        <div className="mb-8">
+          <MemberActivity memberId={member.id} />
         </div>
 
         {/* Score Breakdown and Bills Grid */}

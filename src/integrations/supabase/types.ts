@@ -119,6 +119,56 @@ export type Database = {
         }
         Relationships: []
       }
+      member_committees: {
+        Row: {
+          chamber: string
+          committee_code: string
+          committee_name: string
+          congress: number
+          created_at: string | null
+          id: string
+          is_chair: boolean | null
+          is_ranking_member: boolean | null
+          member_id: string
+          rank: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          chamber: string
+          committee_code: string
+          committee_name: string
+          congress: number
+          created_at?: string | null
+          id?: string
+          is_chair?: boolean | null
+          is_ranking_member?: boolean | null
+          member_id: string
+          rank?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          chamber?: string
+          committee_code?: string
+          committee_name?: string
+          congress?: number
+          created_at?: string | null
+          id?: string
+          is_chair?: boolean | null
+          is_ranking_member?: boolean | null
+          member_id?: string
+          rank?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_committees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_contributions: {
         Row: {
           amount: number
@@ -306,6 +356,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "member_sponsors_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_statements: {
+        Row: {
+          created_at: string | null
+          id: string
+          member_id: string
+          statement_date: string
+          statement_type: string | null
+          subjects: string[] | null
+          title: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          member_id: string
+          statement_date: string
+          statement_type?: string | null
+          subjects?: string[] | null
+          title: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          member_id?: string
+          statement_date?: string
+          statement_type?: string | null
+          subjects?: string[] | null
+          title?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_statements_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
