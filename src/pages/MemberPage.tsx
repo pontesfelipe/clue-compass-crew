@@ -128,10 +128,10 @@ export default function MemberPage() {
   const scores = member.scores;
 
   const scoreBreakdown = scores ? [
-    { name: "Productivity", score: Number(scores.productivity_score) || 0, weight: 25, description: "Bills sponsored and enacted" },
-    { name: "Attendance", score: Number(scores.attendance_score) || 0, weight: 25, description: "Voting participation rate" },
-    { name: "Bipartisanship", score: Number(scores.bipartisanship_score) || 0, weight: 25, description: "Cross-party collaboration" },
-    { name: "Issue Alignment", score: Number(scores.issue_alignment_score) || 0, weight: 25, description: "Based on your preferences" },
+    { name: "Productivity", score: Number(scores.productivityScore) || 0, weight: 25, description: "Bills sponsored and enacted" },
+    { name: "Attendance", score: Number(scores.attendanceScore) || 0, weight: 25, description: "Voting participation rate" },
+    { name: "Bipartisanship", score: Number(scores.bipartisanshipScore) || 0, weight: 25, description: "Cross-party collaboration" },
+    { name: "Issue Alignment", score: Number(scores.issueAlignmentScore) || 0, weight: 25, description: "Based on your preferences" },
   ] : [];
 
   return (
@@ -155,16 +155,16 @@ export default function MemberPage() {
             <div className="flex flex-col sm:flex-row gap-6 items-start">
               {/* Photo */}
               <div className="relative flex-shrink-0">
-                {member.image_url ? (
+                {member.imageUrl ? (
                   <img
-                    src={member.image_url}
-                    alt={member.full_name}
+                    src={member.imageUrl}
+                    alt={member.fullName}
                     className="h-32 w-32 rounded-2xl object-cover border-2 border-border shadow-civic-md"
                   />
                 ) : (
                   <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-muted border-2 border-border shadow-civic-md">
                     <span className="text-3xl font-semibold text-muted-foreground font-serif">
-                      {member.first_name?.[0]}{member.last_name?.[0]}
+                      {member.firstName?.[0]}{member.lastName?.[0]}
                     </span>
                   </div>
                 )}
@@ -198,7 +198,7 @@ export default function MemberPage() {
                 </div>
                 
                 <h1 className="font-serif text-3xl font-bold text-foreground sm:text-4xl mb-2">
-                  {member.full_name}
+                  {member.fullName}
                 </h1>
                 <p className="text-lg text-muted-foreground">
                   {chamberDisplay === "Senate" ? "Senator" : "Representative"} from {stateName}
@@ -214,11 +214,11 @@ export default function MemberPage() {
                       } else if (canAddMore) {
                         addMember({
                           id: member.id,
-                          name: member.full_name,
+                          name: member.fullName,
                           party: member.party,
                           state: member.state,
                           chamber: member.chamber === "senate" ? "Senate" : "House",
-                          imageUrl: member.image_url,
+                          imageUrl: member.imageUrl,
                         });
                       }
                     }}
@@ -244,9 +244,9 @@ export default function MemberPage() {
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
                   </Button>
-                  {member.website_url && (
+                  {member.websiteUrl && (
                     <Button variant="civic-ghost" size="sm" asChild>
-                      <a href={member.website_url} target="_blank" rel="noopener noreferrer">
+                      <a href={member.websiteUrl} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="mr-2 h-4 w-4" />
                         Website
                       </a>
@@ -273,22 +273,22 @@ export default function MemberPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-12">
           <StatsCard
             icon={FileText}
-            value={scores?.bills_sponsored ?? 0}
+            value={scores?.billsSponsored ?? 0}
             label="Bills Sponsored"
           />
           <StatsCard
             icon={Users}
-            value={scores?.bills_cosponsored ?? 0}
+            value={scores?.billsCosponsored ?? 0}
             label="Bills Co-sponsored"
           />
           <StatsCard
             icon={Vote}
-            value={`${scores?.attendance_score ?? 0}%`}
+            value={`${scores?.attendanceScore ?? 0}%`}
             label="Attendance Rate"
           />
           <StatsCard
             icon={Calendar}
-            value={calculateYearsInOffice(member.start_date)}
+            value={calculateYearsInOffice(member.startDate)}
             label="Time in Office"
           />
         </div>

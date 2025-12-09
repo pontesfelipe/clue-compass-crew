@@ -196,12 +196,12 @@ export default function Index() {
                 >
                   <MemberCard
                     id={member.id}
-                    name={member.full_name}
+                    name={member.fullName}
                     party={member.party}
                     state={member.state}
                     chamber={member.chamber === "senate" ? "Senate" : "House"}
                     score={member.score ?? 0}
-                    imageUrl={member.image_url}
+                    imageUrl={member.imageUrl}
                   />
                 </div>
               ))
