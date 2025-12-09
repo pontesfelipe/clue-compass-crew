@@ -5,6 +5,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Log sync run to api_sync_runs table
+async function logSyncRun(
+  supabase: any,
+  sourceId: string | null,
+  jobType: string,
+  status: 'running' | 'success' | 'failed' | 'partial',
+  itemsProcessed: number,
+  errorMessage?: string,
+  metadata?: Record<string, unknown>
+) {
+  if (!sourceId) return
+  
+  try {
+    await supabase
+      .from('api_sync_runs')
+      .insert({
+        source_id: sourceId,
+        job_type: jobType,
+        status,
+        items_processed: itemsProcessed,
+        finished_at: status !== 'running' ? new Date().toISOString() : null,
+        error_message: errorMessage,
+        metadata
+      })
+  } catch (e) {
+    console.log('Error logging sync run:', e)
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -20,7 +49,20 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    console.log('Starting member score calculation...')
+    // Parse query params
+    const url = new URL(req.url)
+    const useRealVoteData = url.searchParams.get('useRealVotes') !== 'false'
+
+    console.log(`Starting member score calculation (useRealVotes: ${useRealVoteData})...`)
+
+    // Get api_sources id for congress_gov
+    const { data: sourceData } = await supabase
+      .from('api_sources')
+      .select('id')
+      .eq('name', 'congress_gov')
+      .single()
+
+    const sourceId = sourceData?.id
 
     // Get all current members
     const { data: members, error: membersError } = await supabase
@@ -31,15 +73,60 @@ Deno.serve(async (req) => {
     if (membersError) throw membersError
     console.log(`Processing ${members?.length || 0} members`)
 
-    const memberMap = new Map(members?.map(m => [m.bioguide_id, m]) || [])
     let scoresUpdated = 0
+    let errors: string[] = []
 
-    // Fetch vote statistics for each member from Congress.gov
+    // Get actual vote data for all members from member_votes
+    const voteStatsMap = new Map<string, { 
+      total: number
+      yea: number
+      nay: number
+      present: number
+      notVoting: number
+    }>()
+
+    if (useRealVoteData) {
+      console.log('Fetching real vote data from member_votes...')
+      
+      const { data: voteData, error: voteError } = await supabase
+        .from('member_votes')
+        .select('member_id, position')
+      
+      if (!voteError && voteData) {
+        for (const vote of voteData) {
+          const stats = voteStatsMap.get(vote.member_id) || {
+            total: 0, yea: 0, nay: 0, present: 0, notVoting: 0
+          }
+          
+          stats.total++
+          if (vote.position === 'yea') stats.yea++
+          else if (vote.position === 'nay') stats.nay++
+          else if (vote.position === 'present') stats.present++
+          else stats.notVoting++
+          
+          voteStatsMap.set(vote.member_id, stats)
+        }
+        
+        console.log(`Loaded vote stats for ${voteStatsMap.size} members`)
+      }
+    }
+
+    // Process each member
     for (const member of members || []) {
       try {
-        console.log(`Fetching data for ${member.full_name} (${member.bioguide_id})...`)
+        // Get real vote stats if available
+        const voteStats = voteStatsMap.get(member.id)
         
-        // Fetch member details including sponsored legislation
+        let votesCast = 0
+        let votesMissed = 0
+        
+        if (voteStats && voteStats.total > 0) {
+          // Use actual vote data
+          votesCast = voteStats.yea + voteStats.nay + voteStats.present
+          votesMissed = voteStats.notVoting
+        }
+        
+        // Fetch member details from Congress.gov for bill data
         const memberUrl = `https://api.congress.gov/v3/member/${member.bioguide_id}?format=json&api_key=${congressApiKey}`
         const memberResponse = await fetch(memberUrl)
         
@@ -51,21 +138,13 @@ Deno.serve(async (req) => {
         const memberData = await memberResponse.json()
         const memberDetail = memberData.member
 
-        // Get sponsored legislation count
-        let billsSponsored = 0
-        let billsCosponsored = 0
+        // Get bill counts
+        let billsSponsored = memberDetail.sponsoredLegislation?.count || 0
+        let billsCosponsored = memberDetail.cosponsoredLegislation?.count || 0
         let billsEnacted = 0
-        
-        if (memberDetail.sponsoredLegislation?.count !== undefined) {
-          billsSponsored = memberDetail.sponsoredLegislation.count
-        }
-        
-        if (memberDetail.cosponsoredLegislation?.count !== undefined) {
-          billsCosponsored = memberDetail.cosponsoredLegislation.count
-        }
-
-        // Fetch sponsored bills to check for enacted ones and bipartisan cosponsorship
         let bipartisanBills = 0
+
+        // Check sponsored bills for enacted status
         if (memberDetail.sponsoredLegislation?.url) {
           try {
             const sponsoredUrl = `${memberDetail.sponsoredLegislation.url}&format=json&limit=100&api_key=${congressApiKey}`
@@ -75,7 +154,6 @@ Deno.serve(async (req) => {
               const bills = sponsoredData.sponsoredLegislation || []
               
               for (const bill of bills) {
-                // Check if bill became law
                 if (bill.latestAction?.text?.toLowerCase().includes('became public law')) {
                   billsEnacted++
                 }
@@ -86,7 +164,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fetch cosponsored bills to detect bipartisan activity
+        // Check cosponsored bills for bipartisan activity
         if (memberDetail.cosponsoredLegislation?.url) {
           try {
             const cosponsoredUrl = `${memberDetail.cosponsoredLegislation.url}&format=json&limit=50&api_key=${congressApiKey}`
@@ -95,9 +173,7 @@ Deno.serve(async (req) => {
               const cosponsoredData = await cosponsoredResponse.json()
               const bills = cosponsoredData.cosponsoredLegislation || []
               
-              // Check a sample of bills for bipartisan sponsorship
               for (const bill of bills.slice(0, 20)) {
-                // Fetch bill detail to check sponsor party
                 const billDetailUrl = `https://api.congress.gov/v3/bill/${bill.congress}/${bill.type?.toLowerCase()}/${bill.number}?format=json&api_key=${congressApiKey}`
                 try {
                   const billDetailResponse = await fetch(billDetailUrl)
@@ -106,7 +182,6 @@ Deno.serve(async (req) => {
                     const sponsor = billDetailData.bill?.sponsors?.[0]
                     if (sponsor?.party) {
                       const sponsorParty = sponsor.party.charAt(0).toUpperCase()
-                      // If sponsor is opposite party, count as bipartisan
                       if ((member.party === 'D' && sponsorParty === 'R') ||
                           (member.party === 'R' && sponsorParty === 'D')) {
                         bipartisanBills++
@@ -116,9 +191,7 @@ Deno.serve(async (req) => {
                 } catch (e) {
                   // Skip bill on error
                 }
-                
-                // Rate limiting
-                await new Promise(resolve => setTimeout(resolve, 50))
+                await new Promise(resolve => setTimeout(resolve, 30))
               }
             }
           } catch (e) {
@@ -126,44 +199,34 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Estimate voting attendance from Congress.gov 
-        // We'll use a proxy: activity level based on legislation count
-        // Congress.gov doesn't expose direct vote attendance easily
-        const totalLegislativeActivity = billsSponsored + billsCosponsored
-        
-        // Generate estimated attendance based on legislative activity
-        // More active members tend to have better attendance
-        let votesCast = 0
-        let votesMissed = 0
-        
-        // Use legislative activity as proxy for engagement
-        // Average member sponsors ~15 bills and cosponsors ~200 per Congress
-        const activityRatio = Math.min(totalLegislativeActivity / 200, 1)
-        
-        // Estimate based on typical voting patterns
-        // Average Congress has ~600-800 roll call votes in House, ~300-400 in Senate
-        const baseVotes = member.chamber === 'senate' ? 350 : 700
-        const attendanceRate = 0.75 + (activityRatio * 0.20) // 75-95% attendance
-        votesCast = Math.round(baseVotes * attendanceRate)
-        votesMissed = baseVotes - votesCast
+        // If no real vote data, estimate based on activity
+        if (!voteStats || voteStats.total === 0) {
+          const totalLegislativeActivity = billsSponsored + billsCosponsored
+          const activityRatio = Math.min(totalLegislativeActivity / 200, 1)
+          const baseVotes = member.chamber === 'senate' ? 350 : 700
+          const attendanceRate = 0.75 + (activityRatio * 0.20)
+          votesCast = Math.round(baseVotes * attendanceRate)
+          votesMissed = baseVotes - votesCast
+        }
 
         // Calculate scores (0-100 scale)
         
-        // Attendance Score: based on estimated vote participation
-        const attendanceScore = Math.round((votesCast / (votesCast + votesMissed)) * 100)
+        // Attendance Score
+        const totalVotes = votesCast + votesMissed
+        const attendanceScore = totalVotes > 0 
+          ? Math.round((votesCast / totalVotes) * 100)
+          : 80 // Default if no vote data
         
-        // Productivity Score: based on bills sponsored and enacted
-        // Average: ~15 sponsored, ~2 enacted per Congress
+        // Productivity Score
         const sponsorScore = Math.min((billsSponsored / 20) * 50, 50)
         const enactedScore = Math.min(billsEnacted * 15, 50)
         const productivityScore = Math.round(sponsorScore + enactedScore)
         
-        // Bipartisanship Score: based on cross-party cosponsorship
-        // 20 bipartisan bills out of 20 checked = 100%
+        // Bipartisanship Score
         const bipartisanshipScore = Math.round(Math.min((bipartisanBills / 10) * 100, 100))
         
-        // Issue Alignment Score: placeholder - would need user preferences
-        // For now, use a baseline based on general effectiveness
+        // Issue Alignment Score (baseline)
+        const activityRatio = Math.min((billsSponsored + billsCosponsored) / 200, 1)
         const issueAlignmentScore = Math.round(50 + (activityRatio * 35))
 
         // Overall Score: weighted average
@@ -179,7 +242,7 @@ Deno.serve(async (req) => {
           .from('member_scores')
           .upsert({
             member_id: member.id,
-            user_id: null, // Public/default scores
+            user_id: null,
             overall_score: overallScore,
             productivity_score: productivityScore,
             attendance_score: attendanceScore,
@@ -197,18 +260,32 @@ Deno.serve(async (req) => {
           })
 
         if (updateError) {
-          console.log(`Error updating scores for ${member.full_name}: ${updateError.message}`)
+          errors.push(`${member.full_name}: ${updateError.message}`)
         } else {
           scoresUpdated++
-          console.log(`Updated scores for ${member.full_name}: overall=${overallScore}, attendance=${attendanceScore}, productivity=${productivityScore}, bipartisan=${bipartisanshipScore}`)
+          console.log(`Updated ${member.full_name}: overall=${overallScore}, attendance=${attendanceScore}, productivity=${productivityScore}`)
         }
 
-        // Rate limiting to avoid API throttling
-        await new Promise(resolve => setTimeout(resolve, 200))
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 150))
         
       } catch (memberError) {
-        console.log(`Error processing member ${member.bioguide_id}: ${memberError}`)
+        const errMsg = memberError instanceof Error ? memberError.message : String(memberError)
+        errors.push(`${member.bioguide_id}: ${errMsg}`)
       }
+    }
+
+    // Log sync run
+    if (sourceId) {
+      await logSyncRun(
+        supabase, 
+        sourceId, 
+        'scores', 
+        errors.length > 0 ? 'partial' : 'success',
+        scoresUpdated,
+        errors.length > 0 ? errors.slice(0, 5).join('; ') : undefined,
+        { useRealVoteData, totalMembers: members?.length || 0 }
+      )
     }
 
     // Update sync progress
@@ -225,6 +302,7 @@ Deno.serve(async (req) => {
     const result = {
       success: true,
       scoresUpdated,
+      errors: errors.slice(0, 10),
       message: `Successfully calculated scores for ${scoresUpdated} members`
     }
 

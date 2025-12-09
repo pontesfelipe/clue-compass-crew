@@ -1,5 +1,8 @@
 project_id = "ifdorcgbhxzwktjlxqfo"
 
+[functions.recalculate-state-scores]
+verify_jwt = false
+
 [functions.sync-fec-finance]
 verify_jwt = false
 
