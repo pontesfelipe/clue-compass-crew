@@ -122,6 +122,24 @@ export function useMember(memberId: string) {
             bills_cosponsored,
             bills_enacted,
             bipartisan_bills
+          ),
+          bill_sponsorships (
+            is_sponsor,
+            cosponsored_date,
+            bills (
+              id,
+              title,
+              short_title,
+              bill_type,
+              bill_number,
+              congress,
+              introduced_date,
+              latest_action_text,
+              latest_action_date,
+              enacted,
+              enacted_date,
+              policy_area
+            )
           )
         `)
         .eq("id", memberId)
@@ -131,11 +149,26 @@ export function useMember(memberId: string) {
       if (error) throw error;
       if (!data) return null;
 
-      const memberData = data as MemberWithScore;
+      const memberData = data as any;
+      const scores = memberData.member_scores?.[0] ?? null;
+      
+      // Get sponsored bills (most recent first)
+      const sponsorships = memberData.bill_sponsorships || [];
+      const sponsoredBills = sponsorships
+        .filter((s: any) => s.is_sponsor && s.bills)
+        .map((s: any) => s.bills)
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.latest_action_date || a.introduced_date || 0);
+          const dateB = new Date(b.latest_action_date || b.introduced_date || 0);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 5);
+
       return {
         ...memberData,
-        score: memberData.member_scores?.[0]?.overall_score ?? 0,
-        scores: memberData.member_scores?.[0] ?? null,
+        score: scores?.overall_score ?? 0,
+        scores,
+        sponsoredBills,
       };
     },
     enabled: !!memberId,

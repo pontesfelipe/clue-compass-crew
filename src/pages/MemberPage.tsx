@@ -6,6 +6,7 @@ import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { StatsCard } from "@/components/StatsCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   ArrowLeft, 
   FileText, 
@@ -14,70 +15,120 @@ import {
   Calendar,
   ExternalLink,
   Share2,
-  Bookmark
+  Bookmark,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMember } from "@/hooks/useMembers";
+import { stateNames } from "@/hooks/useStateData";
 
 type Party = "D" | "R" | "I";
 
-// Mock data - would be fetched from API
-const memberData: {
-  id: string;
-  name: string;
-  party: Party;
-  state: string;
-  stateAbbr: string;
-  chamber: string;
-  district: string | null;
-  termStart: string;
-  website: string;
-  phone: string;
-  office: string;
-  score: number;
-  imageUrl: string | null;
-  scores: { name: string; score: number; weight: number; description: string }[];
-  recentBills: { number: string; title: string; status: string; date: string }[];
-} = {
-  id: "A000360",
-  name: "Susan Collins",
-  party: "R",
-  state: "Maine",
-  stateAbbr: "ME",
-  chamber: "Senate",
-  district: null,
-  termStart: "1997-01-07",
-  website: "https://www.collins.senate.gov",
-  phone: "(202) 224-2523",
-  office: "413 Dirksen Senate Office Building",
-  score: 85,
-  imageUrl: null,
-  scores: [
-    { name: "Productivity", score: 82, weight: 25, description: "Bills sponsored and enacted" },
-    { name: "Attendance", score: 96, weight: 25, description: "Voting participation rate" },
-    { name: "Bipartisanship", score: 91, weight: 30, description: "Cross-party collaboration" },
-    { name: "Issue Alignment", score: 72, weight: 20, description: "Based on your preferences" },
-  ],
-  recentBills: [
-    { number: "S.1234", title: "Infrastructure Investment Act", status: "Passed Senate", date: "2024-03-15" },
-    { number: "S.567", title: "Healthcare Access Improvement Act", status: "In Committee", date: "2024-02-28" },
-    { number: "S.890", title: "Small Business Relief Act", status: "Passed", date: "2024-01-20" },
-  ]
-};
-
-const partyColors = {
+const partyColors: Record<Party, string> = {
   D: "bg-civic-blue/10 text-civic-blue border-civic-blue/30",
   R: "bg-civic-red/10 text-civic-red border-civic-red/30",
   I: "bg-civic-slate/10 text-civic-slate border-civic-slate/30",
 };
 
-const partyNames = {
+const partyNames: Record<Party, string> = {
   D: "Democrat",
   R: "Republican",
   I: "Independent",
 };
 
+function formatBillNumber(bill: any): string {
+  const typeMap: Record<string, string> = {
+    hr: "H.R.",
+    s: "S.",
+    hjres: "H.J.Res.",
+    sjres: "S.J.Res.",
+    hconres: "H.Con.Res.",
+    sconres: "S.Con.Res.",
+    hres: "H.Res.",
+    sres: "S.Res.",
+  };
+  const prefix = typeMap[bill.bill_type] || bill.bill_type?.toUpperCase() || "";
+  return `${prefix}${bill.bill_number}`;
+}
+
+function getBillStatus(bill: any): string {
+  if (bill.enacted) return "Enacted";
+  if (bill.latest_action_text?.toLowerCase().includes("passed")) return "Passed";
+  if (bill.latest_action_text?.toLowerCase().includes("committee")) return "In Committee";
+  return "Introduced";
+}
+
+function calculateYearsInOffice(startDate: string | null): string {
+  if (!startDate) return "N/A";
+  const start = new Date(startDate);
+  const now = new Date();
+  const years = Math.floor((now.getTime() - start.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  if (years < 1) return "< 1 yr";
+  return `${years} yr${years > 1 ? "s" : ""}`;
+}
+
 export default function MemberPage() {
   const { memberId } = useParams<{ memberId: string }>();
+  const { data: member, isLoading, error } = useMember(memberId || "");
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="civic-container py-8 lg:py-12">
+          <Skeleton className="h-8 w-32 mb-8" />
+          <div className="grid gap-8 lg:grid-cols-3 mb-12">
+            <div className="lg:col-span-2">
+              <div className="flex gap-6">
+                <Skeleton className="h-32 w-32 rounded-2xl" />
+                <div className="flex-1 space-y-4">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-10 w-64" />
+                  <Skeleton className="h-5 w-48" />
+                </div>
+              </div>
+            </div>
+            <Skeleton className="h-48 rounded-2xl" />
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (error || !member) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="civic-container py-8 lg:py-12">
+          <div className="flex flex-col items-center justify-center py-20">
+            <AlertCircle className="h-16 w-16 text-muted-foreground mb-4" />
+            <h1 className="font-serif text-2xl font-bold text-foreground mb-2">
+              Member Not Found
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              We couldn't find the member you're looking for.
+            </p>
+            <Button variant="civic" asChild>
+              <Link to="/map">Back to Map</Link>
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const stateName = stateNames[member.state] || member.state;
+  const chamberDisplay = member.chamber === "senate" ? "Senate" : "House";
+  const scores = member.scores;
+
+  const scoreBreakdown = scores ? [
+    { name: "Productivity", score: Number(scores.productivity_score) || 0, weight: 25, description: "Bills sponsored and enacted" },
+    { name: "Attendance", score: Number(scores.attendance_score) || 0, weight: 25, description: "Voting participation rate" },
+    { name: "Bipartisanship", score: Number(scores.bipartisanship_score) || 0, weight: 25, description: "Cross-party collaboration" },
+    { name: "Issue Alignment", score: Number(scores.issue_alignment_score) || 0, weight: 25, description: "Based on your preferences" },
+  ] : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,9 +138,9 @@ export default function MemberPage() {
         {/* Breadcrumb */}
         <div className="mb-8">
           <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground -ml-2">
-            <Link to={`/state/${memberData.stateAbbr}`}>
+            <Link to={`/state/${member.state}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to {memberData.state}
+              Back to {stateName}
             </Link>
           </Button>
         </div>
@@ -100,26 +151,26 @@ export default function MemberPage() {
             <div className="flex flex-col sm:flex-row gap-6 items-start">
               {/* Photo */}
               <div className="relative flex-shrink-0">
-                {memberData.imageUrl ? (
+                {member.image_url ? (
                   <img
-                    src={memberData.imageUrl}
-                    alt={memberData.name}
+                    src={member.image_url}
+                    alt={member.full_name}
                     className="h-32 w-32 rounded-2xl object-cover border-2 border-border shadow-civic-md"
                   />
                 ) : (
                   <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-muted border-2 border-border shadow-civic-md">
                     <span className="text-3xl font-semibold text-muted-foreground font-serif">
-                      {memberData.name.split(' ').map(n => n[0]).join('')}
+                      {member.first_name?.[0]}{member.last_name?.[0]}
                     </span>
                   </div>
                 )}
                 <div className={cn(
                   "absolute -bottom-2 -right-2 h-8 w-8 rounded-full border-4 border-background flex items-center justify-center text-sm font-bold",
-                  memberData.party === "D" ? "bg-civic-blue text-primary-foreground" : 
-                  memberData.party === "R" ? "bg-civic-red text-primary-foreground" : 
+                  member.party === "D" ? "bg-civic-blue text-primary-foreground" : 
+                  member.party === "R" ? "bg-civic-red text-primary-foreground" : 
                   "bg-civic-slate text-primary-foreground"
                 )}>
-                  {memberData.party}
+                  {member.party}
                 </div>
               </div>
 
@@ -128,20 +179,25 @@ export default function MemberPage() {
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Badge 
                     variant="outline" 
-                    className={cn("text-sm", partyColors[memberData.party])}
+                    className={cn("text-sm", partyColors[member.party])}
                   >
-                    {partyNames[memberData.party]}
+                    {partyNames[member.party]}
                   </Badge>
                   <Badge variant="secondary" className="text-sm">
-                    {memberData.chamber}
+                    {chamberDisplay}
                   </Badge>
+                  {member.district && (
+                    <Badge variant="outline" className="text-sm">
+                      District {member.district}
+                    </Badge>
+                  )}
                 </div>
                 
                 <h1 className="font-serif text-3xl font-bold text-foreground sm:text-4xl mb-2">
-                  {memberData.name}
+                  {member.full_name}
                 </h1>
                 <p className="text-lg text-muted-foreground">
-                  {memberData.chamber === "Senate" ? "Senator" : "Representative"} from {memberData.state}
+                  {chamberDisplay === "Senate" ? "Senator" : "Representative"} from {stateName}
                 </p>
                 
                 <div className="flex flex-wrap gap-4 mt-6">
@@ -153,12 +209,14 @@ export default function MemberPage() {
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
                   </Button>
-                  <Button variant="civic-ghost" size="sm" asChild>
-                    <a href={memberData.website} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Official Website
-                    </a>
-                  </Button>
+                  {member.website_url && (
+                    <Button variant="civic-ghost" size="sm" asChild>
+                      <a href={member.website_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Official Website
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -168,9 +226,9 @@ export default function MemberPage() {
           <div className="bg-card rounded-2xl border border-border p-6 shadow-civic-md">
             <div className="flex flex-col items-center text-center">
               <p className="text-sm font-medium text-muted-foreground mb-4">Overall Score</p>
-              <ScoreRing score={memberData.score} size="xl" />
+              <ScoreRing score={member.score ?? 0} size="xl" />
               <p className="text-sm text-muted-foreground mt-4">
-                Top 15% in {memberData.chamber}
+                {chamberDisplay} · {stateName}
               </p>
             </div>
           </div>
@@ -180,24 +238,22 @@ export default function MemberPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-12">
           <StatsCard
             icon={FileText}
-            value="47"
+            value={scores?.bills_sponsored ?? 0}
             label="Bills Sponsored"
-            trend={{ value: 12, isPositive: true }}
           />
           <StatsCard
             icon={Users}
-            value="156"
+            value={scores?.bills_cosponsored ?? 0}
             label="Bills Co-sponsored"
           />
           <StatsCard
             icon={Vote}
-            value="96%"
+            value={`${scores?.attendance_score ?? 0}%`}
             label="Attendance Rate"
-            trend={{ value: 2, isPositive: true }}
           />
           <StatsCard
             icon={Calendar}
-            value="28 yrs"
+            value={calculateYearsInOffice(member.start_date)}
             label="Time in Office"
           />
         </div>
@@ -209,7 +265,11 @@ export default function MemberPage() {
             <h2 className="font-serif text-xl font-semibold text-foreground mb-6">
               Score Breakdown
             </h2>
-            <ScoreBreakdown categories={memberData.scores} />
+            {scoreBreakdown.length > 0 ? (
+              <ScoreBreakdown categories={scoreBreakdown} />
+            ) : (
+              <p className="text-muted-foreground">No score data available.</p>
+            )}
             <div className="mt-6 pt-6 border-t border-border">
               <Button variant="civic-outline" size="sm" className="w-full">
                 Customize Weights
@@ -220,40 +280,58 @@ export default function MemberPage() {
           {/* Recent Bills */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
             <h2 className="font-serif text-xl font-semibold text-foreground mb-6">
-              Recent Bills
+              Sponsored Bills
             </h2>
             <div className="space-y-4">
-              {memberData.recentBills.map((bill, index) => (
-                <div 
-                  key={bill.number}
-                  className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
-                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-foreground">{bill.title}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{bill.number}</p>
-                    </div>
-                    <Badge 
-                      variant="outline" 
-                      className={cn(
-                        "text-xs whitespace-nowrap",
-                        bill.status.includes("Passed") && "bg-score-excellent/10 text-score-excellent border-score-excellent/30"
-                      )}
+              {member.sponsoredBills && member.sponsoredBills.length > 0 ? (
+                member.sponsoredBills.map((bill: any, index: number) => {
+                  const status = getBillStatus(bill);
+                  return (
+                    <div 
+                      key={bill.id}
+                      className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                      style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                     >
-                      {bill.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">{bill.date}</p>
-                </div>
-              ))}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground line-clamp-2">
+                            {bill.short_title || bill.title}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {formatBillNumber(bill)}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-xs whitespace-nowrap flex-shrink-0",
+                            status === "Enacted" && "bg-score-excellent/10 text-score-excellent border-score-excellent/30",
+                            status === "Passed" && "bg-score-good/10 text-score-good border-score-good/30"
+                          )}
+                        >
+                          {status}
+                        </Badge>
+                      </div>
+                      {bill.policy_area && (
+                        <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No bill data available yet.
+                </p>
+              )}
             </div>
-            <div className="mt-6 pt-6 border-t border-border">
-              <Button variant="civic-ghost" size="sm" className="w-full">
-                View All Bills
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            {member.sponsoredBills && member.sponsoredBills.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <Button variant="civic-ghost" size="sm" className="w-full">
+                  View All Bills
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </main>
