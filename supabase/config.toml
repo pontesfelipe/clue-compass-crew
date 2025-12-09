@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.sync-votes]
 verify_jwt = false
+
+[functions.generate-member-summary]
+verify_jwt = false
