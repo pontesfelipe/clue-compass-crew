@@ -106,30 +106,36 @@ Deno.serve(async (req) => {
       if (partyStr.includes('democrat')) party = 'D'
       else if (partyStr.includes('republican')) party = 'R'
       
-      // Determine chamber using multiple methods:
-      // 1. From latest term's chamber field
-      // 2. If member has a district number, they're in the House
-      // 3. Check all terms for any Senate service (senators don't have districts)
-      let chamber: 'senate' | 'house' = 'house' // default
+      // Determine chamber - SIMPLE RULE: 
+      // Senators NEVER have districts, Representatives ALWAYS do
+      // This is more reliable than API chamber field which can be inconsistent
+      let chamber: 'senate' | 'house' = 'house'
       
-      const termChamber = (latestTerm?.chamber || '').toLowerCase()
-      if (termChamber.includes('senate')) {
-        chamber = 'senate'
-      } else if (termChamber.includes('house') || termChamber.includes('representative')) {
+      const hasDistrict = member.district !== undefined && member.district !== null && member.district !== ''
+      
+      if (hasDistrict) {
+        // Has a district number = House Representative
         chamber = 'house'
       } else {
-        // Fallback: check if ANY term is Senate (for members who switched chambers)
-        // Use the most recent Senate term if they have one
-        const senateTerm = terms.find((t: any) => 
-          (t.chamber || '').toLowerCase().includes('senate')
-        )
-        if (senateTerm && !member.district) {
-          // If they have a senate term and no current district, likely a senator
+        // No district = Senator (or delegate, but we handle those separately)
+        // Double-check by looking at term data
+        const termChamber = (latestTerm?.chamber || '').toLowerCase()
+        const hasSenateInTerm = termChamber.includes('senate')
+        const hasHouseInTerm = termChamber.includes('house') || termChamber.includes('representative')
+        
+        if (hasSenateInTerm) {
           chamber = 'senate'
-        }
-        // If member has a district, they're definitely in the House
-        if (member.district !== undefined && member.district !== null) {
+        } else if (hasHouseInTerm) {
           chamber = 'house'
+        } else {
+          // No district and no clear chamber from terms - check ALL terms
+          const anySenate = terms.some((t: any) => (t.chamber || '').toLowerCase().includes('senate'))
+          if (anySenate) {
+            chamber = 'senate'
+          } else {
+            // Last resort: no district typically means Senate
+            chamber = 'senate'
+          }
         }
       }
       
