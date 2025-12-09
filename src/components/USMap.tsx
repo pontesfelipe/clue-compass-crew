@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useStateScores } from "@/hooks/useStateData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 
 const getScoreColor = (score: number): string => {
   if (score >= 80) return "hsl(var(--score-excellent))";
@@ -32,6 +33,23 @@ export function USMap({ onStateClick }: USMapProps) {
   const hoveredData = hoveredState 
     ? stateScores?.find(s => s.abbr === hoveredState) 
     : null;
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    if (!stateScores || stateScores.length === 0) return null;
+    
+    const validStates = stateScores.filter(s => s.score > 0);
+    if (validStates.length === 0) return null;
+
+    const totalScore = validStates.reduce((sum, s) => sum + s.score, 0);
+    const nationalAvg = Math.round(totalScore / validStates.length);
+    
+    const sorted = [...validStates].sort((a, b) => b.score - a.score);
+    const highest = sorted.slice(0, 3);
+    const lowest = sorted.slice(-3).reverse();
+    
+    return { nationalAvg, highest, lowest };
+  }, [stateScores]);
 
   // State grid positions for cartogram layout
   const stateGrid: { [key: string]: { col: number; row: number } } = {
@@ -129,6 +147,71 @@ export function USMap({ onStateClick }: USMapProps) {
           </div>
         ))}
       </div>
+
+      {/* Statistics Summary */}
+      {stats && (
+        <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* National Average */}
+          <div className="p-4 rounded-lg bg-card border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">National Average</span>
+            </div>
+            <div 
+              className="text-3xl font-bold"
+              style={{ color: getScoreColor(stats.nationalAvg) }}
+            >
+              {stats.nationalAvg}
+            </div>
+          </div>
+
+          {/* Highest Scoring States */}
+          <div className="p-4 rounded-lg bg-card border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-4 w-4 text-score-excellent" />
+              <span className="text-sm font-medium text-muted-foreground">Top Performing</span>
+            </div>
+            <div className="space-y-1">
+              {stats.highest.map((state, i) => (
+                <div key={state.abbr} className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">
+                    {i + 1}. {state.name}
+                  </span>
+                  <span 
+                    className="text-sm font-bold"
+                    style={{ color: getScoreColor(state.score) }}
+                  >
+                    {state.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Lowest Scoring States */}
+          <div className="p-4 rounded-lg bg-card border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="h-4 w-4 text-score-bad" />
+              <span className="text-sm font-medium text-muted-foreground">Needs Improvement</span>
+            </div>
+            <div className="space-y-1">
+              {stats.lowest.map((state, i) => (
+                <div key={state.abbr} className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">
+                    {i + 1}. {state.name}
+                  </span>
+                  <span 
+                    className="text-sm font-bold"
+                    style={{ color: getScoreColor(state.score) }}
+                  >
+                    {state.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Score Legend */}
       <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
