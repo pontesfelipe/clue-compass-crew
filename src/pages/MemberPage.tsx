@@ -287,9 +287,10 @@ export default function MemberPage() {
                 member.sponsoredBills.map((bill: any, index: number) => {
                   const status = getBillStatus(bill);
                   return (
-                    <div 
+                    <Link 
+                      to={`/bill/${bill.id}`}
                       key={bill.id}
-                      className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                      className="block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors"
                       style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -315,7 +316,7 @@ export default function MemberPage() {
                       {bill.policy_area && (
                         <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
                       )}
-                    </div>
+                    </Link>
                   );
                 })
               ) : (
@@ -342,9 +343,10 @@ export default function MemberPage() {
                 member.cosponsoredBills.map((bill: any, index: number) => {
                   const status = getBillStatus(bill);
                   return (
-                    <div 
+                    <Link 
+                      to={`/bill/${bill.id}`}
                       key={bill.id}
-                      className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                      className="block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors"
                       style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -370,7 +372,7 @@ export default function MemberPage() {
                       {bill.policy_area && (
                         <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
                       )}
-                    </div>
+                    </Link>
                   );
                 })
               ) : (
