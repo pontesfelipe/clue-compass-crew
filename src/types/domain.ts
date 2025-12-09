@@ -23,6 +23,11 @@ export interface Member {
   inOffice: boolean;
   startDate: string | null;
   endDate: string | null;
+  phone: string | null;
+  officeAddress: string | null;
+  officeCity: string | null;
+  officeState: string | null;
+  officeZip: string | null;
 }
 
 export interface MemberWithScore extends Member {

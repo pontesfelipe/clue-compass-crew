@@ -54,6 +54,11 @@ export function mapApiMemberToMember(apiMember: Record<string, unknown>): Member
     inOffice: Boolean(apiMember.in_office ?? true),
     startDate: apiMember.start_date ? String(apiMember.start_date) : null,
     endDate: apiMember.end_date ? String(apiMember.end_date) : null,
+    phone: apiMember.phone ? String(apiMember.phone) : null,
+    officeAddress: apiMember.office_address ? String(apiMember.office_address) : null,
+    officeCity: apiMember.office_city ? String(apiMember.office_city) : null,
+    officeState: apiMember.office_state ? String(apiMember.office_state) : null,
+    officeZip: apiMember.office_zip ? String(apiMember.office_zip) : null,
   };
 }
 
