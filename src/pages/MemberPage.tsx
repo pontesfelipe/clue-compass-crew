@@ -13,6 +13,8 @@ import {
   Vote, 
   Users, 
   Calendar,
+  CalendarClock,
+  Hash,
   ExternalLink,
   Share2,
   Bookmark,
@@ -69,6 +71,54 @@ function calculateYearsInOffice(startDate: string | null): string {
   const years = Math.floor((now.getTime() - start.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
   if (years < 1) return "< 1 yr";
   return `${years} yr${years > 1 ? "s" : ""}`;
+}
+
+function calculateTerms(startDate: string | null, chamber: string): string {
+  if (!startDate) return "N/A";
+  const start = new Date(startDate);
+  const now = new Date();
+  const yearsServed = (now.getTime() - start.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  const termLength = chamber === "senate" ? 6 : 2;
+  const terms = Math.ceil(yearsServed / termLength);
+  return terms <= 0 ? "1st" : `${terms}${getOrdinalSuffix(terms)}`;
+}
+
+function getOrdinalSuffix(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
+
+function getNextElection(startDate: string | null, chamber: string): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  
+  if (chamber === "house") {
+    // House elections every 2 years (even years)
+    const nextElectionYear = currentYear % 2 === 0 
+      ? (now.getMonth() >= 11 ? currentYear + 2 : currentYear) // After November, next cycle
+      : currentYear + 1;
+    return `Nov ${nextElectionYear}`;
+  }
+  
+  // Senate: 6-year terms, staggered classes
+  if (!startDate) {
+    // Fallback: find next even year
+    const nextEven = currentYear % 2 === 0 ? currentYear : currentYear + 1;
+    return `Nov ${nextEven}`;
+  }
+  
+  const start = new Date(startDate);
+  const startYear = start.getFullYear();
+  
+  // Calculate which class based on start year pattern
+  // Senate classes: Class 1 (2024, 2030), Class 2 (2026, 2032), Class 3 (2028, 2034)
+  let nextElectionYear = startYear;
+  while (nextElectionYear <= currentYear || (nextElectionYear === currentYear && now.getMonth() >= 11)) {
+    nextElectionYear += 6;
+  }
+  
+  return `Nov ${nextElectionYear}`;
 }
 
 export default function MemberPage() {
@@ -271,7 +321,7 @@ export default function MemberPage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-12">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-12">
           <StatsCard
             icon={FileText}
             value={scores?.billsSponsored ?? 0}
@@ -291,6 +341,16 @@ export default function MemberPage() {
             icon={Calendar}
             value={calculateYearsInOffice(member.startDate)}
             label="Time in Office"
+          />
+          <StatsCard
+            icon={Hash}
+            value={calculateTerms(member.startDate, member.chamber)}
+            label="Term"
+          />
+          <StatsCard
+            icon={CalendarClock}
+            value={getNextElection(member.startDate, member.chamber)}
+            label="Next Election"
           />
         </div>
 
