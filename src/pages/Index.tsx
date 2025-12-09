@@ -74,7 +74,7 @@ export default function Index() {
               <div className="flex items-center gap-6 pt-4">
                 {[
                   "535 Members Tracked",
-                  "Real-time Data",
+                  "Near Real-time Data",
                   "Custom Scoring"
                 ].map((item, index) => (
                   <div key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
