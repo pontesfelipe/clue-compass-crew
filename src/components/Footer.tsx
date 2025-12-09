@@ -1,5 +1,6 @@
 import { BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { SyncStatus } from "@/components/SyncStatus";
 
 export function Footer() {
   return (
@@ -47,13 +48,18 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 sm:flex-row">
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} CivicScore. All rights reserved.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Data sourced from Congress.gov API
-          </p>
+        <div className="mt-12 border-t border-border pt-8 space-y-4">
+          <div className="flex justify-center">
+            <SyncStatus />
+          </div>
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} CivicScore. All rights reserved.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Data sourced from Congress.gov API
+            </p>
+          </div>
         </div>
       </div>
     </footer>
