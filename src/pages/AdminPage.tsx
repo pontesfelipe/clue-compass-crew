@@ -736,7 +736,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {["congress-members", "bills", "votes", "fec-finance"].map((syncType) => {
+                    {["congress-members", "bills", "votes", "fec-finance", "member-details"].map((syncType) => {
                       const progress = syncProgress.find((s) => s.id === syncType);
                       return (
                         <Card key={syncType} className="border-2">
