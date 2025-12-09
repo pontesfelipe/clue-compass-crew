@@ -32,6 +32,7 @@ import { useComparison } from "@/contexts/ComparisonContext";
 import { MemberFinanceSection } from "@/features/finance";
 import { MemberAISummary } from "@/components/MemberAISummary";
 import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
+import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
 import { toast } from "@/hooks/use-toast";
 
 type Party = "D" | "R" | "I";
@@ -453,9 +454,7 @@ export default function MemberPage() {
               <p className="text-muted-foreground">No score data available.</p>
             )}
             <div className="mt-6 pt-6 border-t border-border">
-              <Button variant="civic-outline" size="sm" className="w-full">
-                Customize Weights
-              </Button>
+              <ScoringPreferencesDialog />
             </div>
           </div>
 
