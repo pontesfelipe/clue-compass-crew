@@ -111,7 +111,7 @@ export function USMap({ onStateClick }: USMapProps) {
       </div>
 
       {/* State Grid Map */}
-      <div className="grid grid-cols-14 gap-1 p-4">
+      <div className="grid grid-cols-14 gap-0.5 p-4">
         {Array.from({ length: 5 }).map((_, rowIndex) => (
           <div key={rowIndex} className="contents">
             {Array.from({ length: 14 }).map((_, colIndex) => {
