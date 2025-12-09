@@ -228,7 +228,7 @@ serve(async (req) => {
         const allContributions: any[] = [];
         const sponsors: any[] = [];
         const industryTotals = new Map<string, { total: number; count: number }>();
-        const contributorAggregates = new Map<string, { name: string; type: string; amount: number; industry: string | null }>();
+        const contributorAggregates = new Map<string, { name: string; type: string; amount: number; industry: string | null; state: string | null }>();
 
         if (contributionsResponse.ok) {
           const contributionsData = await contributionsResponse.json();
@@ -251,17 +251,23 @@ serve(async (req) => {
             }
             
             const industry = inferIndustry(c.contributor_employer, c.contributor_occupation);
+            const contributorState = c.contributor_state || null;
 
             // Aggregate contributions by contributor name
             const existing = contributorAggregates.get(contributorName);
             if (existing) {
               existing.amount += amount;
+              // Keep the first state we see for this contributor
+              if (!existing.state && contributorState) {
+                existing.state = contributorState;
+              }
             } else {
               contributorAggregates.set(contributorName, {
                 name: contributorName,
                 type: contributorType,
                 amount: amount,
                 industry: industry,
+                state: contributorState,
               });
             }
 
@@ -284,6 +290,7 @@ serve(async (req) => {
               amount: data.amount,
               cycle: currentCycle,
               industry: data.industry,
+              contributor_state: data.state,
             });
 
             // Identify sponsors: large contributors that are PACs, corporations, or unions
