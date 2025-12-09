@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, RefreshCw, Clock } from "lucide-react";
+import { Sparkles, RefreshCw, Clock, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { Link } from "react-router-dom";
 
 interface MemberAISummaryProps {
   memberId: string;
@@ -11,6 +13,7 @@ interface MemberAISummaryProps {
 }
 
 export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) {
+  const { user, isLoading: authLoading } = useAuth();
   const [summary, setSummary] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,7 +110,7 @@ export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) 
     return nextDate;
   };
 
-  if (isFetching) {
+  if (authLoading || isFetching) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
         <div className="flex items-center gap-2 mb-4">
@@ -115,6 +118,26 @@ export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) 
           <h2 className="font-serif text-xl font-semibold text-foreground">AI Summary</h2>
         </div>
         <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="font-serif text-xl font-semibold text-foreground">AI Summary</h2>
+        </div>
+        <div className="text-center py-6">
+          <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground mb-4">
+            Sign in to access AI-powered summaries of {memberName}'s legislative activity.
+          </p>
+          <Button variant="civic" asChild>
+            <Link to="/auth">Sign In</Link>
+          </Button>
+        </div>
       </div>
     );
   }
