@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 
 export function Header() {
@@ -28,6 +28,12 @@ export function Header() {
             <Link to="/bills">
               <FileText className="mr-2 h-4 w-4" />
               Bills
+            </Link>
+          </Button>
+          <Button variant="civic-ghost" size="sm" asChild>
+            <Link to="/votes">
+              <Vote className="mr-2 h-4 w-4" />
+              Votes
             </Link>
           </Button>
           <Button variant="civic-ghost" size="sm" asChild>

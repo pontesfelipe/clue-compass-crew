@@ -11,6 +11,7 @@ import StatePage from "./pages/StatePage";
 import MemberPage from "./pages/MemberPage";
 import BillPage from "./pages/BillPage";
 import BillsPage from "./pages/BillsPage";
+import VotesPage from "./pages/VotesPage";
 import ComparePage from "./pages/ComparePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import NotFound from "./pages/NotFound";
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/bills" element={<BillsPage />} />
+            <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/methodology" element={<HowItWorksPage />} />
             <Route path="/state/:stateAbbr" element={<StatePage />} />
