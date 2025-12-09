@@ -189,22 +189,17 @@ export default function StatePage() {
             <p className="text-muted-foreground">No senators found for this state.</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {senators.map((member, index) => (
-                <div
+              {senators.map((member) => (
+                <MemberCard
                   key={member.id}
-                  className="opacity-0 animate-slide-up"
-                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
-                >
-                  <MemberCard
-                    id={member.id}
-                    name={member.full_name}
-                    party={member.party}
-                    state={member.state}
-                    chamber="Senate"
-                    score={member.score ?? 0}
-                    imageUrl={member.image_url}
-                  />
-                </div>
+                  id={member.id}
+                  name={member.full_name}
+                  party={member.party}
+                  state={member.state}
+                  chamber="Senate"
+                  score={member.score ?? 0}
+                  imageUrl={member.image_url}
+                />
               ))}
             </div>
           )}
@@ -236,22 +231,17 @@ export default function StatePage() {
             <p className="text-muted-foreground">No representatives found for this state.</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {representatives.map((member, index) => (
-                <div
+              {representatives.map((member) => (
+                <MemberCard
                   key={member.id}
-                  className="opacity-0 animate-slide-up"
-                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
-                >
-                  <MemberCard
-                    id={member.id}
-                    name={member.full_name}
-                    party={member.party}
-                    state={member.state}
-                    chamber="House"
-                    score={member.score ?? 0}
-                    imageUrl={member.image_url}
-                  />
-                </div>
+                  id={member.id}
+                  name={member.full_name}
+                  party={member.party}
+                  state={member.state}
+                  chamber="House"
+                  score={member.score ?? 0}
+                  imageUrl={member.image_url}
+                />
               ))}
             </div>
           )}
