@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
-const FEC_API_KEY = "DEMO_KEY"; // FEC provides a demo key for basic access
+const FEC_API_KEY = "DEMO_KEY";
 
 interface FecCandidate {
   candidate_id: string;
@@ -27,18 +27,6 @@ interface FecCommittee {
   treasurer_name: string;
 }
 
-interface FecContribution {
-  contributor_name: string;
-  contributor_employer: string;
-  contributor_occupation: string;
-  contribution_receipt_amount: number;
-  contribution_receipt_date: string;
-  committee: {
-    name: string;
-    committee_type: string;
-  };
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -49,21 +37,35 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log("Starting FEC finance data sync...");
+    // Parse request body for pagination
+    let offset = 0;
+    let limit = 10; // Process only 10 members per call to avoid rate limits
+    try {
+      const body = await req.json();
+      offset = body.offset || 0;
+      limit = body.limit || 10;
+    } catch {
+      // Use defaults if no body
+    }
 
-    // Get all members from database
-    const { data: members, error: membersError } = await supabase
+    console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`);
+
+    // Get members with pagination
+    const { data: members, error: membersError, count } = await supabase
       .from('members')
-      .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber')
-      .eq('in_office', true);
+      .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber', { count: 'exact' })
+      .eq('in_office', true)
+      .order('last_name')
+      .range(offset, offset + limit - 1);
 
     if (membersError) {
       throw new Error(`Failed to fetch members: ${membersError.message}`);
     }
 
-    console.log(`Found ${members?.length || 0} members to process`);
+    console.log(`Processing ${members?.length || 0} members (${offset + 1} to ${offset + (members?.length || 0)} of ${count})`);
 
     let processedCount = 0;
+    let matchedCount = 0;
     let errorCount = 0;
     const currentCycle = 2024;
 
@@ -74,8 +76,15 @@ serve(async (req) => {
         
         console.log(`Searching FEC for: ${member.full_name} (${member.state})`);
         
+        // Wait 1.5 seconds between requests to respect rate limits (40 req/hour for DEMO_KEY)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
         const candidateResponse = await fetch(candidateSearchUrl);
         if (!candidateResponse.ok) {
+          if (candidateResponse.status === 429) {
+            console.error(`Rate limited. Stopping sync.`);
+            break;
+          }
           console.error(`FEC API error for ${member.full_name}: ${candidateResponse.status}`);
           errorCount++;
           continue;
@@ -88,24 +97,33 @@ serve(async (req) => {
         const matchingCandidate = candidates.find((c: FecCandidate) => {
           const nameParts = c.name?.toLowerCase().split(',') || [];
           const lastName = nameParts[0]?.trim();
-          return lastName === member.last_name.toLowerCase() && 
-                 c.state === member.state;
+          return lastName === member.last_name.toLowerCase() && c.state === member.state;
         });
 
         if (!matchingCandidate) {
           console.log(`No FEC match found for ${member.full_name}`);
+          processedCount++;
           continue;
         }
 
         const candidateId = matchingCandidate.candidate_id;
         console.log(`Found FEC candidate: ${candidateId} for ${member.full_name}`);
+        matchedCount++;
+
+        // Wait before next API call
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Get committee(s) for this candidate
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&cycle=${currentCycle}&per_page=5`;
         const committeesResponse = await fetch(committeesUrl);
         
         if (!committeesResponse.ok) {
+          if (committeesResponse.status === 429) {
+            console.error(`Rate limited at committees. Stopping.`);
+            break;
+          }
           console.error(`Failed to fetch committees for ${candidateId}`);
+          processedCount++;
           continue;
         }
 
@@ -114,14 +132,17 @@ serve(async (req) => {
 
         if (committees.length === 0) {
           console.log(`No committees found for ${member.full_name}`);
+          processedCount++;
           continue;
         }
 
-        // Get contributions for the principal campaign committee
+        // Get principal campaign committee
         const principalCommittee = committees.find((c: FecCommittee) => c.committee_type === 'P') || committees[0];
         const committeeId = principalCommittee.committee_id;
 
-        // Fetch schedule A (itemized contributions) aggregated by contributor
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Fetch schedule A (itemized contributions)
         const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=10`;
         const contributionsResponse = await fetch(contributionsUrl);
 
@@ -129,7 +150,6 @@ serve(async (req) => {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
 
-          // Prepare contribution records
           const contributionRecords = contributions.map((c: any) => ({
             member_id: member.id,
             contributor_name: c.contributor_name || 'Unknown',
@@ -140,14 +160,12 @@ serve(async (req) => {
           })).filter((c: any) => c.amount > 0);
 
           if (contributionRecords.length > 0) {
-            // Delete existing contributions for this member and cycle
             await supabase
               .from('member_contributions')
               .delete()
               .eq('member_id', member.id)
               .eq('cycle', currentCycle);
 
-            // Insert new contributions
             const { error: insertError } = await supabase
               .from('member_contributions')
               .insert(contributionRecords);
@@ -160,7 +178,9 @@ serve(async (req) => {
           }
         }
 
-        // Fetch totals/summary for the candidate
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Fetch totals for the candidate
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
         const totalsResponse = await fetch(totalsUrl);
 
@@ -169,7 +189,6 @@ serve(async (req) => {
           const totals = totalsData.results?.[0];
 
           if (totals) {
-            // Create sponsor record from PAC contributions
             const pacAmount = totals.other_political_committee_contributions || 0;
             if (pacAmount > 0) {
               await supabase
@@ -190,7 +209,6 @@ serve(async (req) => {
                 });
             }
 
-            // Create lobbying-like record from party contributions
             const partyAmount = totals.party_committee_contributions || 0;
             if (partyAmount > 0) {
               await supabase
@@ -214,24 +232,28 @@ serve(async (req) => {
 
         processedCount++;
 
-        // Rate limiting - FEC API has limits
-        await new Promise(resolve => setTimeout(resolve, 500));
-
       } catch (memberError) {
         console.error(`Error processing ${member.full_name}:`, memberError);
         errorCount++;
       }
     }
 
+    const hasMore = (offset + (members?.length || 0)) < (count || 0);
+    const nextOffset = offset + (members?.length || 0);
+
     const result = {
       success: true,
-      message: `FEC finance sync completed`,
+      message: `FEC finance sync batch completed`,
       processedCount,
+      matchedCount,
       errorCount,
-      totalMembers: members?.length || 0,
+      totalMembers: count || 0,
+      hasMore,
+      nextOffset: hasMore ? nextOffset : null,
+      hint: hasMore ? `Call again with {"offset": ${nextOffset}} to continue` : 'All members processed',
     };
 
-    console.log("Sync complete:", result);
+    console.log("Batch complete:", result);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -254,52 +276,24 @@ function categorizeContributor(employer: string | null, occupation: string | nul
   const emp = (employer || '').toLowerCase();
   const occ = (occupation || '').toLowerCase();
 
-  if (emp.includes('self') || emp.includes('retired') || occ.includes('retired')) {
-    return 'individual';
-  }
-  if (emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || emp.includes('co.')) {
-    return 'corporate';
-  }
-  if (emp.includes('pac') || emp.includes('committee') || emp.includes('political')) {
-    return 'pac';
-  }
-  if (emp.includes('union') || emp.includes('workers') || emp.includes('labor')) {
-    return 'union';
-  }
+  if (emp.includes('self') || emp.includes('retired') || occ.includes('retired')) return 'individual';
+  if (emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || emp.includes('co.')) return 'corporate';
+  if (emp.includes('pac') || emp.includes('committee') || emp.includes('political')) return 'pac';
+  if (emp.includes('union') || emp.includes('workers') || emp.includes('labor')) return 'union';
   return 'individual';
 }
 
 function inferIndustry(employer: string | null, occupation: string | null): string | null {
-  const emp = (employer || '').toLowerCase();
-  const occ = (occupation || '').toLowerCase();
-  const combined = emp + ' ' + occ;
+  const combined = ((employer || '') + ' ' + (occupation || '')).toLowerCase();
 
-  if (combined.includes('law') || combined.includes('attorney') || combined.includes('legal')) {
-    return 'Legal';
-  }
-  if (combined.includes('real estate') || combined.includes('realtor') || combined.includes('property')) {
-    return 'Real Estate';
-  }
-  if (combined.includes('health') || combined.includes('medical') || combined.includes('doctor') || combined.includes('hospital')) {
-    return 'Healthcare';
-  }
-  if (combined.includes('bank') || combined.includes('financial') || combined.includes('investment') || combined.includes('insurance')) {
-    return 'Finance & Insurance';
-  }
-  if (combined.includes('tech') || combined.includes('software') || combined.includes('computer') || combined.includes('engineer')) {
-    return 'Technology';
-  }
-  if (combined.includes('oil') || combined.includes('gas') || combined.includes('energy') || combined.includes('utility')) {
-    return 'Energy';
-  }
-  if (combined.includes('construction') || combined.includes('builder') || combined.includes('contractor')) {
-    return 'Construction';
-  }
-  if (combined.includes('retired')) {
-    return 'Retired';
-  }
-  if (combined.includes('education') || combined.includes('teacher') || combined.includes('professor') || combined.includes('university')) {
-    return 'Education';
-  }
+  if (combined.includes('law') || combined.includes('attorney') || combined.includes('legal')) return 'Legal';
+  if (combined.includes('real estate') || combined.includes('realtor') || combined.includes('property')) return 'Real Estate';
+  if (combined.includes('health') || combined.includes('medical') || combined.includes('doctor') || combined.includes('hospital')) return 'Healthcare';
+  if (combined.includes('bank') || combined.includes('financial') || combined.includes('investment') || combined.includes('insurance')) return 'Finance & Insurance';
+  if (combined.includes('tech') || combined.includes('software') || combined.includes('computer') || combined.includes('engineer')) return 'Technology';
+  if (combined.includes('oil') || combined.includes('gas') || combined.includes('energy') || combined.includes('utility')) return 'Energy';
+  if (combined.includes('construction') || combined.includes('builder') || combined.includes('contractor')) return 'Construction';
+  if (combined.includes('retired')) return 'Retired';
+  if (combined.includes('education') || combined.includes('teacher') || combined.includes('professor') || combined.includes('university')) return 'Education';
   return null;
 }
