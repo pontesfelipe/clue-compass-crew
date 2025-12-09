@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
@@ -8,14 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Mail, Lock, User } from "lucide-react";
 import { z } from "zod";
 import { Helmet } from "react-helmet";
 
+const TERMS_VERSION = "1.0.0";
+
 const emailSchema = z.string().trim().email({ message: "Please enter a valid email address" });
 const passwordSchema = z.string().min(6, { message: "Password must be at least 6 characters" });
+const nameSchema = z.string().trim().min(1, { message: "This field is required" }).max(50, { message: "Must be less than 50 characters" });
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -28,7 +32,9 @@ export default function AuthPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   
   // Redirect if already authenticated
   useEffect(() => {
@@ -114,7 +120,29 @@ export default function AuthPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate inputs
+    // Validate first name
+    const firstNameResult = nameSchema.safeParse(firstName);
+    if (!firstNameResult.success) {
+      toast({
+        title: "First name required",
+        description: firstNameResult.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate last name
+    const lastNameResult = nameSchema.safeParse(lastName);
+    if (!lastNameResult.success) {
+      toast({
+        title: "Last name required",
+        description: lastNameResult.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate email
     const emailResult = emailSchema.safeParse(signupEmail);
     if (!emailResult.success) {
       toast({
@@ -125,6 +153,7 @@ export default function AuthPage() {
       return;
     }
     
+    // Validate password
     const passwordResult = passwordSchema.safeParse(signupPassword);
     if (!passwordResult.success) {
       toast({
@@ -144,24 +173,35 @@ export default function AuthPage() {
       return;
     }
 
+    // Validate terms acceptance
+    if (!acceptedTerms) {
+      toast({
+        title: "Terms & Conditions required",
+        description: "Please accept the Terms & Conditions to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: signupEmail.trim(),
       password: signupPassword,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          display_name: displayName.trim() || undefined,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          display_name: `${firstName.trim()} ${lastName.trim()}`,
         },
       },
     });
 
-    setIsLoading(false);
-
     if (error) {
+      setIsLoading(false);
       let message = error.message;
       if (error.message.includes("User already registered")) {
         message = "An account with this email already exists. Please log in instead.";
@@ -173,6 +213,21 @@ export default function AuthPage() {
       });
       return;
     }
+
+    // Record terms acceptance
+    if (data.user) {
+      try {
+        await supabase.from("terms_acceptances").insert({
+          user_id: data.user.id,
+          terms_version: TERMS_VERSION,
+          user_agent: navigator.userAgent,
+        });
+      } catch (termsError) {
+        console.error("Failed to record terms acceptance:", termsError);
+      }
+    }
+
+    setIsLoading(false);
 
     toast({
       title: "Account created!",
@@ -304,25 +359,41 @@ export default function AuthPage() {
                 
                 <TabsContent value="signup">
                   <form onSubmit={handleSignup} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-name">Display Name (optional)</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-firstname">First Name *</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="signup-firstname"
+                            type="text"
+                            placeholder="First"
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            className="pl-10"
+                            required
+                            disabled={isLoading}
+                            maxLength={50}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-lastname">Last Name *</Label>
                         <Input
-                          id="signup-name"
+                          id="signup-lastname"
                           type="text"
-                          placeholder="Your name"
-                          value={displayName}
-                          onChange={(e) => setDisplayName(e.target.value)}
-                          className="pl-10"
+                          placeholder="Last"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          required
                           disabled={isLoading}
-                          maxLength={100}
+                          maxLength={50}
                         />
                       </div>
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="signup-email">Email</Label>
+                      <Label htmlFor="signup-email">Email *</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -339,7 +410,7 @@ export default function AuthPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="signup-password">Password</Label>
+                      <Label htmlFor="signup-password">Password *</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -360,7 +431,7 @@ export default function AuthPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="signup-confirm">Confirm Password</Label>
+                      <Label htmlFor="signup-confirm">Confirm Password *</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -374,6 +445,35 @@ export default function AuthPage() {
                           disabled={isLoading}
                         />
                       </div>
+                    </div>
+
+                    <div className="flex items-start space-x-2 pt-2">
+                      <Checkbox
+                        id="terms"
+                        checked={acceptedTerms}
+                        onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                        disabled={isLoading}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="terms" className="text-sm leading-tight cursor-pointer">
+                        I agree to the{" "}
+                        <Link 
+                          to="/terms" 
+                          className="text-primary hover:underline"
+                          target="_blank"
+                        >
+                          Terms & Conditions
+                        </Link>
+                        {" "}and{" "}
+                        <Link 
+                          to="/privacy" 
+                          className="text-primary hover:underline"
+                          target="_blank"
+                        >
+                          Privacy Policy
+                        </Link>
+                        {" *"}
+                      </Label>
                     </div>
                     
                     <Button type="submit" className="w-full" disabled={isLoading}>
