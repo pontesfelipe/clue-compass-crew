@@ -14,6 +14,7 @@ import BillsPage from "./pages/BillsPage";
 import VotesPage from "./pages/VotesPage";
 import ComparePage from "./pages/ComparePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
+import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/methodology" element={<HowItWorksPage />} />
+            <Route path="/auth" element={<AuthPage />} />
             <Route path="/state/:stateAbbr" element={<StatePage />} />
             <Route path="/member/:memberId" element={<MemberPage />} />
             <Route path="/bill/:billId" element={<BillPage />} />
