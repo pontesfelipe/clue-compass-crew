@@ -15,9 +15,10 @@ const getScoreColor = (score: number): string => {
 
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
+  showStats?: boolean;
 }
 
-export function USMap({ onStateClick }: USMapProps) {
+export function USMap({ onStateClick, showStats = true }: USMapProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const { data: stateScores, isLoading } = useStateScores();
@@ -150,7 +151,7 @@ export function USMap({ onStateClick }: USMapProps) {
       </div>
 
       {/* Statistics Summary */}
-      {stats && (
+      {showStats && stats && (
         <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* National Average */}
           <div className="p-4 rounded-lg bg-card border border-border">
@@ -274,7 +275,7 @@ export function USMap({ onStateClick }: USMapProps) {
       )}
 
       {/* Score Legend */}
-      <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
+      {showStats && <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
         <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {[
@@ -295,7 +296,7 @@ export function USMap({ onStateClick }: USMapProps) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
