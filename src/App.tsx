@@ -8,6 +8,7 @@ import MapPage from "./pages/MapPage";
 import StatePage from "./pages/StatePage";
 import MemberPage from "./pages/MemberPage";
 import BillPage from "./pages/BillPage";
+import BillsPage from "./pages/BillsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/map" element={<MapPage />} />
+          <Route path="/bills" element={<BillsPage />} />
           <Route path="/state/:stateAbbr" element={<StatePage />} />
           <Route path="/member/:memberId" element={<MemberPage />} />
           <Route path="/bill/:billId" element={<BillPage />} />
