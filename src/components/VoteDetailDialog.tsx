@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Calendar, Users, Vote, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface VoteDetailDialogProps {
   voteId: string | null;
@@ -171,39 +172,77 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
               </div>
             )}
 
-            {/* Vote Totals */}
+            {/* Vote Totals with Pie Chart */}
             <div>
               <h4 className="font-medium text-foreground mb-3">Vote Breakdown</h4>
-              <div className="space-y-3">
-                {/* Visual bar */}
-                <div className="h-4 rounded-full overflow-hidden flex bg-muted">
-                  <div 
-                    className="bg-score-excellent transition-all duration-500"
-                    style={{ width: `${yeaPercent}%` }}
-                  />
-                  <div 
-                    className="bg-score-bad transition-all duration-500"
-                    style={{ width: `${nayPercent}%` }}
-                  />
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                {/* Pie Chart */}
+                <div className="w-40 h-40 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Yea', value: vote.total_yea || 0, color: 'hsl(var(--score-excellent))' },
+                          { name: 'Nay', value: vote.total_nay || 0, color: 'hsl(var(--score-bad))' },
+                          { name: 'Present', value: vote.total_present || 0, color: 'hsl(var(--score-average))' },
+                          { name: 'Not Voting', value: vote.total_not_voting || 0, color: 'hsl(var(--muted-foreground))' },
+                        ].filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={35}
+                        outerRadius={60}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Yea', value: vote.total_yea || 0, color: 'hsl(var(--score-excellent))' },
+                          { name: 'Nay', value: vote.total_nay || 0, color: 'hsl(var(--score-bad))' },
+                          { name: 'Present', value: vote.total_present || 0, color: 'hsl(var(--score-average))' },
+                          { name: 'Not Voting', value: vote.total_not_voting || 0, color: 'hsl(var(--muted-foreground))' },
+                        ].filter(d => d.value > 0).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            const percent = totalVotes > 0 ? ((data.value / totalVotes) * 100).toFixed(1) : 0;
+                            return (
+                              <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg">
+                                <p className="font-medium text-foreground">{data.name}</p>
+                                <p className="text-sm text-muted-foreground">{data.value} votes ({percent}%)</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
                 
                 {/* Numbers */}
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="p-2 rounded-lg bg-score-excellent/10">
-                    <p className="text-lg font-bold text-score-excellent">{vote.total_yea || 0}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 w-full">
+                  <div className="p-3 rounded-lg bg-score-excellent/10 text-center">
+                    <p className="text-xl font-bold text-score-excellent">{vote.total_yea || 0}</p>
                     <p className="text-xs text-muted-foreground">Yea</p>
+                    <p className="text-xs font-medium text-score-excellent">{yeaPercent.toFixed(1)}%</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-score-bad/10">
-                    <p className="text-lg font-bold text-score-bad">{vote.total_nay || 0}</p>
+                  <div className="p-3 rounded-lg bg-score-bad/10 text-center">
+                    <p className="text-xl font-bold text-score-bad">{vote.total_nay || 0}</p>
                     <p className="text-xs text-muted-foreground">Nay</p>
+                    <p className="text-xs font-medium text-score-bad">{nayPercent.toFixed(1)}%</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-score-average/10">
-                    <p className="text-lg font-bold text-score-average">{vote.total_present || 0}</p>
+                  <div className="p-3 rounded-lg bg-score-average/10 text-center">
+                    <p className="text-xl font-bold text-score-average">{vote.total_present || 0}</p>
                     <p className="text-xs text-muted-foreground">Present</p>
+                    <p className="text-xs font-medium text-score-average">{totalVotes > 0 ? (((vote.total_present || 0) / totalVotes) * 100).toFixed(1) : 0}%</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-muted">
-                    <p className="text-lg font-bold text-muted-foreground">{vote.total_not_voting || 0}</p>
+                  <div className="p-3 rounded-lg bg-muted text-center">
+                    <p className="text-xl font-bold text-muted-foreground">{vote.total_not_voting || 0}</p>
                     <p className="text-xs text-muted-foreground">Not Voting</p>
+                    <p className="text-xs font-medium text-muted-foreground">{totalVotes > 0 ? (((vote.total_not_voting || 0) / totalVotes) * 100).toFixed(1) : 0}%</p>
                   </div>
                 </div>
               </div>
