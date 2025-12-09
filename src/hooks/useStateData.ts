@@ -8,6 +8,7 @@ export {
   useStateMembers, 
   useStateStats, 
   usePartyScores,
+  useChamberScores,
   getNationalAverage,
   stateNames,
   getStateName,
