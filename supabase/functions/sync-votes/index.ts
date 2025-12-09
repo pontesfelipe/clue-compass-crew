@@ -78,39 +78,82 @@ Deno.serve(async (req) => {
         // Process each vote
         for (const vote of rollCallVotes) {
           try {
-            // Extract roll number from different possible fields
-            const rollNumber = vote.rollNumber || vote.rollCallNumber || vote.number
+            // Use the URL from the list response - it includes session
+            const voteUrl = vote.url
+            const rollNumber = vote.rollCallNumber || vote.rollNumber
+            const sessionNumber = vote.sessionNumber
             
             if (!rollNumber) {
-              console.log(`Skipping vote - no roll number. Keys: ${Object.keys(vote).join(', ')}`)
+              console.log(`Skipping vote - no roll number`)
               continue
             }
 
-            // Fetch detailed vote data
-            const detailUrl = `https://api.congress.gov/v3/house-vote/${congress}/${rollNumber}?format=json&api_key=${congressApiKey}`
+            // Use the URL from the API or construct with session
+            let detailUrl = voteUrl ? `${voteUrl}?format=json&api_key=${congressApiKey}` 
+              : `https://api.congress.gov/v3/house-vote/${congress}/${sessionNumber || 1}/${rollNumber}?format=json&api_key=${congressApiKey}`
+            
             const detailResponse = await fetch(detailUrl)
             
             if (!detailResponse.ok) {
               console.log(`Failed to fetch vote ${rollNumber}: ${detailResponse.status}`)
+              // Try without detail - use list data directly
+              const voteRecord = {
+                congress: congress,
+                chamber: 'house' as const,
+                session: sessionNumber || 1,
+                roll_number: rollNumber,
+                vote_date: vote.startDate || vote.actionDate || null,
+                question: vote.amendmentAuthor || vote.question || null,
+                description: vote.voteType || vote.description || null,
+                result: vote.result || null,
+                total_yea: 0,
+                total_nay: 0,
+                total_present: 0,
+                total_not_voting: 0,
+              }
+
+              const { error } = await supabase
+                .from('votes')
+                .upsert(voteRecord, { onConflict: 'congress,chamber,roll_number' })
+              
+              if (!error) {
+                totalVotesProcessed++
+                votesInCongress++
+                console.log(`Created vote from list: roll ${rollNumber}`)
+              }
               continue
             }
             
             const detailData = await detailResponse.json()
-            const voteDetail = detailData.houseRollCallVote || detailData
+            // The detail endpoint returns houseRollCallVote (singular) for individual vote
+            let voteDetail = detailData.houseRollCallVote || vote
+            if (!voteDetail || !voteDetail.rollCallNumber) {
+              voteDetail = vote // Fall back to list data
+            }
 
             // Log structure of first detailed vote
             if (totalVotesProcessed === 0) {
-              console.log(`Vote detail keys: ${Object.keys(voteDetail).join(', ')}`)
+              console.log(`Vote detail: ${JSON.stringify(voteDetail).substring(0, 300)}`)
+            }
+
+            // Extract date - API returns startDate in ISO format
+            let voteDate = voteDetail.startDate || voteDetail.actionDate || vote.startDate || vote.actionDate
+            if (voteDate) {
+              // Parse to just the date part (YYYY-MM-DD)
+              voteDate = voteDate.substring(0, 10)
+            } else {
+              // Use current date as fallback
+              voteDate = new Date().toISOString().substring(0, 10)
             }
 
             const voteRecord = {
               congress: congress,
               chamber: 'house' as const,
-              session: voteDetail.session || 1,
+              session: voteDetail.sessionNumber || voteDetail.session || 1,
               roll_number: rollNumber,
-              vote_date: voteDetail.actionDate || voteDetail.date || vote.actionDate || null,
-              question: voteDetail.question || vote.question || null,
-              description: voteDetail.voteQuestion || voteDetail.description || vote.description || null,
+              vote_date: voteDate,
+              question: voteDetail.legislationType || voteDetail.question || vote.question || null,
+              description: voteDetail.amendmentAuthor || voteDetail.legislationNumber ? `${voteDetail.legislationType || ''} ${voteDetail.legislationNumber || ''}` : null,
               result: voteDetail.result || vote.result || null,
               total_yea: voteDetail.totals?.yea || voteDetail.yea || 0,
               total_nay: voteDetail.totals?.nay || voteDetail.nay || 0,
