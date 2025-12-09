@@ -221,58 +221,83 @@ serve(async (req) => {
 
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Fetch contributions - increased to get more data for sponsor analysis
-        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=30`;
+        // Fetch itemized contributions with actual donor names
+        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&two_year_transaction_period=${currentCycle}&sort=-contribution_receipt_amount&per_page=50`;
         const contributionsResponse = await fetch(contributionsUrl);
 
         const allContributions: any[] = [];
         const sponsors: any[] = [];
         const industryTotals = new Map<string, { total: number; count: number }>();
+        const contributorAggregates = new Map<string, { name: string; type: string; amount: number; industry: string | null }>();
 
         if (contributionsResponse.ok) {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
 
           for (const c of contributions) {
-            const amount = c.total || 0;
+            const amount = c.contribution_receipt_amount || 0;
             if (amount <= 0) continue;
 
+            // Get actual donor name - use committee name for PACs, contributor name for individuals
+            let contributorName = c.contributor_name || 'Unknown';
             const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation);
+            
+            // For PACs/committees, use the committee name if available
+            if (c.committee && c.committee.name) {
+              contributorName = c.committee.name;
+            } else if (c.contributor_aggregate_ytd > 200 && contributorType === 'pac') {
+              // This is likely a PAC contribution - the contributor_name should have the PAC name
+              contributorName = c.contributor_name || 'Unknown PAC';
+            }
+            
             const industry = inferIndustry(c.contributor_employer, c.contributor_occupation);
-            const contributorName = c.contributor_name || 'Unknown';
 
-            // Add to contributions list
-            allContributions.push({
-              member_id: member.id,
-              contributor_name: contributorName,
-              contributor_type: contributorType,
-              amount: amount,
-              cycle: currentCycle,
-              industry: industry,
-            });
-
-            // Track industry totals for lobbying data
-            if (industry) {
-              const existing = industryTotals.get(industry) || { total: 0, count: 0 };
-              industryTotals.set(industry, { 
-                total: existing.total + amount, 
-                count: existing.count + 1 
+            // Aggregate contributions by contributor name
+            const existing = contributorAggregates.get(contributorName);
+            if (existing) {
+              existing.amount += amount;
+            } else {
+              contributorAggregates.set(contributorName, {
+                name: contributorName,
+                type: contributorType,
+                amount: amount,
+                industry: industry,
               });
             }
 
-            // Identify sponsors: large contributors that are PACs, corporations, or unions
-            if (amount >= SPONSOR_THRESHOLD && (contributorType === 'pac' || contributorType === 'corporate' || contributorType === 'union')) {
-              sponsors.push({
-                member_id: member.id,
-                sponsor_name: contributorName,
-                sponsor_type: contributorType,
-                relationship_type: 'major_donor',
-                total_support: amount,
-                cycle: currentCycle,
+            // Track industry totals for lobbying data
+            if (industry) {
+              const existingIndustry = industryTotals.get(industry) || { total: 0, count: 0 };
+              industryTotals.set(industry, { 
+                total: existingIndustry.total + amount, 
+                count: existingIndustry.count + 1 
               });
             }
           }
 
+          // Convert aggregated contributors to contribution records
+          for (const [name, data] of contributorAggregates) {
+            allContributions.push({
+              member_id: member.id,
+              contributor_name: data.name,
+              contributor_type: data.type,
+              amount: data.amount,
+              cycle: currentCycle,
+              industry: data.industry,
+            });
+
+            // Identify sponsors: large contributors that are PACs, corporations, or unions
+            if (data.amount >= SPONSOR_THRESHOLD && (data.type === 'pac' || data.type === 'corporate' || data.type === 'union')) {
+              sponsors.push({
+                member_id: member.id,
+                sponsor_name: data.name,
+                sponsor_type: data.type,
+                relationship_type: 'major_donor',
+                total_support: data.amount,
+                cycle: currentCycle,
+              });
+            }
+          }
           // Insert contributions
           if (allContributions.length > 0) {
             await supabase
