@@ -2,3 +2,6 @@ project_id = "ifdorcgbhxzwktjlxqfo"
 
 [functions.sync-congress-members]
 verify_jwt = false
+
+[functions.sync-bills]
+verify_jwt = false
