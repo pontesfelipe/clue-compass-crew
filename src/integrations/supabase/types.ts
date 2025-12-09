@@ -119,6 +119,91 @@ export type Database = {
         }
         Relationships: []
       }
+      member_contributions: {
+        Row: {
+          amount: number
+          contributor_name: string
+          contributor_type: string
+          created_at: string | null
+          cycle: number
+          id: string
+          industry: string | null
+          member_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number
+          contributor_name: string
+          contributor_type: string
+          created_at?: string | null
+          cycle: number
+          id?: string
+          industry?: string | null
+          member_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          contributor_name?: string
+          contributor_type?: string
+          created_at?: string | null
+          cycle?: number
+          id?: string
+          industry?: string | null
+          member_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_contributions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_lobbying: {
+        Row: {
+          client_count: number | null
+          created_at: string | null
+          cycle: number
+          id: string
+          industry: string
+          member_id: string
+          total_spent: number
+          updated_at: string | null
+        }
+        Insert: {
+          client_count?: number | null
+          created_at?: string | null
+          cycle: number
+          id?: string
+          industry: string
+          member_id: string
+          total_spent?: number
+          updated_at?: string | null
+        }
+        Update: {
+          client_count?: number | null
+          created_at?: string | null
+          cycle?: number
+          id?: string
+          industry?: string
+          member_id?: string
+          total_spent?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_lobbying_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_scores: {
         Row: {
           attendance_score: number | null
@@ -174,6 +259,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "member_scores_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_sponsors: {
+        Row: {
+          created_at: string | null
+          cycle: number
+          id: string
+          member_id: string
+          relationship_type: string
+          sponsor_name: string
+          sponsor_type: string
+          total_support: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          cycle: number
+          id?: string
+          member_id: string
+          relationship_type: string
+          sponsor_name: string
+          sponsor_type: string
+          total_support?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          cycle?: number
+          id?: string
+          member_id?: string
+          relationship_type?: string
+          sponsor_name?: string
+          sponsor_type?: string
+          total_support?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_sponsors_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"

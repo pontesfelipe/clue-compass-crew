@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
 import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
+import { MemberFinanceSection } from "@/features/finance";
 
 type Party = "D" | "R" | "I";
 
@@ -471,6 +472,11 @@ export default function MemberPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Financial Relationships Section */}
+        <div className="mt-8">
+          <MemberFinanceSection memberId={member.id} />
         </div>
       </main>
 
