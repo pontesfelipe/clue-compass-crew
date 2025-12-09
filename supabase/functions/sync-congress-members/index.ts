@@ -309,6 +309,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Update sync progress
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'congress-members',
+        last_run_at: new Date().toISOString(),
+        status: 'complete',
+        total_processed: memberRecords.length,
+        current_offset: 0,
+      }, { onConflict: 'id' })
+
     const result = {
       success: true,
       membersProcessed: memberRecords.length,

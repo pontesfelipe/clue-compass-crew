@@ -171,6 +171,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Update sync progress
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'bills',
+        last_run_at: new Date().toISOString(),
+        status: 'complete',
+        total_processed: totalBillsProcessed,
+        current_offset: 0,
+      }, { onConflict: 'id' })
+
     const result = {
       success: true,
       billsProcessed: totalBillsProcessed,
