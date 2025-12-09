@@ -20,7 +20,8 @@ import {
   Bookmark,
   Scale,
   Check,
-  AlertCircle
+  AlertCircle,
+  Twitter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
@@ -300,6 +301,14 @@ export default function MemberPage() {
                       <a href={member.websiteUrl} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="mr-2 h-4 w-4" />
                         Website
+                      </a>
+                    </Button>
+                  )}
+                  {member.twitterHandle && (
+                    <Button variant="civic-ghost" size="sm" asChild>
+                      <a href={`https://x.com/${member.twitterHandle}`} target="_blank" rel="noopener noreferrer">
+                        <Twitter className="mr-2 h-4 w-4" />
+                        @{member.twitterHandle}
                       </a>
                     </Button>
                   )}
