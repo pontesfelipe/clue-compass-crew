@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdmin } from "@/hooks/useAdmin";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,7 @@ import {
 
 export function Header() {
   const { user, isAuthenticated, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -72,6 +74,14 @@ export function Header() {
                   {user?.email}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="flex items-center">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Admin Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={signOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
