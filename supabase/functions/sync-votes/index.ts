@@ -33,213 +33,166 @@ Deno.serve(async (req) => {
     const memberMap = new Map(members?.map(m => [m.bioguide_id, { id: m.id, chamber: m.chamber }]) || [])
     console.log(`Loaded ${memberMap.size} members for mapping`)
 
-    // Fetch recent roll call votes from Congress 118 and 119
-    // Using house-vote and senate-vote endpoints
+    // Fetch House roll call votes from Congress 118 and 119
     const congresses = [118, 119]
-    const chambers = ['house', 'senate'] as const
     let totalVotesProcessed = 0
     let totalMemberVotesCreated = 0
 
     for (const congress of congresses) {
-      for (const chamber of chambers) {
-        console.log(`Fetching ${chamber} votes from Congress ${congress}...`)
+      console.log(`Fetching House votes from Congress ${congress}...`)
+      
+      let offset = 0
+      const limit = 50
+      let hasMore = true
+      let votesInCongress = 0
+      
+      while (hasMore && votesInCongress < 30) { // Limit to avoid timeout
+        const url = `https://api.congress.gov/v3/house-vote/${congress}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
         
-        // Use the correct endpoint path for each chamber
-        const endpointPath = chamber === 'house' ? 'house-vote' : 'daily-congressional-record'
-        let offset = 0
-        const limit = 250
-        let hasMore = true
-        let votesInChamber = 0
+        console.log(`Fetching offset ${offset}...`)
         
-        while (hasMore && votesInChamber < 100) { // Limit votes to avoid timeout
-          // Try house-vote endpoint for House chamber
-          const url = chamber === 'house' 
-            ? `https://api.congress.gov/v3/house-vote/${congress}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
-            : `https://api.congress.gov/v3/nomination/${congress}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}` // Senate votes through nominations
-          
-          console.log(`Fetching: ${url.replace(congressApiKey, 'API_KEY')}`)
-          
-          const response = await fetch(url)
-          
-          if (!response.ok) {
-            console.error(`Congress API error for ${chamber} votes: ${response.status} - ${response.statusText}`)
-            const errorText = await response.text()
-            console.log(`Error response: ${errorText.substring(0, 200)}`)
-            break
-          }
-          
-          const data = await response.json()
-          console.log(`API response keys: ${Object.keys(data).join(', ')}`)
-          
-          // Handle different response formats
-          const rollCallVotes = data['house-votes'] || data['houseVotes'] || data.votes || data.nominations || []
-          
-          console.log(`Found ${rollCallVotes.length} items`)
-          
-          if (rollCallVotes.length === 0) {
-            hasMore = false
-            break
-          }
+        const response = await fetch(url)
+        
+        if (!response.ok) {
+          console.error(`Congress API error: ${response.status}`)
+          break
+        }
+        
+        const data = await response.json()
+        
+        // The correct key is 'houseRollCallVotes'
+        const rollCallVotes = data.houseRollCallVotes || []
+        
+        console.log(`Found ${rollCallVotes.length} house votes`)
+        
+        if (rollCallVotes.length === 0) {
+          hasMore = false
+          break
+        }
 
-          // Process each vote
-          for (const rollCall of rollCallVotes) {
-            try {
-              // Get vote URL - handle different formats
-              let voteUrl = rollCall.url
-              if (!voteUrl && rollCall.rollCallNumber) {
-                voteUrl = `https://api.congress.gov/v3/house-vote/${congress}/${rollCall.rollCallNumber}`
-              }
-              if (!voteUrl) {
-                console.log('No URL for vote, using basic data')
-                // Create vote from list data
-                const voteRecord = {
-                  congress: congress,
-                  chamber: chamber as 'senate' | 'house',
-                  session: rollCall.session || 1,
-                  roll_number: rollCall.rollCallNumber || rollCall.rollNumber || rollCall.number,
-                  vote_date: rollCall.date || rollCall.actionDate || null,
-                  question: rollCall.question || rollCall.title || null,
-                  description: rollCall.description || rollCall.result || null,
-                  result: rollCall.result || null,
-                  total_yea: rollCall.totals?.yea || rollCall.totals?.yes || rollCall.yea || 0,
-                  total_nay: rollCall.totals?.nay || rollCall.totals?.no || rollCall.nay || 0,
-                  total_present: rollCall.totals?.present || rollCall.present || 0,
-                  total_not_voting: rollCall.totals?.notVoting || rollCall.notVoting || 0,
-                }
+        // Log first vote structure for debugging
+        if (rollCallVotes.length > 0 && offset === 0) {
+          console.log(`Sample vote keys: ${Object.keys(rollCallVotes[0]).join(', ')}`)
+        }
 
-                if (!voteRecord.roll_number) continue
+        // Process each vote
+        for (const vote of rollCallVotes) {
+          try {
+            // Extract roll number from different possible fields
+            const rollNumber = vote.rollNumber || vote.rollCallNumber || vote.number
+            
+            if (!rollNumber) {
+              console.log(`Skipping vote - no roll number. Keys: ${Object.keys(vote).join(', ')}`)
+              continue
+            }
 
-                const { error: voteError } = await supabase
-                  .from('votes')
-                  .upsert(voteRecord, {
-                    onConflict: 'congress,chamber,roll_number',
-                    ignoreDuplicates: false
-                  })
-
-                if (!voteError) {
-                  totalVotesProcessed++
-                  console.log(`Created vote: ${chamber} roll ${voteRecord.roll_number}`)
-                }
-                continue
-              }
-              
-              // Fetch vote details
-              const fullUrl = voteUrl.includes('api_key') ? voteUrl : `${voteUrl}?format=json&api_key=${congressApiKey}`
-              const detailResponse = await fetch(fullUrl)
-              
-              if (!detailResponse.ok) {
-                console.log(`Skipping vote: detail fetch failed - ${detailResponse.status}`)
-                continue
-              }
-              
-              const detailData = await detailResponse.json()
-              // Handle different response structures
-              const voteDetail = detailData['house-vote'] || detailData['roll-call-vote'] || detailData.vote || detailData
-              
-              if (!voteDetail) {
-                console.log('No vote detail found in response')
-                continue
-              }
-
-              const voteRecord = {
-                congress: congress,
-                chamber: chamber as 'senate' | 'house',
-                session: voteDetail.session || 1,
-                roll_number: voteDetail.rollCallNumber || voteDetail.rollNumber || rollCall.rollCallNumber,
-                vote_date: voteDetail.date || voteDetail.actionDate || null,
-                question: voteDetail.question || null,
-                description: voteDetail.description || voteDetail.title || null,
-                result: voteDetail.result || null,
-                total_yea: voteDetail.totals?.yea || voteDetail.totals?.yes || 0,
-                total_nay: voteDetail.totals?.nay || voteDetail.totals?.no || 0,
-                total_present: voteDetail.totals?.present || 0,
-                total_not_voting: voteDetail.totals?.notVoting || 0,
-              }
-
-              if (!voteRecord.roll_number) {
-                console.log('No roll number found')
-                continue
-              }
-
-              // Upsert vote
-              const { data: upsertedVote, error: voteError } = await supabase
-                .from('votes')
-                .upsert(voteRecord, {
-                  onConflict: 'congress,chamber,roll_number',
-                  ignoreDuplicates: false
-                })
-                .select('id')
-                .single()
-
-              let voteId: string
-              if (voteError) {
-                // Try to get existing vote
-                const { data: existingVote } = await supabase
-                  .from('votes')
-                  .select('id')
-                  .eq('congress', congress)
-                  .eq('chamber', chamber)
-                  .eq('roll_number', voteRecord.roll_number)
-                  .single()
-                
-                if (!existingVote) {
-                  console.log(`Error upserting vote: ${voteError.message}`)
-                  continue
-                }
-                voteId = existingVote.id
-              } else {
-                voteId = upsertedVote.id
-              }
-
-              totalVotesProcessed++
-              console.log(`Processed vote: ${chamber} roll ${voteRecord.roll_number}`)
-
-              // Process member votes if available
-              const memberVotes = voteDetail.members || voteDetail.memberVotes || []
-              for (const mv of memberVotes.slice(0, 100)) { // Limit members per vote
-                const bioguideId = mv.bioguideId || mv.member?.bioguideId
-                const memberInfo = memberMap.get(bioguideId)
-                if (!memberInfo) continue
-
-                // Map vote position
-                let position: 'yea' | 'nay' | 'present' | 'not_voting' = 'not_voting'
-                const voteStr = (mv.voteResult || mv.vote || mv.votePosition || '').toLowerCase()
-                if (voteStr === 'yea' || voteStr === 'yes' || voteStr === 'aye') {
-                  position = 'yea'
-                } else if (voteStr === 'nay' || voteStr === 'no') {
-                  position = 'nay'
-                } else if (voteStr === 'present') {
-                  position = 'present'
-                }
-
-                const { error: mvError } = await supabase
-                  .from('member_votes')
-                  .upsert({
-                    vote_id: voteId,
-                    member_id: memberInfo.id,
-                    position: position,
-                  }, {
-                    onConflict: 'vote_id,member_id',
-                    ignoreDuplicates: true
-                  })
-
-                if (!mvError) totalMemberVotesCreated++
-              }
-
-            } catch (voteError) {
-              console.log(`Error processing vote: ${voteError}`)
+            // Fetch detailed vote data
+            const detailUrl = `https://api.congress.gov/v3/house-vote/${congress}/${rollNumber}?format=json&api_key=${congressApiKey}`
+            const detailResponse = await fetch(detailUrl)
+            
+            if (!detailResponse.ok) {
+              console.log(`Failed to fetch vote ${rollNumber}: ${detailResponse.status}`)
+              continue
             }
             
-            // Rate limiting
-            await new Promise(resolve => setTimeout(resolve, 150))
-          }
+            const detailData = await detailResponse.json()
+            const voteDetail = detailData.houseRollCallVote || detailData
 
-          votesInChamber += rollCallVotes.length
-          offset += limit
-          hasMore = rollCallVotes.length === limit
+            // Log structure of first detailed vote
+            if (totalVotesProcessed === 0) {
+              console.log(`Vote detail keys: ${Object.keys(voteDetail).join(', ')}`)
+            }
+
+            const voteRecord = {
+              congress: congress,
+              chamber: 'house' as const,
+              session: voteDetail.session || 1,
+              roll_number: rollNumber,
+              vote_date: voteDetail.actionDate || voteDetail.date || vote.actionDate || null,
+              question: voteDetail.question || vote.question || null,
+              description: voteDetail.voteQuestion || voteDetail.description || vote.description || null,
+              result: voteDetail.result || vote.result || null,
+              total_yea: voteDetail.totals?.yea || voteDetail.yea || 0,
+              total_nay: voteDetail.totals?.nay || voteDetail.nay || 0,
+              total_present: voteDetail.totals?.present || voteDetail.present || 0,
+              total_not_voting: voteDetail.totals?.notVoting || voteDetail.notVoting || 0,
+            }
+
+            // Upsert vote
+            const { data: upsertedVote, error: voteError } = await supabase
+              .from('votes')
+              .upsert(voteRecord, {
+                onConflict: 'congress,chamber,roll_number',
+                ignoreDuplicates: false
+              })
+              .select('id')
+              .single()
+
+            let voteId: string
+            if (voteError) {
+              const { data: existingVote } = await supabase
+                .from('votes')
+                .select('id')
+                .eq('congress', congress)
+                .eq('chamber', 'house')
+                .eq('roll_number', rollNumber)
+                .single()
+              
+              if (!existingVote) {
+                console.log(`Error upserting vote ${rollNumber}: ${voteError.message}`)
+                continue
+              }
+              voteId = existingVote.id
+            } else {
+              voteId = upsertedVote.id
+            }
+
+            totalVotesProcessed++
+            votesInCongress++
+            console.log(`Processed vote: roll ${rollNumber}`)
+
+            // Process member votes if available
+            const memberVotes = voteDetail.members || voteDetail.memberVotes || []
+            for (const mv of memberVotes.slice(0, 50)) {
+              const bioguideId = mv.bioguideId || mv.member?.bioguideId
+              const memberInfo = memberMap.get(bioguideId)
+              if (!memberInfo) continue
+
+              let position: 'yea' | 'nay' | 'present' | 'not_voting' = 'not_voting'
+              const voteStr = (mv.votePosition || mv.vote || '').toLowerCase()
+              if (voteStr === 'yea' || voteStr === 'yes' || voteStr === 'aye') {
+                position = 'yea'
+              } else if (voteStr === 'nay' || voteStr === 'no') {
+                position = 'nay'
+              } else if (voteStr === 'present') {
+                position = 'present'
+              }
+
+              const { error: mvError } = await supabase
+                .from('member_votes')
+                .upsert({
+                  vote_id: voteId,
+                  member_id: memberInfo.id,
+                  position: position,
+                }, {
+                  onConflict: 'vote_id,member_id',
+                  ignoreDuplicates: true
+                })
+
+              if (!mvError) totalMemberVotesCreated++
+            }
+
+          } catch (voteError) {
+            console.log(`Error processing vote: ${voteError}`)
+          }
           
-          console.log(`Processed ${votesInChamber} ${chamber} votes from Congress ${congress}`)
+          await new Promise(resolve => setTimeout(resolve, 100))
         }
+
+        offset += limit
+        hasMore = rollCallVotes.length === limit
+        
+        console.log(`Processed ${votesInCongress} votes from Congress ${congress}`)
       }
     }
 
