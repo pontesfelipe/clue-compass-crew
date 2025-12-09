@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Map, Settings, User } from "lucide-react";
+import { MemberSearch } from "@/components/MemberSearch";
 
 export function Header() {
   return (
@@ -16,6 +17,7 @@ export function Header() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
+          <MemberSearch />
           <Button variant="civic-ghost" size="sm" asChild>
             <Link to="/map">
               <Map className="mr-2 h-4 w-4" />
@@ -31,6 +33,9 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <div className="md:hidden">
+            <MemberSearch />
+          </div>
           <Button variant="civic-outline" size="sm" className="hidden sm:flex">
             <User className="mr-2 h-4 w-4" />
             Sign In
