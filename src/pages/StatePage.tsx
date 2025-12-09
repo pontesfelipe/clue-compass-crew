@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -7,26 +8,53 @@ import { StatsCard } from "@/components/StatsCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   ArrowLeft, 
   Users, 
   FileText, 
   Vote, 
   Scale,
-  MapPin
+  MapPin,
+  Filter
 } from "lucide-react";
 import { useStateMembers, useStateStats, stateNames } from "@/hooks/useStateData";
+
+type ScoreFilter = "all" | "top" | "good" | "average" | "below";
+
+const scoreFilters: { value: ScoreFilter; label: string; min: number; max: number }[] = [
+  { value: "all", label: "All Scores", min: 0, max: 100 },
+  { value: "top", label: "Top Performers (80+)", min: 80, max: 100 },
+  { value: "good", label: "Good (60-79)", min: 60, max: 79 },
+  { value: "average", label: "Average (40-59)", min: 40, max: 59 },
+  { value: "below", label: "Below Average (<40)", min: 0, max: 39 },
+];
 
 export default function StatePage() {
   const { stateAbbr } = useParams<{ stateAbbr: string }>();
   const normalizedAbbr = stateAbbr?.toUpperCase() || "";
+  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
   
   const { data: members, isLoading: membersLoading } = useStateMembers(normalizedAbbr);
   const { data: stats, isLoading: statsLoading } = useStateStats(normalizedAbbr);
 
   const stateName = stateNames[normalizedAbbr] || normalizedAbbr;
-  const senators = members?.filter(m => m.chamber === "senate") || [];
-  const representatives = members?.filter(m => m.chamber === "house") || [];
+  
+  const filterByScore = (memberList: typeof members) => {
+    if (!memberList || scoreFilter === "all") return memberList || [];
+    const filter = scoreFilters.find(f => f.value === scoreFilter);
+    if (!filter) return memberList;
+    return memberList.filter(m => (m.score ?? 0) >= filter.min && (m.score ?? 0) <= filter.max);
+  };
+
+  const senators = filterByScore(members?.filter(m => m.chamber === "senate"));
+  const representatives = filterByScore(members?.filter(m => m.chamber === "house"));
 
   const isLoading = membersLoading || statsLoading;
 
@@ -113,6 +141,26 @@ export default function StatePage() {
               />
             </>
           )}
+        </div>
+
+        {/* Score Filter */}
+        <div className="flex items-center justify-between mb-8 p-4 bg-card rounded-xl border border-border">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Filter className="h-4 w-4" />
+            <span className="text-sm font-medium">Filter by Score</span>
+          </div>
+          <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as ScoreFilter)}>
+            <SelectTrigger className="w-[200px] bg-background">
+              <SelectValue placeholder="Select score range" />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border border-border z-50">
+              {scoreFilters.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Senators Section */}
