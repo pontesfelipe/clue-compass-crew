@@ -259,7 +259,7 @@ export default function MemberPage() {
         </div>
 
         {/* Score Breakdown and Bills Grid */}
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2 mb-8">
           {/* Score Breakdown */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
             <h2 className="font-serif text-xl font-semibold text-foreground mb-6">
@@ -277,7 +277,7 @@ export default function MemberPage() {
             </div>
           </div>
 
-          {/* Recent Bills */}
+          {/* Sponsored Bills */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
             <h2 className="font-serif text-xl font-semibold text-foreground mb-6">
               Sponsored Bills
@@ -320,18 +320,119 @@ export default function MemberPage() {
                 })
               ) : (
                 <p className="text-muted-foreground text-center py-8">
-                  No bill data available yet.
+                  No sponsored bills yet.
                 </p>
               )}
             </div>
-            {member.sponsoredBills && member.sponsoredBills.length > 0 && (
-              <div className="mt-6 pt-6 border-t border-border">
-                <Button variant="civic-ghost" size="sm" className="w-full">
-                  View All Bills
-                  <ExternalLink className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            )}
+          </div>
+        </div>
+
+        {/* Cosponsored Bills and Vote History */}
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Cosponsored Bills */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
+            <div className="flex items-center gap-2 mb-6">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-serif text-xl font-semibold text-foreground">
+                Cosponsored Bills
+              </h2>
+            </div>
+            <div className="space-y-4">
+              {member.cosponsoredBills && member.cosponsoredBills.length > 0 ? (
+                member.cosponsoredBills.map((bill: any, index: number) => {
+                  const status = getBillStatus(bill);
+                  return (
+                    <div 
+                      key={bill.id}
+                      className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                      style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground line-clamp-2">
+                            {bill.short_title || bill.title}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {formatBillNumber(bill)}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-xs whitespace-nowrap flex-shrink-0",
+                            status === "Enacted" && "bg-score-excellent/10 text-score-excellent border-score-excellent/30",
+                            status === "Passed" && "bg-score-good/10 text-score-good border-score-good/30"
+                          )}
+                        >
+                          {status}
+                        </Badge>
+                      </div>
+                      {bill.policy_area && (
+                        <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No cosponsored bills yet.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Vote History */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
+            <div className="flex items-center gap-2 mb-6">
+              <Vote className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-serif text-xl font-semibold text-foreground">
+                Recent Votes
+              </h2>
+            </div>
+            <div className="space-y-4">
+              {member.voteHistory && member.voteHistory.length > 0 ? (
+                member.voteHistory.map((vote: any, index: number) => (
+                  <div 
+                    key={vote.id}
+                    className="p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
+                    style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground line-clamp-2">
+                          {vote.question || vote.description || `Roll Call #${vote.roll_number}`}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {vote.vote_date ? new Date(vote.vote_date).toLocaleDateString() : 'Unknown date'}
+                          {vote.result && ` · ${vote.result}`}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          "text-xs whitespace-nowrap flex-shrink-0 capitalize",
+                          vote.position === "yea" && "bg-score-excellent/10 text-score-excellent border-score-excellent/30",
+                          vote.position === "nay" && "bg-score-bad/10 text-score-bad border-score-bad/30",
+                          vote.position === "present" && "bg-score-average/10 text-score-average border-score-average/30",
+                          vote.position === "not_voting" && "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {vote.position === "not_voting" ? "Not Voting" : vote.position}
+                      </Badge>
+                    </div>
+                    {(vote.total_yea || vote.total_nay) && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Yea: {vote.total_yea || 0} · Nay: {vote.total_nay || 0}
+                      </p>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No vote history available yet.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </main>
