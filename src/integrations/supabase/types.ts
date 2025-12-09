@@ -123,6 +123,7 @@ export type Database = {
         Row: {
           amount: number
           contributor_name: string
+          contributor_state: string | null
           contributor_type: string
           created_at: string | null
           cycle: number
@@ -134,6 +135,7 @@ export type Database = {
         Insert: {
           amount?: number
           contributor_name: string
+          contributor_state?: string | null
           contributor_type: string
           created_at?: string | null
           cycle: number
@@ -145,6 +147,7 @@ export type Database = {
         Update: {
           amount?: number
           contributor_name?: string
+          contributor_state?: string | null
           contributor_type?: string
           created_at?: string | null
           cycle?: number

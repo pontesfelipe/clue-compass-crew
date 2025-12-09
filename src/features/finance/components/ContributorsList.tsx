@@ -33,9 +33,16 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
           style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'forwards' }}
         >
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-foreground truncate">
-              {contribution.contributorName}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-foreground truncate">
+                {contribution.contributorName}
+              </p>
+              {contribution.contributorState && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  {contribution.contributorState}
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <Badge 
                 variant="outline" 
