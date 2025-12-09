@@ -94,9 +94,11 @@ Deno.serve(async (req) => {
       if (partyStr.includes('democrat')) party = 'D'
       else if (partyStr.includes('republican')) party = 'R'
       
-      // Map chamber from latest term
+      // Map chamber from latest term - API returns "Senate" or "House of Representatives"
       const chamberStr = (latestTerm?.chamber || '').toLowerCase()
-      const chamber: 'senate' | 'house' = chamberStr === 'senate' ? 'senate' : 'house'
+      const chamber: 'senate' | 'house' = chamberStr.includes('senate') ? 'senate' : 'house'
+      
+      console.log(`Member ${member.name}: chamber=${latestTerm?.chamber}, mapped=${chamber}`)
       
       // Parse names correctly - API gives firstName and lastName directly
       // But also has name in "LastName, FirstName" format as backup
