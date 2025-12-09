@@ -88,27 +88,6 @@ export function USMap({ onStateClick }: USMapProps) {
         </div>
       )}
 
-      {/* Legend */}
-      <div className="absolute bottom-4 right-4 z-10 rounded-lg bg-card border border-border shadow-civic-md p-3">
-        <p className="text-xs font-medium text-muted-foreground mb-2">Average Score</p>
-        <div className="flex gap-1">
-          {[
-            { color: "hsl(var(--score-bad))", label: "<50" },
-            { color: "hsl(var(--score-poor))", label: "50+" },
-            { color: "hsl(var(--score-average))", label: "60+" },
-            { color: "hsl(var(--score-good))", label: "70+" },
-            { color: "hsl(var(--score-excellent))", label: "80+" },
-          ].map((item) => (
-            <div key={item.label} className="flex flex-col items-center gap-1">
-              <div 
-                className="w-6 h-4 rounded-sm" 
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="text-[10px] text-muted-foreground">{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* State Grid Map */}
       <div className="grid grid-cols-14 gap-1 p-4">
@@ -149,6 +128,30 @@ export function USMap({ onStateClick }: USMapProps) {
             })}
           </div>
         ))}
+      </div>
+
+      {/* Score Legend */}
+      <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
+        <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {[
+            { color: "hsl(var(--score-bad))", range: "0-49", label: "Needs Improvement" },
+            { color: "hsl(var(--score-poor))", range: "50-59", label: "Below Average" },
+            { color: "hsl(var(--score-average))", range: "60-69", label: "Average" },
+            { color: "hsl(var(--score-good))", range: "70-79", label: "Good" },
+            { color: "hsl(var(--score-excellent))", range: "80-100", label: "Excellent" },
+          ].map((item) => (
+            <div key={item.range} className="flex items-center gap-2">
+              <div 
+                className="w-4 h-4 rounded-sm shrink-0" 
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{item.range}</span> {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
