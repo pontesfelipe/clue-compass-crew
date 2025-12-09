@@ -439,6 +439,39 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_progress: {
+        Row: {
+          created_at: string | null
+          current_offset: number
+          id: string
+          last_matched_count: number | null
+          last_run_at: string | null
+          status: string | null
+          total_processed: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_offset?: number
+          id: string
+          last_matched_count?: number | null
+          last_run_at?: string | null
+          status?: string | null
+          total_processed?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_offset?: number
+          id?: string
+          last_matched_count?: number | null
+          last_run_at?: string | null
+          status?: string | null
+          total_processed?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_scoring_preferences: {
         Row: {
           attendance_weight: number | null
