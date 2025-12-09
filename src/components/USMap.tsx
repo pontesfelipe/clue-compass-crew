@@ -33,22 +33,20 @@ export function USMap({ onStateClick }: USMapProps) {
     ? stateScores?.find(s => s.abbr === hoveredState) 
     : null;
 
-  // Simplified state grid positions for a clean cartogram
+  // Compact state grid positions - standard US tile cartogram
   const stateGrid: { [key: string]: { col: number; row: number } } = {
-    AK: { col: 0, row: 0 }, HI: { col: 0, row: 4 },
-    WA: { col: 1, row: 0 }, OR: { col: 1, row: 1 }, CA: { col: 1, row: 2 },
-    ID: { col: 2, row: 0 }, NV: { col: 2, row: 1 }, AZ: { col: 2, row: 2 },
-    MT: { col: 3, row: 0 }, UT: { col: 3, row: 1 }, NM: { col: 3, row: 2 },
-    WY: { col: 4, row: 0 }, CO: { col: 4, row: 1 }, TX: { col: 4, row: 3 },
-    ND: { col: 5, row: 0 }, SD: { col: 5, row: 1 }, NE: { col: 5, row: 2 }, KS: { col: 5, row: 3 }, OK: { col: 5, row: 4 },
-    MN: { col: 6, row: 0 }, IA: { col: 6, row: 1 }, MO: { col: 6, row: 2 }, AR: { col: 6, row: 3 }, LA: { col: 6, row: 4 },
-    WI: { col: 7, row: 0 }, IL: { col: 7, row: 1 }, KY: { col: 7, row: 2 }, TN: { col: 7, row: 3 }, MS: { col: 7, row: 4 },
-    MI: { col: 8, row: 0 }, IN: { col: 8, row: 1 }, OH: { col: 8, row: 2 }, AL: { col: 8, row: 3 }, FL: { col: 8, row: 4 },
-    PA: { col: 9, row: 1 }, WV: { col: 9, row: 2 }, VA: { col: 9, row: 3 }, GA: { col: 9, row: 4 },
-    NY: { col: 10, row: 0 }, NJ: { col: 10, row: 1 }, MD: { col: 10, row: 2 }, NC: { col: 10, row: 3 }, SC: { col: 10, row: 4 },
-    VT: { col: 11, row: 0 }, CT: { col: 11, row: 1 }, DE: { col: 11, row: 2 },
-    NH: { col: 12, row: 0 }, RI: { col: 12, row: 1 }, DC: { col: 12, row: 2 },
-    ME: { col: 13, row: 0 }, MA: { col: 13, row: 1 },
+    // Row 0
+    AK: { col: 0, row: 0 }, ME: { col: 10, row: 0 },
+    // Row 1
+    WA: { col: 1, row: 1 }, ID: { col: 2, row: 1 }, MT: { col: 3, row: 1 }, ND: { col: 4, row: 1 }, MN: { col: 5, row: 1 }, WI: { col: 6, row: 1 }, MI: { col: 8, row: 1 }, VT: { col: 9, row: 1 }, NH: { col: 10, row: 1 },
+    // Row 2
+    OR: { col: 1, row: 2 }, NV: { col: 2, row: 2 }, WY: { col: 3, row: 2 }, SD: { col: 4, row: 2 }, IA: { col: 5, row: 2 }, IL: { col: 6, row: 2 }, IN: { col: 7, row: 2 }, OH: { col: 8, row: 2 }, PA: { col: 9, row: 2 }, NY: { col: 10, row: 2 }, MA: { col: 11, row: 2 },
+    // Row 3
+    CA: { col: 1, row: 3 }, UT: { col: 2, row: 3 }, CO: { col: 3, row: 3 }, NE: { col: 4, row: 3 }, KS: { col: 5, row: 3 }, MO: { col: 6, row: 3 }, KY: { col: 7, row: 3 }, WV: { col: 8, row: 3 }, VA: { col: 9, row: 3 }, NJ: { col: 10, row: 3 }, CT: { col: 11, row: 3 }, RI: { col: 12, row: 3 },
+    // Row 4
+    AZ: { col: 2, row: 4 }, NM: { col: 3, row: 4 }, OK: { col: 5, row: 4 }, AR: { col: 6, row: 4 }, TN: { col: 7, row: 4 }, NC: { col: 8, row: 4 }, SC: { col: 9, row: 4 }, MD: { col: 10, row: 4 }, DE: { col: 11, row: 4 },
+    // Row 5
+    HI: { col: 0, row: 5 }, TX: { col: 4, row: 5 }, LA: { col: 6, row: 5 }, MS: { col: 7, row: 5 }, AL: { col: 8, row: 5 }, GA: { col: 9, row: 5 }, FL: { col: 10, row: 5 }, DC: { col: 11, row: 5 },
   };
 
   // All 50 states + DC for the grid
@@ -57,8 +55,8 @@ export function USMap({ onStateClick }: USMapProps) {
   if (isLoading) {
     return (
       <div className="relative w-full p-4">
-        <div className="grid grid-cols-14 gap-1">
-          {Array.from({ length: 70 }).map((_, i) => (
+        <div className="grid grid-cols-13 gap-0.5">
+          {Array.from({ length: 78 }).map((_, i) => (
             <Skeleton key={i} className="w-full aspect-square rounded-md" />
           ))}
         </div>
@@ -111,10 +109,10 @@ export function USMap({ onStateClick }: USMapProps) {
       </div>
 
       {/* State Grid Map */}
-      <div className="grid grid-cols-14 gap-0.5 p-4">
-        {Array.from({ length: 5 }).map((_, rowIndex) => (
+      <div className="grid grid-cols-13 gap-0.5 p-4">
+        {Array.from({ length: 6 }).map((_, rowIndex) => (
           <div key={rowIndex} className="contents">
-            {Array.from({ length: 14 }).map((_, colIndex) => {
+            {Array.from({ length: 13 }).map((_, colIndex) => {
               const stateAbbr = allStates.find(abbr => {
                 const pos = stateGrid[abbr];
                 return pos && pos.row === rowIndex && pos.col === colIndex;
