@@ -16,11 +16,14 @@ import {
   ExternalLink,
   Share2,
   Bookmark,
+  Scale,
+  Check,
   AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
 import { stateNames } from "@/hooks/useStateData";
+import { useComparison } from "@/contexts/ComparisonContext";
 
 type Party = "D" | "R" | "I";
 
@@ -70,6 +73,7 @@ function calculateYearsInOffice(startDate: string | null): string {
 export default function MemberPage() {
   const { memberId } = useParams<{ memberId: string }>();
   const { data: member, isLoading, error } = useMember(memberId || "");
+  const { addMember, removeMember, isMemberSelected, canAddMore } = useComparison();
 
   if (isLoading) {
     return (
@@ -201,11 +205,42 @@ export default function MemberPage() {
                 </p>
                 
                 <div className="flex flex-wrap gap-4 mt-6">
-                  <Button variant="civic" size="sm">
+                  <Button 
+                    variant={isMemberSelected(member.id) ? "default" : "civic-outline"} 
+                    size="sm"
+                    onClick={() => {
+                      if (isMemberSelected(member.id)) {
+                        removeMember(member.id);
+                      } else if (canAddMore) {
+                        addMember({
+                          id: member.id,
+                          name: member.full_name,
+                          party: member.party,
+                          state: member.state,
+                          chamber: member.chamber === "senate" ? "Senate" : "House",
+                          imageUrl: member.image_url,
+                        });
+                      }
+                    }}
+                    disabled={!isMemberSelected(member.id) && !canAddMore}
+                  >
+                    {isMemberSelected(member.id) ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Added to Compare
+                      </>
+                    ) : (
+                      <>
+                        <Scale className="mr-2 h-4 w-4" />
+                        Compare
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="civic-outline" size="sm">
                     <Bookmark className="mr-2 h-4 w-4" />
                     Track
                   </Button>
-                  <Button variant="civic-outline" size="sm">
+                  <Button variant="civic-ghost" size="sm">
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
                   </Button>
@@ -213,7 +248,7 @@ export default function MemberPage() {
                     <Button variant="civic-ghost" size="sm" asChild>
                       <a href={member.website_url} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="mr-2 h-4 w-4" />
-                        Official Website
+                        Website
                       </a>
                     </Button>
                   )}
