@@ -11,6 +11,62 @@ import type { StateScore, StateStats } from "@/types/domain";
 import type { MemberWithScore } from "@/types/domain";
 
 /**
+ * Fetch party-based score breakdown
+ */
+export function usePartyScores() {
+  return useQuery({
+    queryKey: ["party-scores"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select(`
+          party,
+          member_scores!inner (
+            overall_score
+          )
+        `)
+        .eq("in_office", true)
+        .is("member_scores.user_id", null);
+
+      if (error) throw error;
+
+      const partyAggregates: Record<string, { total: number; count: number }> = {
+        D: { total: 0, count: 0 },
+        R: { total: 0, count: 0 },
+        I: { total: 0, count: 0 },
+      };
+
+      (data || []).forEach((member) => {
+        const party = member.party as string;
+        const memberScores = member.member_scores as { overall_score: number | null }[];
+        const score = memberScores?.[0]?.overall_score;
+
+        if (party && score != null && partyAggregates[party]) {
+          partyAggregates[party].total += Number(score);
+          partyAggregates[party].count += 1;
+        }
+      });
+
+      return {
+        democratic: {
+          avg: partyAggregates.D.count > 0 ? Math.round(partyAggregates.D.total / partyAggregates.D.count) : 0,
+          count: partyAggregates.D.count,
+        },
+        republican: {
+          avg: partyAggregates.R.count > 0 ? Math.round(partyAggregates.R.total / partyAggregates.R.count) : 0,
+          count: partyAggregates.R.count,
+        },
+        independent: {
+          avg: partyAggregates.I.count > 0 ? Math.round(partyAggregates.I.total / partyAggregates.I.count) : 0,
+          count: partyAggregates.I.count,
+        },
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Fetch all state scores for the map
  */
 export function useStateScores() {
