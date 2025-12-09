@@ -30,6 +30,7 @@ import { useMember } from "@/hooks/useMembers";
 import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
 import { MemberFinanceSection } from "@/features/finance";
+import { MemberAISummary } from "@/components/MemberAISummary";
 import { toast } from "@/hooks/use-toast";
 
 type Party = "D" | "R" | "I";
@@ -431,6 +432,11 @@ export default function MemberPage() {
             </div>
           </div>
         )}
+
+        {/* AI Summary Section */}
+        <div className="mb-8">
+          <MemberAISummary memberId={member.id} memberName={member.fullName} />
+        </div>
 
         {/* Score Breakdown and Bills Grid */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">

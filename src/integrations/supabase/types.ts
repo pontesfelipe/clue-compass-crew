@@ -310,6 +310,35 @@ export type Database = {
           },
         ]
       }
+      member_summaries: {
+        Row: {
+          generated_at: string
+          id: string
+          member_id: string
+          summary: string
+        }
+        Insert: {
+          generated_at?: string
+          id?: string
+          member_id: string
+          summary: string
+        }
+        Update: {
+          generated_at?: string
+          id?: string
+          member_id?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_summaries_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_votes: {
         Row: {
           created_at: string | null
