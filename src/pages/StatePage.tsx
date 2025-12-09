@@ -193,12 +193,12 @@ export default function StatePage() {
                 <MemberCard
                   key={member.id}
                   id={member.id}
-                  name={member.full_name}
+                  name={member.fullName}
                   party={member.party}
                   state={member.state}
                   chamber="Senate"
                   score={member.score ?? 0}
-                  imageUrl={member.image_url}
+                  imageUrl={member.imageUrl}
                 />
               ))}
             </div>
@@ -235,12 +235,12 @@ export default function StatePage() {
                 <MemberCard
                   key={member.id}
                   id={member.id}
-                  name={member.full_name}
+                  name={member.fullName}
                   party={member.party}
                   state={member.state}
                   chamber="House"
                   score={member.score ?? 0}
-                  imageUrl={member.image_url}
+                  imageUrl={member.imageUrl}
                 />
               ))}
             </div>
