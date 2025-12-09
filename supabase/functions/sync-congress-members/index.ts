@@ -81,6 +81,40 @@ Deno.serve(async (req) => {
 
     console.log(`Total members fetched: ${members.length}`)
 
+    // Fetch official website URLs for each member (in batches to avoid rate limits)
+    const memberDetailsMap = new Map<string, string | null>()
+    const detailBatchSize = 10
+    
+    for (let i = 0; i < members.length; i += detailBatchSize) {
+      const batch = members.slice(i, i + detailBatchSize)
+      
+      const detailPromises = batch.map(async (member: any) => {
+        try {
+          const detailUrl = `https://api.congress.gov/v3/member/${member.bioguideId}?format=json&api_key=${congressApiKey}`
+          const detailRes = await fetch(detailUrl)
+          if (detailRes.ok) {
+            const detailData = await detailRes.json()
+            return { 
+              bioguideId: member.bioguideId, 
+              websiteUrl: detailData.member?.officialWebsiteUrl || null 
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to fetch details for ${member.bioguideId}`)
+        }
+        return { bioguideId: member.bioguideId, websiteUrl: null }
+      })
+      
+      const results = await Promise.all(detailPromises)
+      results.forEach(r => memberDetailsMap.set(r.bioguideId, r.websiteUrl))
+      
+      if (i + detailBatchSize < members.length) {
+        await new Promise(resolve => setTimeout(resolve, 100)) // Small delay between batches
+      }
+    }
+    
+    console.log(`Fetched ${memberDetailsMap.size} member detail records`)
+
     // Transform and upsert members
     const memberRecords = members.map((member: any) => {
       // Get terms array - terms are in chronological order (oldest first)
@@ -156,6 +190,9 @@ Deno.serve(async (req) => {
       // Get state - prefer stateName (full name) over stateCode
       const state = latestTerm?.stateName || member.state || latestTerm?.stateCode || ''
       
+      // Get official website URL from details fetch
+      const officialWebsite = memberDetailsMap.get(member.bioguideId) || null
+      
       return {
         bioguide_id: member.bioguideId,
         first_name: firstName,
@@ -166,7 +203,7 @@ Deno.serve(async (req) => {
         party,
         chamber,
         image_url: member.depiction?.imageUrl || null,
-        website_url: member.url || null,
+        website_url: officialWebsite,
         in_office: true,
         start_date: latestTerm?.startYear ? `${latestTerm.startYear}-01-03` : null,
         updated_at: new Date().toISOString(),
