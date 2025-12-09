@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
-const FEC_API_KEY = "DEMO_KEY";
+const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY";
 
 interface FecCandidate {
   candidate_id: string;
@@ -39,7 +39,7 @@ serve(async (req) => {
 
     // Parse request body for pagination
     let offset = 0;
-    let limit = 10; // Process only 10 members per call to avoid rate limits
+    let limit = 50; // Process 50 members per call with real API key
     try {
       const body = await req.json();
       offset = body.offset || 0;
@@ -71,37 +71,68 @@ serve(async (req) => {
 
     for (const member of members || []) {
       try {
-        // Search for FEC candidate by name and state
-        const candidateSearchUrl = `${FEC_API_BASE}/candidates/search/?api_key=${FEC_API_KEY}&name=${encodeURIComponent(member.last_name)}&state=${member.state}&election_year=${currentCycle}&per_page=5`;
+        // Search for FEC candidate by name and state - try multiple cycles
+        const searchCycles = [2024, 2022, 2020];
+        let matchingCandidate = null;
+        let candidateResponse = null;
         
-        console.log(`Searching FEC for: ${member.full_name} (${member.state})`);
-        
-        // Wait 1.5 seconds between requests to respect rate limits (40 req/hour for DEMO_KEY)
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        const candidateResponse = await fetch(candidateSearchUrl);
-        if (!candidateResponse.ok) {
-          if (candidateResponse.status === 429) {
-            console.error(`Rate limited. Stopping sync.`);
-            break;
+        for (const cycle of searchCycles) {
+          const candidateSearchUrl = `${FEC_API_BASE}/candidates/search/?api_key=${FEC_API_KEY}&q=${encodeURIComponent(member.full_name)}&state=${member.state}&cycle=${cycle}&per_page=10&office=H&office=S`;
+          
+          console.log(`Searching FEC for: ${member.full_name} (${member.state}, cycle ${cycle})`);
+          
+          // Wait between requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          candidateResponse = await fetch(candidateSearchUrl);
+          if (!candidateResponse.ok) {
+            if (candidateResponse.status === 429) {
+              console.error(`Rate limited. Stopping sync.`);
+              break;
+            }
+            continue;
           }
-          console.error(`FEC API error for ${member.full_name}: ${candidateResponse.status}`);
-          errorCount++;
-          continue;
+
+          const candidateData = await candidateResponse.json();
+          const candidates = candidateData.results || [];
+          
+          if (candidates.length > 0) {
+            // Find best matching candidate - improved matching logic
+            const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '');
+            const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '');
+            
+            matchingCandidate = candidates.find((c: FecCandidate) => {
+              if (!c.name || c.state !== member.state) return false;
+              
+              // FEC format is typically "LASTNAME, FIRSTNAME MIDDLE"
+              const fecName = c.name.toLowerCase();
+              const fecLastName = fecName.split(',')[0]?.trim().replace(/[^a-z]/g, '') || '';
+              const fecFirstPart = fecName.split(',')[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || '';
+              
+              // Match last name
+              const lastNameMatch = fecLastName === memberLastName || 
+                                   fecLastName.includes(memberLastName) || 
+                                   memberLastName.includes(fecLastName);
+              
+              // Match first name (at least first 3 chars)
+              const firstNameMatch = fecFirstPart === memberFirstName ||
+                                    fecFirstPart.startsWith(memberFirstName.substring(0, 3)) ||
+                                    memberFirstName.startsWith(fecFirstPart.substring(0, 3));
+              
+              return lastNameMatch && firstNameMatch;
+            });
+            
+            // If no exact match, take first result with matching state
+            if (!matchingCandidate && candidates.length > 0) {
+              matchingCandidate = candidates.find((c: FecCandidate) => c.state === member.state);
+            }
+            
+            if (matchingCandidate) break;
+          }
         }
 
-        const candidateData = await candidateResponse.json();
-        const candidates = candidateData.results || [];
-
-        // Find best matching candidate
-        const matchingCandidate = candidates.find((c: FecCandidate) => {
-          const nameParts = c.name?.toLowerCase().split(',') || [];
-          const lastName = nameParts[0]?.trim();
-          return lastName === member.last_name.toLowerCase() && c.state === member.state;
-        });
-
         if (!matchingCandidate) {
-          console.log(`No FEC match found for ${member.full_name}`);
+          console.log(`No FEC match for ${member.full_name}`);
           processedCount++;
           continue;
         }
@@ -111,7 +142,7 @@ serve(async (req) => {
         matchedCount++;
 
         // Wait before next API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Get committee(s) for this candidate
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&cycle=${currentCycle}&per_page=5`;
@@ -140,7 +171,7 @@ serve(async (req) => {
         const principalCommittee = committees.find((c: FecCommittee) => c.committee_type === 'P') || committees[0];
         const committeeId = principalCommittee.committee_id;
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Fetch schedule A (itemized contributions)
         const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=10`;
@@ -178,7 +209,7 @@ serve(async (req) => {
           }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Fetch totals for the candidate
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
