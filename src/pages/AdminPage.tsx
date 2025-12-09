@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, UserPlus, UserMinus } from "lucide-react";
+import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3, FileText, Vote } from "lucide-react";
 import { Helmet } from "react-helmet";
 import {
   Select,
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface UserProfile {
   id: string;
@@ -42,6 +43,21 @@ interface SyncProgress {
   total_processed: number | null;
 }
 
+interface AnalyticsData {
+  userSignups: { date: string; count: number }[];
+  dataCounts: { name: string; count: number }[];
+  aiSummaries: { date: string; count: number }[];
+  totals: {
+    members: number;
+    bills: number;
+    votes: number;
+    users: number;
+    aiSummaries: number;
+  };
+}
+
+const CHART_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -51,8 +67,10 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingSync, setIsLoadingSync] = useState(false);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [triggeringSyncId, setTriggeringSyncId] = useState<string | null>(null);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
 
@@ -83,6 +101,7 @@ export default function AdminPage() {
       fetchUsers();
       fetchUserRoles();
       fetchSyncProgress();
+      fetchAnalytics();
     }
   }, [isAdmin]);
 
@@ -118,6 +137,95 @@ export default function AdminPage() {
       setUserRoles((data || []) as UserRole[]);
     } catch (error) {
       console.error("Error fetching user roles:", error);
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    setIsLoadingAnalytics(true);
+    try {
+      // Fetch all data in parallel
+      const [profilesRes, membersRes, billsRes, votesRes, summariesRes] = await Promise.all([
+        supabase.from("profiles").select("created_at"),
+        supabase.from("members").select("id", { count: "exact", head: true }),
+        supabase.from("bills").select("id", { count: "exact", head: true }),
+        supabase.from("votes").select("id", { count: "exact", head: true }),
+        supabase.from("member_summaries").select("generated_at"),
+      ]);
+
+      // Process user signups by date (last 30 days)
+      const signupsByDate = new Map<string, number>();
+      const now = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        signupsByDate.set(date.toISOString().split("T")[0], 0);
+      }
+
+      (profilesRes.data || []).forEach((profile) => {
+        if (profile.created_at) {
+          const date = profile.created_at.split("T")[0];
+          if (signupsByDate.has(date)) {
+            signupsByDate.set(date, (signupsByDate.get(date) || 0) + 1);
+          }
+        }
+      });
+
+      const userSignups = Array.from(signupsByDate.entries()).map(([date, count]) => ({
+        date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        count,
+      }));
+
+      // Process AI summaries by date (last 30 days)
+      const summariesByDate = new Map<string, number>();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        summariesByDate.set(date.toISOString().split("T")[0], 0);
+      }
+
+      (summariesRes.data || []).forEach((summary) => {
+        if (summary.generated_at) {
+          const date = summary.generated_at.split("T")[0];
+          if (summariesByDate.has(date)) {
+            summariesByDate.set(date, (summariesByDate.get(date) || 0) + 1);
+          }
+        }
+      });
+
+      const aiSummaries = Array.from(summariesByDate.entries()).map(([date, count]) => ({
+        date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        count,
+      }));
+
+      // Data counts for pie chart
+      const dataCounts = [
+        { name: "Members", count: membersRes.count || 0 },
+        { name: "Bills", count: billsRes.count || 0 },
+        { name: "Votes", count: votesRes.count || 0 },
+        { name: "AI Summaries", count: summariesRes.data?.length || 0 },
+      ];
+
+      setAnalytics({
+        userSignups,
+        dataCounts,
+        aiSummaries,
+        totals: {
+          members: membersRes.count || 0,
+          bills: billsRes.count || 0,
+          votes: votesRes.count || 0,
+          users: profilesRes.data?.length || 0,
+          aiSummaries: summariesRes.data?.length || 0,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch analytics",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingAnalytics(false);
     }
   };
 
@@ -334,8 +442,12 @@ export default function AdminPage() {
             <h1 className="font-serif text-3xl font-bold">Admin Dashboard</h1>
           </div>
 
-          <Tabs defaultValue="users" className="w-full">
+          <Tabs defaultValue="analytics" className="w-full">
             <TabsList className="mb-6">
+              <TabsTrigger value="analytics" className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Analytics
+              </TabsTrigger>
               <TabsTrigger value="users" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Users
@@ -349,6 +461,184 @@ export default function AdminPage() {
                 AI Assistant
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="analytics">
+              <div className="space-y-6">
+                {/* Summary Cards */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Total Users</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.users || 0}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Congress Members</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.members.toLocaleString() || 0}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Bills Tracked</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.bills.toLocaleString() || 0}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Votes Recorded</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.votes.toLocaleString() || 0}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>AI Summaries</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.aiSummaries || 0}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                </div>
+
+                {/* Charts */}
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span>User Signups (Last 30 Days)</span>
+                        <Button variant="outline" size="sm" onClick={fetchAnalytics} disabled={isLoadingAnalytics}>
+                          <RefreshCw className={`h-4 w-4 ${isLoadingAnalytics ? "animate-spin" : ""}`} />
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingAnalytics ? (
+                        <div className="flex justify-center py-16">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <AreaChart data={analytics?.userSignups || []}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                            <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: "hsl(var(--card))", 
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: "8px"
+                              }} 
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="count" 
+                              stroke="hsl(var(--primary))" 
+                              fill="hsl(var(--primary) / 0.2)" 
+                              name="Signups"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>AI Summaries Generated (Last 30 Days)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingAnalytics ? (
+                        <div className="flex justify-center py-16">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={analytics?.aiSummaries || []}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                            <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: "hsl(var(--card))", 
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: "8px"
+                              }} 
+                            />
+                            <Bar dataKey="count" fill="hsl(var(--chart-2))" name="Summaries" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Data Distribution */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Data Distribution</CardTitle>
+                    <CardDescription>Overview of tracked congressional data</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingAnalytics ? (
+                      <div className="flex justify-center py-16">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col md:flex-row items-center justify-center gap-8">
+                        <ResponsiveContainer width={300} height={250}>
+                          <PieChart>
+                            <Pie
+                              data={analytics?.dataCounts || []}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                              paddingAngle={2}
+                              dataKey="count"
+                              nameKey="name"
+                            >
+                              {(analytics?.dataCounts || []).map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: "hsl(var(--card))", 
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: "8px"
+                              }}
+                              formatter={(value: number) => value.toLocaleString()}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="grid gap-2">
+                          {(analytics?.dataCounts || []).map((item, index) => (
+                            <div key={item.name} className="flex items-center gap-3">
+                              <div 
+                                className="w-4 h-4 rounded" 
+                                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} 
+                              />
+                              <span className="text-sm font-medium">{item.name}</span>
+                              <span className="text-sm text-muted-foreground ml-auto">
+                                {item.count.toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
             <TabsContent value="users">
               <Card>
