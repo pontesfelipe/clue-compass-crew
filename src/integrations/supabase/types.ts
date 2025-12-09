@@ -644,8 +644,10 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           email: string | null
+          first_name: string | null
           home_state: string | null
           id: string
+          last_name: string | null
           updated_at: string | null
           user_id: string
         }
@@ -653,8 +655,10 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          first_name?: string | null
           home_state?: string | null
           id?: string
+          last_name?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -662,8 +666,10 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          first_name?: string | null
           home_state?: string | null
           id?: string
+          last_name?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -756,6 +762,36 @@ export type Database = {
           status?: string | null
           total_processed?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      terms_acceptances: {
+        Row: {
+          accepted_at: string
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          terms_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          terms_version: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          terms_version?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
