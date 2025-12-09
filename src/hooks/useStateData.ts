@@ -23,6 +23,22 @@ const stateNames: { [key: string]: string } = {
   PR: "Puerto Rico", VI: "Virgin Islands"
 };
 
+// Reverse lookup: full name to abbreviation
+const stateAbbreviations: { [key: string]: string } = Object.entries(stateNames).reduce(
+  (acc, [abbr, name]) => ({ ...acc, [name]: abbr }),
+  {}
+);
+
+// Helper to get full state name from abbreviation
+function getStateName(abbr: string): string {
+  return stateNames[abbr.toUpperCase()] || abbr;
+}
+
+// Helper to get abbreviation from full state name
+function getStateAbbr(name: string): string {
+  return stateAbbreviations[name] || name;
+}
+
 export function useStateScores() {
   return useQuery({
     queryKey: ["state-scores"],
@@ -40,19 +56,21 @@ export function useStateScores() {
 
       if (error) throw error;
 
-      // Aggregate scores by state
+      // Aggregate scores by state (state is stored as full name in DB)
       const stateAggregates: { [key: string]: { total: number; count: number } } = {};
       
       (data || []).forEach((member: any) => {
-        const state = member.state;
+        const stateName = member.state;
         const score = member.member_scores?.[0]?.overall_score;
         
-        if (state && score != null) {
-          if (!stateAggregates[state]) {
-            stateAggregates[state] = { total: 0, count: 0 };
+        if (stateName && score != null) {
+          // Convert full name to abbreviation for consistent keys
+          const abbr = getStateAbbr(stateName);
+          if (!stateAggregates[abbr]) {
+            stateAggregates[abbr] = { total: 0, count: 0 };
           }
-          stateAggregates[state].total += Number(score);
-          stateAggregates[state].count += 1;
+          stateAggregates[abbr].total += Number(score);
+          stateAggregates[abbr].count += 1;
         }
       });
 
@@ -70,6 +88,8 @@ export function useStateScores() {
 }
 
 export function useStateMembers(stateAbbr: string) {
+  const stateName = getStateName(stateAbbr);
+  
   return useQuery({
     queryKey: ["state-members", stateAbbr],
     queryFn: async () => {
@@ -91,7 +111,7 @@ export function useStateMembers(stateAbbr: string) {
             bipartisan_bills
           )
         `)
-        .eq("state", stateAbbr.toUpperCase())
+        .eq("state", stateName)
         .eq("in_office", true)
         .is("member_scores.user_id", null)
         .order("overall_score", { referencedTable: "member_scores", ascending: false });
@@ -109,6 +129,8 @@ export function useStateMembers(stateAbbr: string) {
 }
 
 export function useStateStats(stateAbbr: string) {
+  const stateName = getStateName(stateAbbr);
+  
   return useQuery({
     queryKey: ["state-stats", stateAbbr],
     queryFn: async () => {
@@ -125,7 +147,7 @@ export function useStateStats(stateAbbr: string) {
             votes_missed
           )
         `)
-        .eq("state", stateAbbr.toUpperCase())
+        .eq("state", stateName)
         .eq("in_office", true)
         .is("member_scores.user_id", null);
 
@@ -178,4 +200,4 @@ export function getNationalAverage(stateScores: StateScore[]) {
   return count > 0 ? Math.round(total / count) : 0;
 }
 
-export { stateNames };
+export { stateNames, getStateName, getStateAbbr };
