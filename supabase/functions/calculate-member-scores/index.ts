@@ -211,6 +211,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Update sync progress
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'member-scores',
+        last_run_at: new Date().toISOString(),
+        status: 'complete',
+        total_processed: scoresUpdated,
+        current_offset: 0,
+      }, { onConflict: 'id' })
+
     const result = {
       success: true,
       scoresUpdated,
