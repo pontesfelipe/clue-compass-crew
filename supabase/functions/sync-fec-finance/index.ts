@@ -10,6 +10,22 @@ const corsHeaders = {
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
 const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY";
 
+// State name to abbreviation mapping
+const stateAbbreviations: Record<string, string> = {
+  "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+  "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
+  "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA",
+  "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+  "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS", "Missouri": "MO",
+  "Montana": "MT", "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH",
+  "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT",
+  "Virginia": "VA", "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY",
+  "District of Columbia": "DC", "Puerto Rico": "PR", "Guam": "GU", "American Samoa": "AS",
+  "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
+};
+
 interface FecCandidate {
   candidate_id: string;
   name: string;
@@ -17,14 +33,7 @@ interface FecCandidate {
   state: string;
   district: string;
   office: string;
-}
-
-interface FecCommittee {
-  committee_id: string;
-  name: string;
-  committee_type: string;
-  party: string;
-  treasurer_name: string;
+  election_years: number[];
 }
 
 serve(async (req) => {
@@ -37,20 +46,18 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Parse request body for pagination
     let offset = 0;
-    let limit = 50; // Process 50 members per call with real API key
+    let limit = 20;
     try {
       const body = await req.json();
       offset = body.offset || 0;
-      limit = body.limit || 10;
+      limit = body.limit || 20;
     } catch {
       // Use defaults if no body
     }
 
     console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`);
 
-    // Get members with pagination
     const { data: members, error: membersError, count } = await supabase
       .from('members')
       .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber', { count: 'exact' })
@@ -71,63 +78,76 @@ serve(async (req) => {
 
     for (const member of members || []) {
       try {
-        // Search for FEC candidate by name and state - try multiple cycles
-        const searchCycles = [2024, 2022, 2020];
-        let matchingCandidate = null;
-        let candidateResponse = null;
+        // Convert state name to abbreviation
+        const stateAbbr = stateAbbreviations[member.state] || member.state;
+        if (!stateAbbr || stateAbbr.length !== 2) {
+          console.log(`Unknown state for ${member.full_name}: ${member.state}`);
+          processedCount++;
+          continue;
+        }
+
+        // Search by last name with state filter
+        const lastName = member.last_name.replace(/[^a-zA-Z\s]/g, '').trim();
+        const office = member.chamber === 'house' ? 'H' : 'S';
         
-        for (const cycle of searchCycles) {
-          const candidateSearchUrl = `${FEC_API_BASE}/candidates/search/?api_key=${FEC_API_KEY}&q=${encodeURIComponent(member.full_name)}&state=${member.state}&cycle=${cycle}&per_page=10&office=H&office=S`;
+        const candidateSearchUrl = `${FEC_API_BASE}/candidates/?api_key=${FEC_API_KEY}&name=${encodeURIComponent(lastName)}&state=${stateAbbr}&office=${office}&is_active_candidate=true&sort=-election_years&per_page=20`;
+        
+        console.log(`Searching FEC for: ${member.full_name} (${stateAbbr}, ${office})`);
+        
+        await new Promise(resolve => setTimeout(resolve, 250));
+        
+        const candidateResponse = await fetch(candidateSearchUrl);
+        if (!candidateResponse.ok) {
+          if (candidateResponse.status === 429) {
+            console.error(`Rate limited. Stopping sync.`);
+            break;
+          }
+          console.log(`FEC search failed for ${member.full_name}: ${candidateResponse.status}`);
+          processedCount++;
+          continue;
+        }
+
+        const candidateData = await candidateResponse.json();
+        const candidates = candidateData.results || [];
+        
+        console.log(`Found ${candidates.length} FEC candidates for ${lastName} in ${stateAbbr}`);
+
+        // Find best matching candidate
+        let matchingCandidate = null;
+        const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '');
+        const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '');
+        
+        for (const c of candidates) {
+          if (!c.name) continue;
           
-          console.log(`Searching FEC for: ${member.full_name} (${member.state}, cycle ${cycle})`);
+          // FEC format is typically "LASTNAME, FIRSTNAME MIDDLE"
+          const fecName = c.name.toLowerCase();
+          const nameParts = fecName.split(',');
+          const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || '';
+          const fecFirstPart = nameParts[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || '';
           
-          // Wait between requests
-          await new Promise(resolve => setTimeout(resolve, 200));
+          const lastNameMatch = fecLastName === memberLastName;
+          const firstNameMatch = fecFirstPart === memberFirstName ||
+                                (fecFirstPart.length >= 3 && memberFirstName.startsWith(fecFirstPart.substring(0, 3))) ||
+                                (memberFirstName.length >= 3 && fecFirstPart.startsWith(memberFirstName.substring(0, 3)));
           
-          candidateResponse = await fetch(candidateSearchUrl);
-          if (!candidateResponse.ok) {
-            if (candidateResponse.status === 429) {
-              console.error(`Rate limited. Stopping sync.`);
+          if (lastNameMatch && firstNameMatch) {
+            matchingCandidate = c;
+            console.log(`Matched: ${member.full_name} -> ${c.name} (${c.candidate_id})`);
+            break;
+          }
+        }
+        
+        // Fallback: just last name with same office
+        if (!matchingCandidate) {
+          for (const c of candidates) {
+            if (!c.name) continue;
+            const fecLastName = c.name.toLowerCase().split(',')[0]?.trim().replace(/[^a-z]/g, '') || '';
+            if (fecLastName === memberLastName && c.office === office) {
+              matchingCandidate = c;
+              console.log(`Fallback match: ${member.full_name} -> ${c.name} (${c.candidate_id})`);
               break;
             }
-            continue;
-          }
-
-          const candidateData = await candidateResponse.json();
-          const candidates = candidateData.results || [];
-          
-          if (candidates.length > 0) {
-            // Find best matching candidate - improved matching logic
-            const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '');
-            const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '');
-            
-            matchingCandidate = candidates.find((c: FecCandidate) => {
-              if (!c.name || c.state !== member.state) return false;
-              
-              // FEC format is typically "LASTNAME, FIRSTNAME MIDDLE"
-              const fecName = c.name.toLowerCase();
-              const fecLastName = fecName.split(',')[0]?.trim().replace(/[^a-z]/g, '') || '';
-              const fecFirstPart = fecName.split(',')[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || '';
-              
-              // Match last name
-              const lastNameMatch = fecLastName === memberLastName || 
-                                   fecLastName.includes(memberLastName) || 
-                                   memberLastName.includes(fecLastName);
-              
-              // Match first name (at least first 3 chars)
-              const firstNameMatch = fecFirstPart === memberFirstName ||
-                                    fecFirstPart.startsWith(memberFirstName.substring(0, 3)) ||
-                                    memberFirstName.startsWith(fecFirstPart.substring(0, 3));
-              
-              return lastNameMatch && firstNameMatch;
-            });
-            
-            // If no exact match, take first result with matching state
-            if (!matchingCandidate && candidates.length > 0) {
-              matchingCandidate = candidates.find((c: FecCandidate) => c.state === member.state);
-            }
-            
-            if (matchingCandidate) break;
           }
         }
 
@@ -138,14 +158,12 @@ serve(async (req) => {
         }
 
         const candidateId = matchingCandidate.candidate_id;
-        console.log(`Found FEC candidate: ${candidateId} for ${member.full_name}`);
         matchedCount++;
 
-        // Wait before next API call
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 250));
 
-        // Get committee(s) for this candidate
-        const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&cycle=${currentCycle}&per_page=5`;
+        // Get committees
+        const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=5`;
         const committeesResponse = await fetch(committeesUrl);
         
         if (!committeesResponse.ok) {
@@ -153,7 +171,6 @@ serve(async (req) => {
             console.error(`Rate limited at committees. Stopping.`);
             break;
           }
-          console.error(`Failed to fetch committees for ${candidateId}`);
           processedCount++;
           continue;
         }
@@ -167,19 +184,20 @@ serve(async (req) => {
           continue;
         }
 
-        // Get principal campaign committee
-        const principalCommittee = committees.find((c: FecCommittee) => c.committee_type === 'P') || committees[0];
+        const principalCommittee = committees.find((c: any) => c.committee_type === 'P') || committees[0];
         const committeeId = principalCommittee.committee_id;
+        console.log(`Found committee ${committeeId} for ${member.full_name}`);
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 250));
 
-        // Fetch schedule A (itemized contributions)
-        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=10`;
+        // Fetch contributions
+        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/by_contributor/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&cycle=${currentCycle}&sort=-total&per_page=15`;
         const contributionsResponse = await fetch(contributionsUrl);
 
         if (contributionsResponse.ok) {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
+          console.log(`Found ${contributions.length} contributors for ${member.full_name}`);
 
           const contributionRecords = contributions.map((c: any) => ({
             member_id: member.id,
@@ -202,16 +220,16 @@ serve(async (req) => {
               .insert(contributionRecords);
 
             if (insertError) {
-              console.error(`Failed to insert contributions for ${member.full_name}: ${insertError.message}`);
+              console.error(`Failed to insert contributions: ${insertError.message}`);
             } else {
               console.log(`Inserted ${contributionRecords.length} contributions for ${member.full_name}`);
             }
           }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 250));
 
-        // Fetch totals for the candidate
+        // Fetch candidate totals
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
         const totalsResponse = await fetch(totalsUrl);
 
@@ -220,6 +238,8 @@ serve(async (req) => {
           const totals = totalsData.results?.[0];
 
           if (totals) {
+            console.log(`Totals for ${member.full_name}: PAC=$${totals.other_political_committee_contributions || 0}`);
+            
             const pacAmount = totals.other_political_committee_contributions || 0;
             if (pacAmount > 0) {
               await supabase
@@ -257,6 +277,28 @@ serve(async (req) => {
                   client_count: 1,
                   cycle: currentCycle,
                 });
+            }
+
+            const individualAmount = totals.individual_itemized_contributions || 0;
+            if (individualAmount > 0) {
+              const existingContribs = await supabase
+                .from('member_contributions')
+                .select('id')
+                .eq('member_id', member.id)
+                .eq('cycle', currentCycle);
+              
+              if ((existingContribs.data?.length || 0) === 0) {
+                await supabase
+                  .from('member_contributions')
+                  .insert({
+                    member_id: member.id,
+                    contributor_name: 'Individual Contributors (Total)',
+                    contributor_type: 'individual',
+                    amount: individualAmount,
+                    cycle: currentCycle,
+                    industry: null,
+                  });
+              }
             }
           }
         }
@@ -326,5 +368,8 @@ function inferIndustry(employer: string | null, occupation: string | null): stri
   if (combined.includes('construction') || combined.includes('builder') || combined.includes('contractor')) return 'Construction';
   if (combined.includes('retired')) return 'Retired';
   if (combined.includes('education') || combined.includes('teacher') || combined.includes('professor') || combined.includes('university')) return 'Education';
+  if (combined.includes('farm') || combined.includes('agri') || combined.includes('ranch')) return 'Agriculture';
+  if (combined.includes('media') || combined.includes('entertainment') || combined.includes('film') || combined.includes('tv')) return 'Media & Entertainment';
+  if (combined.includes('defense') || combined.includes('military') || combined.includes('aerospace')) return 'Defense & Aerospace';
   return null;
 }
