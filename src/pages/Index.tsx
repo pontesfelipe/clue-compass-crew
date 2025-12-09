@@ -2,7 +2,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
-import StateGrid from "@/components/StateGrid";
+import { USMap } from "@/components/USMap";
 import { MemberCard } from "@/components/MemberCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,12 +87,12 @@ export default function Index() {
 
             <div className="relative">
               <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/5 to-accent/5 blur-2xl" />
-              <div className="relative rounded-2xl border border-border bg-card p-6 shadow-civic-xl max-h-[500px] overflow-y-auto">
+              <div className="relative rounded-2xl border border-border bg-card p-6 shadow-civic-xl">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-serif text-lg font-semibold text-foreground">National Overview</h3>
                   <ScoreRing score={67} size="md" />
                 </div>
-                <StateGrid />
+                <USMap />
               </div>
             </div>
           </div>
