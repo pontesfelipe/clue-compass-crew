@@ -12,10 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
+import { EditUserDialog } from "@/components/admin/EditUserDialog";
+import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import {
   Select,
   SelectContent,
@@ -30,6 +32,8 @@ interface UserProfile {
   user_id: string;
   email: string | null;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   created_at: string | null;
 }
 
@@ -69,6 +73,8 @@ export default function AdminPage() {
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
   const [updatingToggleId, setUpdatingToggleId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -567,7 +573,7 @@ export default function AdminPage() {
                                 }
                                 disabled={isUpdating}
                               >
-                                <SelectTrigger className="w-32">
+                                <SelectTrigger className="w-28">
                                   {isUpdating ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
@@ -592,6 +598,23 @@ export default function AdminPage() {
                                   {currentRole}
                                 </Badge>
                               )}
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setEditingUser(user)}
+                                title="Edit user"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeletingUser(user)}
+                                title="Delete user"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
                         );
@@ -675,6 +698,20 @@ export default function AdminPage() {
 
         <Footer />
       </div>
+
+      <EditUserDialog
+        user={editingUser}
+        open={!!editingUser}
+        onOpenChange={(open) => !open && setEditingUser(null)}
+        onSuccess={fetchUsers}
+      />
+
+      <DeleteUserDialog
+        user={deletingUser}
+        open={!!deletingUser}
+        onOpenChange={(open) => !open && setDeletingUser(null)}
+        onSuccess={fetchUsers}
+      />
     </>
   );
 }

@@ -4,6 +4,7 @@ import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
+import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +108,7 @@ export function Header() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                <DeleteAccountDialog />
                 <DropdownMenuItem onClick={signOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
