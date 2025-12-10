@@ -8,9 +8,11 @@ import { TrendingUp, TrendingDown, Award } from "lucide-react";
 // Score color scale: higher = more green (better score)
 const getScoreColor = (score: number | null): string => {
   if (score === null) return "hsl(var(--muted))";
-  if (score >= 75) return "hsl(142 76% 36%)"; // High score - green
-  if (score >= 60) return "hsl(38 92% 50%)"; // Medium - amber
-  return "hsl(0 72% 51%)"; // Low score - red
+  if (score >= 81) return "hsl(142 76% 36%)";  // Excellent - dark green
+  if (score >= 71) return "hsl(142 71% 45%)";  // Good - light green
+  if (score >= 66) return "hsl(38 92% 50%)";   // Average - amber
+  if (score >= 61) return "hsl(25 95% 53%)";   // Below average - orange
+  return "hsl(0 72% 51%)";                      // Below 60 - red
 };
 
 interface USMapProps {
@@ -204,14 +206,16 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
           {/* Legend */}
           <div className="p-4 rounded-lg bg-card border border-border">
             <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {[
-                { color: "hsl(142 76% 36%)", range: "75+", label: "High performance" },
-                { color: "hsl(38 92% 50%)", range: "60-74", label: "Average" },
-                { color: "hsl(0 72% 51%)", range: "Below 60", label: "Needs improvement" },
+                { color: "hsl(142 76% 36%)", range: "81+", label: "Excellent" },
+                { color: "hsl(142 71% 45%)", range: "71-80", label: "Good" },
+                { color: "hsl(38 92% 50%)", range: "66-70", label: "Average" },
+                { color: "hsl(25 95% 53%)", range: "61-65", label: "Below avg" },
+                { color: "hsl(0 72% 51%)", range: "≤60", label: "Needs work" },
               ].map((item) => (
                 <div key={item.range} className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{item.range}</span> {item.label}
                   </span>
