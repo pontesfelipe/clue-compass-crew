@@ -5,6 +5,7 @@ import { Sparkles, RefreshCw, Clock, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeatureToggles } from "@/hooks/useFeatureToggles";
 import { Link } from "react-router-dom";
 
 interface MemberAISummaryProps {
@@ -14,6 +15,7 @@ interface MemberAISummaryProps {
 
 export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) {
   const { user, isLoading: authLoading } = useAuth();
+  const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const [summary, setSummary] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,7 +112,12 @@ export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) 
     return nextDate;
   };
 
-  if (authLoading || isFetching) {
+  // Check if feature is disabled
+  if (!togglesLoading && !isFeatureEnabled("ai_summary")) {
+    return null;
+  }
+
+  if (authLoading || isFetching || togglesLoading) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
         <div className="flex items-center gap-2 mb-4">

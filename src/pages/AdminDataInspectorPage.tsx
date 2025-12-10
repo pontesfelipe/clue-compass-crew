@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -9,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Database, Users, FileText, Vote, DollarSign, Building, Activity, AlertTriangle, GitBranch } from "lucide-react";
+import { Search, Database, Users, FileText, Vote, DollarSign, Building, Activity, AlertTriangle, GitBranch, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAdmin } from "@/hooks/useAdmin";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface DataSourceInfo {
   table: string;
@@ -291,9 +294,31 @@ const dataSources: DataSourceInfo[] = [
 ];
 
 export default function AdminDataInspectorPage() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { isAdmin, isLoading: isAdminLoading } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate("/auth");
+    }
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // Redirect if not admin
+  useEffect(() => {
+    if (!isAdminLoading && !isAdmin && !authLoading) {
+      toast({
+        title: "Access Denied",
+        description: "You do not have permission to access this page.",
+        variant: "destructive",
+      });
+      navigate("/");
+    }
+  }, [isAdmin, isAdminLoading, authLoading, navigate, toast]);
 
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ["admin-members-search", searchTerm],
@@ -438,6 +463,18 @@ export default function AdminDataInspectorPage() {
     
     return issues;
   };
+
+  if (authLoading || isAdminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">

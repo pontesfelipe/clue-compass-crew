@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import {
@@ -223,7 +223,7 @@ export default function AdminPage() {
     return role?.role || null;
   };
 
-  const handleRoleChange = async (userId: string, newRole: "admin" | "moderator" | "user" | "none") => {
+  const handleRoleChange = async (userId: string, newRole: "admin" | "user" | "none") => {
     setUpdatingRoleUserId(userId);
     try {
       const existingRole = userRoles.find((r) => r.user_id === userId);
@@ -314,17 +314,9 @@ export default function AdminPage() {
         <Header />
 
         <main className="flex-1 container mx-auto py-8 px-4">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <Shield className="h-8 w-8 text-primary" />
-              <h1 className="font-serif text-3xl font-bold">Admin Dashboard</h1>
-            </div>
-            <Button variant="outline" asChild>
-              <Link to="/admin/data-inspector">
-                <Search className="h-4 w-4 mr-2" />
-                Data Inspector
-              </Link>
-            </Button>
+          <div className="flex items-center gap-3 mb-8">
+            <Shield className="h-8 w-8 text-primary" />
+            <h1 className="font-serif text-3xl font-bold">Admin Dashboard</h1>
           </div>
 
           <Tabs defaultValue="analytics" className="w-full">
@@ -344,6 +336,10 @@ export default function AdminPage() {
               <TabsTrigger value="features" className="flex items-center gap-2">
                 <ToggleLeft className="h-4 w-4" />
                 Features
+              </TabsTrigger>
+              <TabsTrigger value="inspector" className="flex items-center gap-2">
+                <FileSearch className="h-4 w-4" />
+                Data Inspector
               </TabsTrigger>
             </TabsList>
 
@@ -564,9 +560,9 @@ export default function AdminPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <Select
-                                value={currentRole || "none"}
+                                value={currentRole || "user"}
                                 onValueChange={(value) => 
-                                  handleRoleChange(user.user_id, value as "admin" | "moderator" | "user" | "none")
+                                  handleRoleChange(user.user_id, value as "admin" | "user" | "none")
                                 }
                                 disabled={isUpdating}
                               >
@@ -574,13 +570,11 @@ export default function AdminPage() {
                                   {isUpdating ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <SelectValue placeholder="No role" />
+                                    <SelectValue placeholder="User" />
                                   )}
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="none">No role</SelectItem>
                                   <SelectItem value="user">User</SelectItem>
-                                  <SelectItem value="moderator">Moderator</SelectItem>
                                   <SelectItem value="admin">Admin</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -668,6 +662,31 @@ export default function AdminPage() {
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="inspector">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSearch className="h-5 w-5" />
+                    Data Inspector
+                  </CardTitle>
+                  <CardDescription>
+                    Inspect data sources and field mappings for member pages
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    View the full Data Inspector for detailed field mappings and data flow visualization.
+                  </p>
+                  <Button variant="civic" asChild>
+                    <Link to="/admin/data-inspector">
+                      <Search className="h-4 w-4 mr-2" />
+                      Open Full Data Inspector
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>

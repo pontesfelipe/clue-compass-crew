@@ -36,6 +36,36 @@ export default function AuthPage() {
   const [lastName, setLastName] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   
+  // Handle OAuth redirect - extract name from Google
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const user = session.user;
+        const metadata = user.user_metadata;
+        
+        // If user signed up via Google, extract their name
+        if (metadata?.full_name || metadata?.name) {
+          const fullName = metadata.full_name || metadata.name || "";
+          const nameParts = fullName.split(" ");
+          const firstName = nameParts[0] || "";
+          const lastName = nameParts.slice(1).join(" ") || "";
+          
+          // Update profile with name from Google
+          await supabase.from("profiles").upsert({
+            user_id: user.id,
+            first_name: firstName,
+            last_name: lastName,
+            display_name: fullName,
+            email: user.email,
+          }, { onConflict: "user_id" });
+        }
+      }
+    };
+    
+    handleOAuthCallback();
+  }, []);
+  
   // Redirect if already authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -49,7 +79,7 @@ export default function AuthPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/auth`,
       },
     });
 

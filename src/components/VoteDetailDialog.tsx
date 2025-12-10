@@ -103,13 +103,25 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
             {/* Vote Question/Description */}
             <div>
               <h3 className="font-semibold text-lg text-foreground mb-2">
-                {vote.question || `Roll Call #${vote.roll_number}`}
+                {vote.question || `Roll Call Vote #${vote.roll_number}`}
               </h3>
-              {vote.description && (
-                <p className="text-muted-foreground">
-                  {vote.description}
+              <div className="p-4 rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {vote.description || (
+                    <>
+                      This {vote.chamber === 'house' ? 'House' : 'Senate'} vote took place on{' '}
+                      {vote.vote_date ? new Date(vote.vote_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) : 'an unknown date'}
+                      {vote.result && `. The vote ${vote.result.toLowerCase().includes('passed') ? 'passed' : vote.result.toLowerCase().includes('failed') ? 'failed' : 'concluded'} with ${vote.total_yea || 0} in favor and ${vote.total_nay || 0} against`}
+                      {vote.bills ? ` regarding ${vote.bills.short_title || vote.bills.title || 'a piece of legislation'}` : ''}.
+                    </>
+                  )}
                 </p>
-              )}
+              </div>
             </div>
 
             {/* Member's Position */}
