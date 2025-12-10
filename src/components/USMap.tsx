@@ -15,8 +15,20 @@ const getScoreColor = (score: number | null): string => {
   return "hsl(0 72% 51%)";                      // Below 60 - red
 };
 
-// US Territories with non-voting delegates
-const TERRITORIES = new Set(['GU', 'AS', 'VI', 'MP', 'PR', 'DC']);
+// Fixed US state grid layout - DO NOT REORDER
+const US_GRID: (string | null)[][] = [
+  ["WA", "MT", "ND", "MN", "WI", "MI", "NY", "VT", "NH", "ME", null, null, null],
+  ["OR", "ID", "WY", "SD", "IA", "IL", "IN", "OH", "PA", "NJ", "CT", "RI", "MA"],
+  ["CA", "NV", "UT", "CO", "NE", "MO", "KY", "WV", "VA", "MD", "DE", null, null],
+  ["AZ", "NM", "KS", "AR", "TN", "NC", "SC", null, null, null, null, null, null],
+  ["TX", "OK", "LA", "MS", "AL", "GA", null, null, null, null, null, null, null],
+  ["HI", "AK", "FL", null, null, null, null, null, null, null, null, null, null],
+];
+
+// Territories rendered separately - non-voting delegates
+const TERRITORIES = ["DC", "PR", "VI", "GU", "AS", "MP"];
+
+const GRID_COLUMNS = 13; // Longest row length
 
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
@@ -41,13 +53,13 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
     ? stateScores?.find(s => s.abbr === hoveredState)
     : null;
   
-  const isTerritory = (abbr: string) => TERRITORIES.has(abbr);
+  const isTerritory = (abbr: string) => TERRITORIES.includes(abbr);
 
   // Calculate statistics (exclude territories from national stats)
   const stats = useMemo(() => {
     if (!stateScores || stateScores.length === 0) return null;
 
-    const validStates = stateScores.filter(s => s.score != null && !TERRITORIES.has(s.abbr));
+    const validStates = stateScores.filter(s => s.score != null && !TERRITORIES.includes(s.abbr));
     if (validStates.length === 0) return null;
 
     const avgScore = Math.round(
@@ -62,33 +74,40 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
     return { avgScore, topStates, bottomStates, statesWithData: validStates.length };
   }, [stateScores]);
 
-  // State grid positions for cartogram layout
-  const stateGrid: { [key: string]: { col: number; row: number } } = {
-    AK: { col: 0, row: 0 }, HI: { col: 0, row: 4 },
-    WA: { col: 1, row: 0 }, OR: { col: 1, row: 1 }, CA: { col: 1, row: 2 },
-    ID: { col: 2, row: 0 }, NV: { col: 2, row: 1 }, AZ: { col: 2, row: 2 },
-    MT: { col: 3, row: 0 }, UT: { col: 3, row: 1 }, NM: { col: 3, row: 2 },
-    WY: { col: 4, row: 0 }, CO: { col: 4, row: 1 }, TX: { col: 4, row: 2 },
-    ND: { col: 5, row: 0 }, SD: { col: 5, row: 1 }, NE: { col: 5, row: 2 }, KS: { col: 5, row: 3 }, OK: { col: 5, row: 4 },
-    MN: { col: 6, row: 0 }, IA: { col: 6, row: 1 }, MO: { col: 6, row: 2 }, AR: { col: 6, row: 3 }, LA: { col: 6, row: 4 },
-    WI: { col: 7, row: 0 }, IL: { col: 7, row: 1 }, KY: { col: 7, row: 2 }, TN: { col: 7, row: 3 }, MS: { col: 7, row: 4 },
-    MI: { col: 8, row: 0 }, IN: { col: 8, row: 1 }, OH: { col: 8, row: 2 }, AL: { col: 8, row: 3 }, FL: { col: 8, row: 4 },
-    PA: { col: 9, row: 1 }, WV: { col: 9, row: 2 }, VA: { col: 9, row: 3 }, GA: { col: 9, row: 4 },
-    NY: { col: 10, row: 0 }, NJ: { col: 10, row: 1 }, MD: { col: 10, row: 2 }, NC: { col: 10, row: 3 }, SC: { col: 10, row: 4 },
-    VT: { col: 11, row: 0 }, CT: { col: 11, row: 1 }, DE: { col: 11, row: 2 },
-    NH: { col: 12, row: 0 }, RI: { col: 12, row: 1 }, DC: { col: 12, row: 2 },
-    ME: { col: 13, row: 0 }, MA: { col: 13, row: 1 },
-    // Territories (bottom row)
-    PR: { col: 1, row: 4 }, VI: { col: 2, row: 4 }, GU: { col: 3, row: 4 }, AS: { col: 4, row: 4 }, MP: { col: 4, row: 3 },
-  };
+  const renderStateTile = (stateAbbr: string, isTerritoryTile: boolean = false) => {
+    const stateData = stateScores?.find(s => s.abbr === stateAbbr);
+    const bgColor = getScoreColor(stateData?.score ?? null);
+    const textColor = "hsl(var(--background))";
+    const hasData = !!stateData;
 
-  const allStates = Object.keys(stateGrid);
+    return (
+      <button
+        key={stateAbbr}
+        onClick={() => handleStateClick(stateAbbr)}
+        onMouseEnter={() => setHoveredState(stateAbbr)}
+        onMouseLeave={() => setHoveredState(null)}
+        className={cn(
+          "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10",
+          hoveredState === stateAbbr && "ring-2 ring-primary ring-offset-2",
+          !hasData && "opacity-50",
+          isTerritoryTile ? "border-2 border-dashed border-white/50 opacity-75 shadow-none" : "shadow-civic-sm"
+        )}
+        style={{ backgroundColor: bgColor, color: textColor }}
+        title={isTerritoryTile ? "Territory (non-voting delegate)" : undefined}
+      >
+        {stateAbbr}
+      </button>
+    );
+  };
 
   if (isLoading) {
     return (
       <div className="relative w-full p-4">
-        <div className="grid grid-cols-14 gap-1">
-          {Array.from({ length: 70 }).map((_, i) => (
+        <div 
+          className="grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: GRID_COLUMNS * 6 }).map((_, i) => (
             <Skeleton key={i} className="w-full aspect-square rounded-md" />
           ))}
         </div>
@@ -120,47 +139,29 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
         </div>
       )}
 
-      {/* State Grid Map */}
-      <div className="grid grid-cols-14 gap-1 p-4">
-        {Array.from({ length: 5 }).map((_, rowIndex) => (
-          <div key={rowIndex} className="contents">
-            {Array.from({ length: 14 }).map((_, colIndex) => {
-              const stateAbbr = allStates.find(abbr => {
-                const pos = stateGrid[abbr];
-                return pos && pos.row === rowIndex && pos.col === colIndex;
-              });
-
-              if (!stateAbbr) {
-                return <div key={`${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
+      {/* State Grid Map - Fixed Layout */}
+      <div className="p-4">
+        <div 
+          className="grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
+        >
+          {US_GRID.map((row, rowIndex) => (
+            row.map((stateAbbr, colIndex) => {
+              if (stateAbbr === null) {
+                return <div key={`empty-${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
               }
+              return renderStateTile(stateAbbr);
+            })
+          ))}
+        </div>
 
-              const stateData = stateScores?.find(s => s.abbr === stateAbbr);
-              const bgColor = getScoreColor(stateData?.score ?? null);
-              const textColor = "hsl(var(--background))";
-              const hasData = !!stateData;
-              const isTerritoryTile = isTerritory(stateAbbr);
-
-              return (
-                <button
-                  key={stateAbbr}
-                  onClick={() => handleStateClick(stateAbbr)}
-                  onMouseEnter={() => setHoveredState(stateAbbr)}
-                  onMouseLeave={() => setHoveredState(null)}
-                  className={cn(
-                    "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10",
-                    hoveredState === stateAbbr && "ring-2 ring-primary ring-offset-2",
-                    !hasData && "opacity-50",
-                    isTerritoryTile ? "border-2 border-dashed border-white/50 opacity-75 shadow-none" : "shadow-civic-sm"
-                  )}
-                  style={{ backgroundColor: bgColor, color: textColor }}
-                  title={isTerritoryTile ? "Territory (non-voting delegate)" : undefined}
-                >
-                  {stateAbbr}
-                </button>
-              );
-            })}
+        {/* Territories Section */}
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-2 font-medium">Territories (Non-Voting)</p>
+          <div className="flex gap-1 flex-wrap" style={{ maxWidth: `calc(${TERRITORIES.length} * (100% / ${GRID_COLUMNS}) + ${TERRITORIES.length - 1} * 0.25rem)` }}>
+            {TERRITORIES.map(territory => renderStateTile(territory, true))}
           </div>
-        ))}
+        </div>
       </div>
 
       {/* Statistics */}
