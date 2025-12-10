@@ -819,9 +819,13 @@ export type Database = {
         Row: {
           created_at: string | null
           current_offset: number
+          cursor: string | null
+          error_message: string | null
           id: string
           last_matched_count: number | null
           last_run_at: string | null
+          last_synced_at: string | null
+          metadata: Json | null
           status: string | null
           total_processed: number | null
           updated_at: string | null
@@ -829,9 +833,13 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_offset?: number
+          cursor?: string | null
+          error_message?: string | null
           id: string
           last_matched_count?: number | null
           last_run_at?: string | null
+          last_synced_at?: string | null
+          metadata?: Json | null
           status?: string | null
           total_processed?: number | null
           updated_at?: string | null
@@ -839,9 +847,13 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_offset?: number
+          cursor?: string | null
+          error_message?: string | null
           id?: string
           last_matched_count?: number | null
           last_run_at?: string | null
+          last_synced_at?: string | null
+          metadata?: Json | null
           status?: string | null
           total_processed?: number | null
           updated_at?: string | null
