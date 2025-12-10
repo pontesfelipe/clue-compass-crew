@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3, FileText, Vote } from "lucide-react";
+import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3 } from "lucide-react";
 import { Helmet } from "react-helmet";
+import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import {
   Select,
   SelectContent,
@@ -36,12 +37,6 @@ interface UserRole {
   created_at: string | null;
 }
 
-interface SyncProgress {
-  id: string;
-  status: string | null;
-  last_run_at: string | null;
-  total_processed: number | null;
-}
 
 interface AnalyticsData {
   userSignups: { date: string; count: number }[];
@@ -66,12 +61,9 @@ export default function AdminPage() {
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-  const [isLoadingSync, setIsLoadingSync] = useState(false);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
-  const [triggeringSyncId, setTriggeringSyncId] = useState<string | null>(null);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
 
   // AI Chat state
@@ -100,7 +92,6 @@ export default function AdminPage() {
     if (isAdmin) {
       fetchUsers();
       fetchUserRoles();
-      fetchSyncProgress();
       fetchAnalytics();
     }
   }, [isAdmin]);
@@ -281,50 +272,6 @@ export default function AdminPage() {
       });
     } finally {
       setUpdatingRoleUserId(null);
-    }
-  };
-
-  const fetchSyncProgress = async () => {
-    setIsLoadingSync(true);
-    try {
-      const { data, error } = await supabase
-        .from("sync_progress")
-        .select("*")
-        .order("id");
-
-      if (error) throw error;
-      setSyncProgress(data || []);
-    } catch (error) {
-      console.error("Error fetching sync progress:", error);
-    } finally {
-      setIsLoadingSync(false);
-    }
-  };
-
-  const triggerSync = async (syncType: string) => {
-    setTriggeringSyncId(syncType);
-    try {
-      const functionName = `sync-${syncType}`;
-      const { error } = await supabase.functions.invoke(functionName);
-
-      if (error) throw error;
-
-      toast({
-        title: "Sync Triggered",
-        description: `${syncType} sync has been started.`,
-      });
-
-      // Refresh sync progress after triggering
-      setTimeout(fetchSyncProgress, 2000);
-    } catch (error) {
-      console.error("Error triggering sync:", error);
-      toast({
-        title: "Error",
-        description: `Failed to trigger ${syncType} sync`,
-        variant: "destructive",
-      });
-    } finally {
-      setTriggeringSyncId(null);
     }
   };
 
@@ -723,63 +670,7 @@ export default function AdminPage() {
             </TabsContent>
 
             <TabsContent value="sync">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Data Synchronization</span>
-                    <Button variant="outline" size="sm" onClick={fetchSyncProgress} disabled={isLoadingSync}>
-                      <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingSync ? "animate-spin" : ""}`} />
-                      Refresh
-                    </Button>
-                  </CardTitle>
-                  <CardDescription>Manage and trigger data sync operations</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {["congress-members", "bills", "votes", "fec-finance", "member-details"].map((syncType) => {
-                      const progress = syncProgress.find((s) => s.id === syncType);
-                      return (
-                        <Card key={syncType} className="border-2">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg capitalize">
-                              {syncType.replace(/-/g, " ")}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                              <p>Status: {progress?.status || "Unknown"}</p>
-                              <p>
-                                Last run:{" "}
-                                {progress?.last_run_at
-                                  ? new Date(progress.last_run_at).toLocaleString()
-                                  : "Never"}
-                              </p>
-                              <p>Processed: {progress?.total_processed?.toLocaleString() || 0}</p>
-                            </div>
-                            <Button
-                              onClick={() => triggerSync(syncType)}
-                              disabled={triggeringSyncId === syncType}
-                              className="w-full"
-                            >
-                              {triggeringSyncId === syncType ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Running...
-                                </>
-                              ) : (
-                                <>
-                                  <RefreshCw className="h-4 w-4 mr-2" />
-                                  Trigger Sync
-                                </>
-                              )}
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+              <SyncStatusCard />
             </TabsContent>
 
             <TabsContent value="ai">
