@@ -255,6 +255,124 @@ export type Database = {
           },
         ]
       }
+      issue_questions: {
+        Row: {
+          created_at: string
+          dimension: string | null
+          id: string
+          is_active: boolean
+          issue_id: string
+          question_text: string
+          sort_order: number
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          is_active?: boolean
+          issue_id: string
+          question_text: string
+          sort_order?: number
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          is_active?: boolean
+          issue_id?: string
+          question_text?: string
+          sort_order?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_questions_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issue_signals: {
+        Row: {
+          created_at: string
+          description: string | null
+          direction: number
+          external_ref: string
+          id: string
+          issue_id: string
+          signal_type: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          direction: number
+          external_ref: string
+          id?: string
+          issue_id: string
+          signal_type: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          direction?: number
+          external_ref?: string
+          id?: string
+          issue_id?: string
+          signal_type?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_signals_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issues: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon_name: string | null
+          id: string
+          is_active: boolean
+          label: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_committees: {
         Row: {
           chamber: string
@@ -710,8 +828,54 @@ export type Database = {
         }
         Relationships: []
       }
+      politician_issue_positions: {
+        Row: {
+          data_points_count: number
+          id: string
+          issue_id: string
+          politician_id: string
+          score_value: number
+          source_version: number
+          updated_at: string
+        }
+        Insert: {
+          data_points_count?: number
+          id?: string
+          issue_id: string
+          politician_id: string
+          score_value?: number
+          source_version?: number
+          updated_at?: string
+        }
+        Update: {
+          data_points_count?: number
+          id?: string
+          issue_id?: string
+          politician_id?: string
+          score_value?: number
+          source_version?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "politician_issue_positions_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "politician_issue_positions_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          age_range: string | null
           created_at: string | null
           display_name: string | null
           email: string | null
@@ -719,10 +883,14 @@ export type Database = {
           home_state: string | null
           id: string
           last_name: string | null
+          profile_complete: boolean | null
+          profile_version: number | null
           updated_at: string | null
           user_id: string
+          zip_code: string | null
         }
         Insert: {
+          age_range?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
@@ -730,10 +898,14 @@ export type Database = {
           home_state?: string | null
           id?: string
           last_name?: string | null
+          profile_complete?: boolean | null
+          profile_version?: number | null
           updated_at?: string | null
           user_id: string
+          zip_code?: string | null
         }
         Update: {
+          age_range?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
@@ -741,8 +913,11 @@ export type Database = {
           home_state?: string | null
           id?: string
           last_name?: string | null
+          profile_complete?: boolean | null
+          profile_version?: number | null
           updated_at?: string | null
           user_id?: string
+          zip_code?: string | null
         }
         Relationships: []
       }
@@ -890,6 +1065,114 @@ export type Database = {
         }
         Relationships: []
       }
+      user_answers: {
+        Row: {
+          answer_value: number
+          created_at: string
+          id: string
+          question_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answer_value: number
+          created_at?: string
+          id?: string
+          question_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answer_value?: number
+          created_at?: string
+          id?: string
+          question_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "issue_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_issue_priorities: {
+        Row: {
+          created_at: string
+          id: string
+          issue_id: string
+          priority_level: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issue_id: string
+          priority_level?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issue_id?: string
+          priority_level?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_issue_priorities_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_politician_alignment: {
+        Row: {
+          breakdown: Json
+          id: string
+          last_computed_at: string
+          overall_alignment: number
+          politician_id: string
+          profile_version: number
+          user_id: string
+        }
+        Insert: {
+          breakdown?: Json
+          id?: string
+          last_computed_at?: string
+          overall_alignment: number
+          politician_id: string
+          profile_version?: number
+          user_id: string
+        }
+        Update: {
+          breakdown?: Json
+          id?: string
+          last_computed_at?: string
+          overall_alignment?: number
+          politician_id?: string
+          profile_version?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_politician_alignment_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -1026,6 +1309,7 @@ export type Database = {
       }
     }
     Enums: {
+      age_range: "18-29" | "30-44" | "45-64" | "65+"
       app_role: "admin" | "moderator" | "user"
       bill_type:
         | "hr"
@@ -1166,6 +1450,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      age_range: ["18-29", "30-44", "45-64", "65+"],
       app_role: ["admin", "moderator", "user"],
       bill_type: [
         "hr",
