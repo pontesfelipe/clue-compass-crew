@@ -9,8 +9,11 @@ export {
   useStateStats, 
   usePartyScores,
   useChamberScores,
+  useStateFundingScores,
   getNationalAverage,
   stateNames,
   getStateName,
   getStateAbbr
 } from "@/features/states/hooks/useStates";
+
+export type { StateFundingScore } from "@/features/states/hooks/useStates";

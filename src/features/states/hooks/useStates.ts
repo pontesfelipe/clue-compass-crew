@@ -185,6 +185,48 @@ export function useStateScores() {
 }
 
 /**
+ * State funding scores interface
+ */
+export interface StateFundingScore {
+  abbr: string;
+  name: string;
+  avgGrassrootsSupport: number | null;
+  avgPacDependence: number | null;
+  avgLocalMoney: number | null;
+  avgPctOutOfState: number | null;
+  memberCount: number;
+}
+
+/**
+ * Fetch state funding scores for the funding layer
+ */
+export function useStateFundingScores() {
+  return useQuery({
+    queryKey: ["state-funding-scores"],
+    queryFn: async (): Promise<StateFundingScore[]> => {
+      const { data, error } = await supabase
+        .from("state_scores")
+        .select("state, avg_grassroots_support, avg_pac_dependence, avg_local_money, avg_pct_out_of_state, member_count");
+
+      if (error) throw error;
+
+      return (data || [])
+        .filter((row) => row.avg_pac_dependence != null)
+        .map((row) => ({
+          abbr: getStateAbbr(row.state),
+          name: row.state,
+          avgGrassrootsSupport: row.avg_grassroots_support != null ? Math.round(Number(row.avg_grassroots_support)) : null,
+          avgPacDependence: row.avg_pac_dependence != null ? Math.round(Number(row.avg_pac_dependence)) : null,
+          avgLocalMoney: row.avg_local_money != null ? Math.round(Number(row.avg_local_money)) : null,
+          avgPctOutOfState: row.avg_pct_out_of_state != null ? Math.round(Number(row.avg_pct_out_of_state)) : null,
+          memberCount: row.member_count || 0,
+        }));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Fetch members for a specific state
  */
 export function useStateMembers(stateAbbr: string) {
