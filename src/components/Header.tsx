@@ -60,6 +60,12 @@ export function Header() {
               My Matches
             </Link>
           </Button>
+          <Button variant="civic-ghost" size="sm" asChild>
+            <Link to="/tracked-members">
+              <Bookmark className="mr-2 h-4 w-4" />
+              Tracked
+            </Link>
+          </Button>
         </nav>
 
         <div className="flex items-center gap-2">
