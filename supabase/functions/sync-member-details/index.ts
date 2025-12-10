@@ -16,10 +16,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let memberId: string | null = null;
     let syncType = 'all'; // 'committees', 'statements', or 'all'
@@ -34,16 +35,27 @@ serve(async (req) => {
 
     console.log(`Starting member details sync (memberId: ${memberId || 'all'}, type: ${syncType})...`);
 
+    // Get sync progress
+    const { data: progress } = await supabase
+      .from('sync_progress')
+      .select('current_offset')
+      .eq('id', 'member-details')
+      .maybeSingle();
+
+    let offset = progress?.current_offset || 0;
+    const batchSize = 50; // Process 50 at a time
+
     // Get members to sync
     let membersQuery = supabase
       .from('members')
       .select('id, bioguide_id, full_name, chamber')
-      .eq('in_office', true);
+      .eq('in_office', true)
+      .order('full_name');
     
     if (memberId) {
       membersQuery = membersQuery.eq('id', memberId);
     } else {
-      membersQuery = membersQuery.limit(20);
+      membersQuery = membersQuery.range(offset, offset + batchSize - 1);
     }
 
     const { data: members, error: membersError } = await membersQuery;
@@ -165,13 +177,35 @@ serve(async (req) => {
       }
     }
 
+    // Update sync progress
+    const { count: totalMembers } = await supabase
+      .from('members')
+      .select('id', { count: 'exact', head: true })
+      .eq('in_office', true);
+
+    const nextOffset = memberId ? offset : offset + members.length;
+    const hasMore = !memberId && nextOffset < (totalMembers || 0);
+
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'member-details',
+        status: hasMore ? 'partial' : 'complete',
+        current_offset: hasMore ? nextOffset : 0,
+        total_processed: memberId ? 1 : nextOffset,
+        last_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+
     const result = {
       success: true,
-      message: 'Member details sync completed',
+      message: hasMore ? `Processed ${members.length} members. ${(totalMembers || 0) - nextOffset} remaining.` : 'Member details sync completed',
       membersProcessed: members.length,
       committeesAdded,
       statementsAdded,
       errorsCount,
+      hasMore,
+      nextOffset: hasMore ? nextOffset : 0,
     };
 
     console.log('Sync complete:', result);
@@ -183,6 +217,15 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in sync-member-details:', error);
+    
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'member-details',
+        status: 'error',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
     
     return new Response(JSON.stringify({ 
       success: false, 
