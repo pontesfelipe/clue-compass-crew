@@ -344,9 +344,43 @@ const cronSchedule = [
   { job: "send-weekly-digest", schedule: "Weekly on Monday at 8 AM UTC", cron: "0 8 * * 1", description: "Sends weekly digest emails" },
 ];
 
+// Map sync_progress IDs to edge function names
+const syncProgressMapping: Record<string, string> = {
+  'congress-members': 'sync-congress-members',
+  'member-details': 'sync-member-details',
+  'bills': 'sync-bills',
+  'votes': 'sync-votes',
+  'fec-finance': 'sync-fec-finance',
+  'fec-funding': 'sync-fec-funding',
+  'member-scores': 'calculate-member-scores',
+  'state-scores': 'recalculate-state-scores',
+};
+
 export function DataInspectorContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+
+  // Live sync status query with auto-refetch
+  const { data: syncProgress } = useQuery({
+    queryKey: ["admin-sync-progress"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sync_progress")
+        .select("*")
+        .order("id", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 5000, // Refetch every 5 seconds for live updates
+  });
+
+  // Helper to get sync status for a function
+  const getSyncStatus = (functionName: string) => {
+    if (!syncProgress) return null;
+    const mappedId = Object.entries(syncProgressMapping).find(([_, fn]) => fn === functionName)?.[0];
+    if (!mappedId) return null;
+    return syncProgress.find((sp: any) => sp.id === mappedId);
+  };
 
   const { data: members, isLoading: membersLoading } = useQuery({
     queryKey: ["admin-members-search", searchTerm],
@@ -1085,47 +1119,94 @@ export function DataInspectorContent() {
                   </div>
                 </div>
 
-                {/* Stage 2: Edge Functions */}
+                {/* Stage 2: Edge Functions with Live Status */}
                 <div className="space-y-3">
                   <div className="text-center">
                     <Badge className="mb-3 bg-green-500/20 text-green-600 border-green-500/30 px-4 py-1">
                       <Zap className="h-3 w-3 mr-1 inline" />
                       2. Edge Functions
                     </Badge>
+                    {syncProgress?.some((sp: any) => sp.status === 'running') && (
+                      <div className="text-xs text-green-500 animate-pulse mt-1">● Live syncing</div>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-congress-members</div>
-                      <div className="text-xs text-muted-foreground">Daily @ midnight</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-member-details</div>
-                      <div className="text-xs text-muted-foreground">Daily @ 1 AM</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-bills</div>
-                      <div className="text-xs text-muted-foreground">Every 6 hours</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-votes</div>
-                      <div className="text-xs text-muted-foreground">Every 2 hours</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-fec-finance</div>
-                      <div className="text-xs text-muted-foreground">5 min batches</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                      <div className="font-medium text-green-600 text-xs">sync-fec-funding</div>
-                      <div className="text-xs text-muted-foreground">Daily @ 2 AM</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                      <div className="font-medium text-amber-600 text-xs">calculate-member-scores</div>
-                      <div className="text-xs text-muted-foreground">Every 2h @ :30</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                      <div className="font-medium text-purple-600 text-xs">classify-issue-signals</div>
-                      <div className="text-xs text-muted-foreground">Every 6h @ :15</div>
-                    </div>
+                    {[
+                      { name: 'sync-congress-members', schedule: 'Daily @ midnight', type: 'sync' as const },
+                      { name: 'sync-member-details', schedule: 'Daily @ 1 AM', type: 'sync' as const },
+                      { name: 'sync-bills', schedule: 'Every 6 hours', type: 'sync' as const },
+                      { name: 'sync-votes', schedule: 'Every 2 hours', type: 'sync' as const },
+                      { name: 'sync-fec-finance', schedule: '5 min batches', type: 'sync' as const },
+                      { name: 'sync-fec-funding', schedule: 'Daily @ 2 AM', type: 'sync' as const },
+                      { name: 'calculate-member-scores', schedule: 'Every 2h @ :30', type: 'compute' as const },
+                      { name: 'recalculate-state-scores', schedule: 'Every 2h @ :45', type: 'compute' as const },
+                      { name: 'classify-issue-signals', schedule: 'Every 6h @ :15', type: 'ai' as const },
+                    ].map((func) => {
+                      const status = getSyncStatus(func.name);
+                      const isRunning = status?.status === 'running';
+                      const isComplete = status?.status === 'complete';
+                      
+                      const baseClasses = func.type === 'compute' 
+                        ? 'bg-amber-500/10 border-amber-500/30' 
+                        : func.type === 'ai' 
+                          ? 'bg-purple-500/10 border-purple-500/30' 
+                          : 'bg-green-500/10 border-green-500/30';
+                      
+                      const runningClasses = func.type === 'compute'
+                        ? 'bg-amber-500/20 border-amber-500/50 ring-2 ring-amber-500/30'
+                        : func.type === 'ai'
+                          ? 'bg-purple-500/20 border-purple-500/50 ring-2 ring-purple-500/30'
+                          : 'bg-green-500/20 border-green-500/50 ring-2 ring-green-500/30';
+                      
+                      const textColor = func.type === 'compute' ? 'text-amber-600' : func.type === 'ai' ? 'text-purple-600' : 'text-green-600';
+                      const pingColor = func.type === 'compute' ? 'bg-amber-400' : func.type === 'ai' ? 'bg-purple-400' : 'bg-green-400';
+                      const dotColor = func.type === 'compute' ? 'bg-amber-500' : func.type === 'ai' ? 'bg-purple-500' : 'bg-green-500';
+                      const progressColor = func.type === 'compute' ? 'bg-amber-500' : func.type === 'ai' ? 'bg-purple-500' : 'bg-green-500';
+                      
+                      return (
+                        <div 
+                          key={func.name} 
+                          className={`p-2 rounded-lg border transition-all ${isRunning ? runningClasses : baseClasses}`}
+                        >
+                          <div className={`font-medium text-xs flex items-center justify-between ${textColor}`}>
+                            <span className="flex items-center gap-1">
+                              {func.name}
+                              {isRunning && (
+                                <span className="relative flex h-2 w-2 ml-1">
+                                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${pingColor} opacity-75`}></span>
+                                  <span className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`}></span>
+                                </span>
+                              )}
+                            </span>
+                            {status && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                isRunning ? 'bg-green-500 text-white' :
+                                isComplete ? 'bg-blue-500/20 text-blue-600' :
+                                'bg-muted text-muted-foreground'
+                              }`}>
+                                {isRunning ? 'Running' : isComplete ? 'Done' : 'Idle'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center justify-between mt-1">
+                            <span>{func.schedule}</span>
+                            {status?.total_processed > 0 && (
+                              <span className="font-mono text-xs">{status.total_processed} items</span>
+                            )}
+                          </div>
+                          {isRunning && status?.current_offset > 0 && (
+                            <div className="mt-1.5">
+                              <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${progressColor}`}
+                                  style={{ width: `${Math.min((status.current_offset / 539) * 100, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
