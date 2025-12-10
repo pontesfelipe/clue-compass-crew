@@ -38,6 +38,7 @@ import { VoteDetailDialog } from "@/components/VoteDetailDialog";
 import { MemberCommittees } from "@/features/members/components/MemberCommittees";
 import { MemberVotingComparison } from "@/features/members/components/MemberVotingComparison";
 import { MemberActivity } from "@/features/members/components/MemberActivity";
+import { AlignmentWidget } from "@/features/alignment";
 import { useState } from "react";
 
 type Party = "D" | "R" | "I";
@@ -441,6 +442,14 @@ export default function MemberPage() {
             </div>
           </div>
         )}
+
+        {/* Your Alignment */}
+        <div className="mb-8">
+          <h2 className="font-serif text-xl font-semibold text-foreground mb-4">
+            Your Alignment
+          </h2>
+          <AlignmentWidget politicianId={member.id} politicianName={member.fullName} />
+        </div>
 
         {/* AI Summary and Policy Areas */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">
