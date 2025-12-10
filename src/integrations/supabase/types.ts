@@ -699,6 +699,35 @@ export type Database = {
           },
         ]
       }
+      member_tracking: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_tracking_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_votes: {
         Row: {
           created_at: string | null
@@ -828,6 +857,42 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          bill_notifications: boolean
+          created_at: string
+          email_enabled: boolean
+          id: string
+          score_change_notifications: boolean
+          updated_at: string
+          user_id: string
+          vote_notifications: boolean
+          weekly_digest: boolean
+        }
+        Insert: {
+          bill_notifications?: boolean
+          created_at?: string
+          email_enabled?: boolean
+          id?: string
+          score_change_notifications?: boolean
+          updated_at?: string
+          user_id: string
+          vote_notifications?: boolean
+          weekly_digest?: boolean
+        }
+        Update: {
+          bill_notifications?: boolean
+          created_at?: string
+          email_enabled?: boolean
+          id?: string
+          score_change_notifications?: boolean
+          updated_at?: string
+          user_id?: string
+          vote_notifications?: boolean
+          weekly_digest?: boolean
+        }
+        Relationships: []
+      }
       politician_issue_positions: {
         Row: {
           data_points_count: number
@@ -918,6 +983,30 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
           zip_code?: string | null
+        }
+        Relationships: []
+      }
+      sent_notifications: {
+        Row: {
+          id: string
+          notification_type: string
+          reference_id: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          notification_type: string
+          reference_id: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          notification_type?: string
+          reference_id?: string
+          sent_at?: string
+          user_id?: string
         }
         Relationships: []
       }
