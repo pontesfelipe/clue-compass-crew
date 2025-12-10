@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.data-status]
 verify_jwt = false
+
+[functions.compute-politician-positions]
+verify_jwt = false
