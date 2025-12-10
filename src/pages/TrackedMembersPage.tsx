@@ -1,16 +1,15 @@
 import { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { NotificationSettingsDialog } from "@/components/NotificationSettingsDialog";
+import { TrackedMemberActivity } from "@/components/TrackedMemberActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Helmet } from "react-helmet";
 import { 
   ArrowLeft, 
@@ -20,8 +19,6 @@ import {
   Users, 
   ExternalLink,
   Settings,
-  Mail,
-  Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,22 +41,7 @@ export default function TrackedMembersPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { trackedMembers, isLoading: trackingLoading, untrackMember, isTrackingPending } = useMemberTracking();
 
-  // Fetch sent notifications
-  const { data: notifications, isLoading: notificationsLoading } = useQuery({
-    queryKey: ["sent-notifications", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from("sent_notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("sent_at", { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user?.id,
-  });
+  const trackedMemberIds = trackedMembers.map((t) => t.member_id);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -250,57 +232,8 @@ export default function TrackedMembersPage() {
           </div>
         )}
 
-        {/* Recent Notifications */}
-        {notifications && notifications.length > 0 && (
-          <div className="mt-12">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Mail className="h-5 w-5 text-primary" />
-                  Recent Notifications
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {notifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-full bg-primary/10 p-2">
-                          {notif.notification_type === "weekly_digest" ? (
-                            <Mail className="h-4 w-4 text-primary" />
-                          ) : (
-                            <Bell className="h-4 w-4 text-primary" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">
-                            {notif.notification_type === "weekly_digest"
-                              ? "Weekly Digest"
-                              : notif.notification_type === "vote"
-                              ? "Vote Notification"
-                              : notif.notification_type === "bill"
-                              ? "Bill Notification"
-                              : "Score Change"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {notif.reference_id}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {new Date(notif.sent_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Recent Activity from Tracked Members */}
+        <TrackedMemberActivity trackedMemberIds={trackedMemberIds} />
 
         {/* Info Section */}
         <div className="mt-12 rounded-xl border border-border bg-card p-6">
@@ -310,13 +243,12 @@ export default function TrackedMembersPage() {
             </div>
             <div>
               <h3 className="font-semibold text-foreground mb-1">
-                How notifications work
+                About Activity Tracking
               </h3>
               <p className="text-sm text-muted-foreground">
-                When tracked members cast votes, sponsor bills, or have significant score changes, 
-                you'll receive email notifications based on your preferences. Weekly digests are sent 
-                every Monday with a summary of your tracked members' activity. Customize what you 
-                receive using the Notification Settings button above.
+                This page shows recent votes and bill activity from the members you're tracking.
+                Activity updates are synced regularly from Congress.gov. Track more members to see
+                their latest legislative actions here.
               </p>
             </div>
           </div>
