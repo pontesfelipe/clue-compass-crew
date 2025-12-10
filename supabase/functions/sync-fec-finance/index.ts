@@ -369,19 +369,12 @@ serve(async (req) => {
               });
             }
 
-            // Add individual total if no detailed contributions
+            // Only add individual total if we got NO detailed contributions at all
+            // This prevents showing generic "Individual Contributors (Total)" when we have actual donor names
             const individualAmount = totals.individual_itemized_contributions || 0;
             if (individualAmount > 0 && allContributions.length === 0) {
-              await supabase
-                .from('member_contributions')
-                .insert({
-                  member_id: member.id,
-                  contributor_name: 'Individual Contributors (Total)',
-                  contributor_type: 'individual',
-                  amount: individualAmount,
-                  cycle: currentCycle,
-                  industry: null,
-                });
+              // Only as fallback when FEC API didn't return any itemized contributions
+              console.log(`No itemized contributions found for ${member.full_name}, adding total as fallback`);
             }
           }
         }
