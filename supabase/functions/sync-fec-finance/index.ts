@@ -305,14 +305,15 @@ serve(async (req) => {
               });
             }
           }
-          // Insert contributions
-          if (allContributions.length > 0) {
-            await supabase
-              .from('member_contributions')
-              .delete()
-              .eq('member_id', member.id)
-              .eq('cycle', currentCycle);
+          // Always delete old contributions first to prevent duplicates
+          await supabase
+            .from('member_contributions')
+            .delete()
+            .eq('member_id', member.id)
+            .eq('cycle', currentCycle);
 
+          // Insert contributions if we have them
+          if (allContributions.length > 0) {
             await supabase
               .from('member_contributions')
               .insert(allContributions);

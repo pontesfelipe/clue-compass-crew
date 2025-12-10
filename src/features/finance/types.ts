@@ -6,7 +6,7 @@ export interface Contribution {
   id: string;
   memberId: string;
   contributorName: string;
-  contributorType: "individual" | "pac" | "organization";
+  contributorType: "individual" | "pac" | "organization" | "corporate" | "union";
   amount: number;
   cycle: number;
   industry: string | null;
@@ -45,6 +45,8 @@ export const contributorTypeLabels: Record<Contribution["contributorType"], stri
   individual: "Individual",
   pac: "PAC",
   organization: "Organization",
+  corporate: "Corporate",
+  union: "Union",
 };
 
 export const sponsorTypeLabels: Record<Sponsor["sponsorType"], string> = {
