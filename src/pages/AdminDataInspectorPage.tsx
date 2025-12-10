@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Database, Users, FileText, Vote, DollarSign, Building, Activity, AlertTriangle } from "lucide-react";
+import { Search, Database, Users, FileText, Vote, DollarSign, Building, Activity, AlertTriangle, GitBranch } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAdmin } from "@/hooks/useAdmin";
 
@@ -464,6 +464,10 @@ export default function AdminDataInspectorPage() {
               <Database className="h-4 w-4 mr-2" />
               Data Sources
             </TabsTrigger>
+            <TabsTrigger value="flow">
+              <GitBranch className="h-4 w-4 mr-2" />
+              Data Flow
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="inspector" className="space-y-6">
@@ -817,6 +821,280 @@ export default function AdminDataInspectorPage() {
                       <p className="text-xs text-muted-foreground">{ds.source}</p>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="flow" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Data Pipeline Overview</CardTitle>
+                <CardDescription>
+                  How data flows from external APIs through sync functions into the database and to the UI
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-8">
+                  {/* Main Flow Diagram */}
+                  <div className="border rounded-lg p-6 bg-muted/30">
+                    <h3 className="font-semibold mb-4">High-Level Data Flow</h3>
+                    <div className="flex flex-col lg:flex-row items-stretch gap-4">
+                      {/* External APIs */}
+                      <div className="flex-1 border rounded-lg p-4 bg-blue-500/10 border-blue-500/30">
+                        <h4 className="font-medium text-blue-600 dark:text-blue-400 mb-3">External APIs</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="p-2 bg-background rounded border">Congress.gov API</div>
+                          <div className="p-2 bg-background rounded border">House Clerk XML</div>
+                          <div className="p-2 bg-background rounded border">Senate.gov XML</div>
+                          <div className="p-2 bg-background rounded border">FEC API</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center lg:flex-col">
+                        <div className="w-8 h-8 lg:w-12 lg:h-12 flex items-center justify-center text-muted-foreground">→</div>
+                      </div>
+
+                      {/* Sync Functions */}
+                      <div className="flex-1 border rounded-lg p-4 bg-amber-500/10 border-amber-500/30">
+                        <h4 className="font-medium text-amber-600 dark:text-amber-400 mb-3">Edge Functions (Cron)</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-congress-members</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-bills</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-votes</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-member-details</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-fec-finance</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">sync-fec-funding</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center lg:flex-col">
+                        <div className="w-8 h-8 lg:w-12 lg:h-12 flex items-center justify-center text-muted-foreground">→</div>
+                      </div>
+
+                      {/* Database */}
+                      <div className="flex-1 border rounded-lg p-4 bg-green-500/10 border-green-500/30">
+                        <h4 className="font-medium text-green-600 dark:text-green-400 mb-3">Database Tables</h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="p-2 bg-background rounded border font-mono text-xs">members</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">bills</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">votes</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">member_votes</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">member_scores</div>
+                          <div className="p-2 bg-background rounded border font-mono text-xs">funding_metrics</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center lg:flex-col">
+                        <div className="w-8 h-8 lg:w-12 lg:h-12 flex items-center justify-center text-muted-foreground">→</div>
+                      </div>
+
+                      {/* UI */}
+                      <div className="flex-1 border rounded-lg p-4 bg-purple-500/10 border-purple-500/30">
+                        <h4 className="font-medium text-purple-600 dark:text-purple-400 mb-3">UI Components</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="p-2 bg-background rounded border">MemberPage</div>
+                          <div className="p-2 bg-background rounded border">StatePage</div>
+                          <div className="p-2 bg-background rounded border">BillPage</div>
+                          <div className="p-2 bg-background rounded border">VotesPage</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Sync Flows */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Congress Data Flow */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Users className="h-4 w-4 text-blue-500" />
+                          Congress.gov Data Flow
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-blue-500/10">API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-congress-members</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">members</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-blue-500/10">API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-bills</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">bills, bill_sponsorships</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-blue-500/10">API + XML</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-votes</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">votes, member_votes</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-blue-500/10">API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-member-details</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">member_committees, member_statements</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* FEC Data Flow */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-green-500" />
+                          FEC Finance Data Flow
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-500/10">FEC API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-fec-finance</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">member_contributions</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-500/10">FEC API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-fec-finance</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">member_sponsors</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-500/10">FEC API</Badge>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">sync-fec-funding</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">funding_metrics</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Score Calculation Flow */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Vote className="h-4 w-4 text-amber-500" />
+                          Score Calculation Flow
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="secondary">bill_sponsorships</Badge>
+                          <span className="text-muted-foreground">+</span>
+                          <Badge variant="secondary">member_votes</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">calculate-member-scores</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">member_scores</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">recalculate-state-scores</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">state_scores</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Alignment Flow */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Users className="h-4 w-4 text-purple-500" />
+                          User Alignment Flow
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="secondary">bills</Badge>
+                          <span className="text-muted-foreground">+</span>
+                          <Badge variant="secondary">votes</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">classify-issue-signals</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">issue_signals</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono text-xs">compute-politician-positions</span>
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">politician_issue_positions</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline">User Answers</Badge>
+                          <span className="text-muted-foreground">+</span>
+                          <Badge variant="secondary">politician_issue_positions</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">→</span>
+                          <Badge variant="secondary">user_politician_alignment</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Cron Schedule */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Sync Schedule (Cron Jobs)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">sync-congress-members</span>
+                          <Badge variant="outline">Daily 00:00 UTC</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">sync-bills</span>
+                          <Badge variant="outline">Every 6h</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">sync-votes</span>
+                          <Badge variant="outline">Every 2h</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">sync-member-details</span>
+                          <Badge variant="outline">Daily 01:00 UTC</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">sync-fec-funding</span>
+                          <Badge variant="outline">Daily 02:00 UTC</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">calculate-member-scores</span>
+                          <Badge variant="outline">Every 2h :30</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">recalculate-state-scores</span>
+                          <Badge variant="outline">Every 2h :45</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">classify-issue-signals</span>
+                          <Badge variant="outline">Every 6h :15</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <span className="font-mono text-xs">compute-politician-positions</span>
+                          <Badge variant="outline">Every 6h :30</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </CardContent>
             </Card>
