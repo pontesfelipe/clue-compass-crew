@@ -39,6 +39,8 @@ import { MemberCommittees } from "@/features/members/components/MemberCommittees
 import { MemberVotingComparison } from "@/features/members/components/MemberVotingComparison";
 import { MemberActivity } from "@/features/members/components/MemberActivity";
 import { AlignmentWidget } from "@/features/alignment";
+import { useMemberTracking } from "@/hooks/useMemberTracking";
+import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
 type Party = "D" | "R" | "I";
@@ -138,6 +140,8 @@ export default function MemberPage() {
   const { memberId } = useParams<{ memberId: string }>();
   const { data: member, isLoading, error } = useMember(memberId || "");
   const { addMember, removeMember, isMemberSelected, canAddMore } = useComparison();
+  const { user } = useAuth();
+  const { isTracking, trackMember, untrackMember, isTrackingPending } = useMemberTracking();
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [selectedVotePosition, setSelectedVotePosition] = useState<string | undefined>();
 
@@ -302,9 +306,33 @@ export default function MemberPage() {
                       </>
                     )}
                   </Button>
-                  <Button variant="civic-outline" size="sm">
-                    <Bookmark className="mr-2 h-4 w-4" />
-                    Track
+                  <Button 
+                    variant={isTracking(member.id) ? "default" : "civic-outline"} 
+                    size="sm"
+                    disabled={!user || isTrackingPending}
+                    onClick={() => {
+                      if (!user) {
+                        toast({ title: "Sign in required", description: "Please sign in to track members.", variant: "destructive" });
+                        return;
+                      }
+                      if (isTracking(member.id)) {
+                        untrackMember(member.id);
+                      } else {
+                        trackMember(member.id);
+                      }
+                    }}
+                  >
+                    {isTracking(member.id) ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Tracking
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark className="mr-2 h-4 w-4" />
+                        {user ? "Track" : "Sign in to Track"}
+                      </>
+                    )}
                   </Button>
                   <Button 
                     variant="civic-ghost" 
