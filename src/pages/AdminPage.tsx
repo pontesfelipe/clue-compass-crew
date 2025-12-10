@@ -3,14 +3,16 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
+import { useFeatureToggles } from "@/hooks/useFeatureToggles";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3, Search } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import {
@@ -37,7 +39,6 @@ interface UserRole {
   created_at: string | null;
 }
 
-
 interface AnalyticsData {
   userSignups: { date: string; count: number }[];
   dataCounts: { name: string; count: number }[];
@@ -58,6 +59,7 @@ export default function AdminPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { isAdmin, isLoading: adminLoading } = useAdmin();
   const { toast } = useToast();
+  const { toggles, isLoading: isLoadingToggles, updateToggle, fetchToggles } = useFeatureToggles();
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -65,11 +67,7 @@ export default function AdminPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
-
-  // AI Chat state
-  const [aiMessages, setAiMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
-  const [aiInput, setAiInput] = useState("");
-  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [updatingToggleId, setUpdatingToggleId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -275,90 +273,22 @@ export default function AdminPage() {
     }
   };
 
-  const handleAiSubmit = async () => {
-    if (!aiInput.trim() || isAiLoading) return;
-
-    const userMessage = { role: "user" as const, content: aiInput };
-    setAiMessages((prev) => [...prev, userMessage]);
-    setAiInput("");
-    setIsAiLoading(true);
-
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-ai-chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ messages: [...aiMessages, userMessage] }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "AI request failed");
-      }
-
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = "";
-
-      if (reader) {
-        let textBuffer = "";
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          textBuffer += decoder.decode(value, { stream: true });
-
-          let newlineIndex: number;
-          while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-            let line = textBuffer.slice(0, newlineIndex);
-            textBuffer = textBuffer.slice(newlineIndex + 1);
-
-            if (line.endsWith("\r")) line = line.slice(0, -1);
-            if (line.startsWith(":") || line.trim() === "") continue;
-            if (!line.startsWith("data: ")) continue;
-
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === "[DONE]") break;
-
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) {
-                assistantContent += content;
-                setAiMessages((prev) => {
-                  const last = prev[prev.length - 1];
-                  if (last?.role === "assistant") {
-                    return prev.map((m, i) =>
-                      i === prev.length - 1 ? { ...m, content: assistantContent } : m
-                    );
-                  }
-                  return [...prev, { role: "assistant", content: assistantContent }];
-                });
-              }
-            } catch {
-              textBuffer = line + "\n" + textBuffer;
-              break;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("AI chat error:", error);
+  const handleToggleChange = async (toggleId: string, enabled: boolean) => {
+    setUpdatingToggleId(toggleId);
+    const success = await updateToggle(toggleId, enabled);
+    if (success) {
       toast({
-        title: "AI Error",
-        description: error instanceof Error ? error.message : "Failed to get AI response",
+        title: "Feature Updated",
+        description: `Feature has been ${enabled ? "enabled" : "disabled"}.`,
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Failed to update feature toggle",
         variant: "destructive",
       });
-    } finally {
-      setIsAiLoading(false);
     }
+    setUpdatingToggleId(null);
   };
 
   if (authLoading || adminLoading) {
@@ -411,9 +341,9 @@ export default function AdminPage() {
                 <Database className="h-4 w-4" />
                 Data Sync
               </TabsTrigger>
-              <TabsTrigger value="ai" className="flex items-center gap-2">
-                <Bot className="h-4 w-4" />
-                AI Assistant
+              <TabsTrigger value="features" className="flex items-center gap-2">
+                <ToggleLeft className="h-4 w-4" />
+                Features
               </TabsTrigger>
             </TabsList>
 
@@ -681,76 +611,63 @@ export default function AdminPage() {
               <SyncStatusCard />
             </TabsContent>
 
-            <TabsContent value="ai">
-              <Card className="h-[600px] flex flex-col">
+            <TabsContent value="features">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-5 w-5" />
-                    AI Assistant (Unlimited)
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <ToggleLeft className="h-5 w-5" />
+                      Feature Toggles
+                    </span>
+                    <Button variant="outline" size="sm" onClick={fetchToggles} disabled={isLoadingToggles}>
+                      <RefreshCw className={`h-4 w-4 ${isLoadingToggles ? "animate-spin" : ""}`} />
+                    </Button>
                   </CardTitle>
                   <CardDescription>
-                    Ask questions about CivicScore data, get insights, or get help with admin tasks
+                    Enable or disable features across the platform
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col">
-                  <div className="flex-1 overflow-auto space-y-4 mb-4 p-4 rounded-lg bg-muted/50">
-                    {aiMessages.length === 0 ? (
-                      <div className="text-center text-muted-foreground py-8">
-                        <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>Start a conversation with the AI assistant</p>
-                        <p className="text-sm mt-2">
-                          Ask about member scores, voting patterns, or data analysis
-                        </p>
-                      </div>
-                    ) : (
-                      aiMessages.map((msg, idx) => (
+                <CardContent>
+                  {isLoadingToggles ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : toggles.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No feature toggles found</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {toggles.map((toggle) => (
                         <div
-                          key={idx}
-                          className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                          key={toggle.id}
+                          className="flex items-center justify-between p-4 rounded-lg border bg-card"
                         >
-                          <div
-                            className={`max-w-[80%] p-3 rounded-lg ${
-                              msg.role === "user"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border"
-                            }`}
-                          >
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{toggle.label}</p>
+                              <Badge variant={toggle.enabled ? "default" : "secondary"}>
+                                {toggle.enabled ? "Enabled" : "Disabled"}
+                              </Badge>
+                            </div>
+                            {toggle.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {toggle.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {updatingToggleId === toggle.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Switch
+                                checked={toggle.enabled}
+                                onCheckedChange={(checked) => handleToggleChange(toggle.id, checked)}
+                              />
+                            )}
                           </div>
                         </div>
-                      ))
-                    )}
-                    {isAiLoading && aiMessages[aiMessages.length - 1]?.role === "user" && (
-                      <div className="flex justify-start">
-                        <div className="bg-card border p-3 rounded-lg">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={aiInput}
-                      onChange={(e) => setAiInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleAiSubmit()}
-                      placeholder="Ask the AI assistant..."
-                      className="flex-1 px-4 py-2 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                      disabled={isAiLoading}
-                    />
-                    <Button onClick={handleAiSubmit} disabled={isAiLoading || !aiInput.trim()}>
-                      {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
-                    </Button>
-                    {aiMessages.length > 0 && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setAiMessages([])}
-                        disabled={isAiLoading}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
