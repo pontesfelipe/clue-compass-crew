@@ -1,21 +1,9 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useStateScores, usePartyScores, useChamberScores, useStateFundingScores } from "@/hooks/useStateData";
-import type { StateFundingScore } from "@/hooks/useStateData";
+import { useStateFundingScores } from "@/hooks/useStateData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, BarChart3, Users, Building2, DollarSign, Leaf } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-type MapLayer = "behavior" | "funding";
-
-const getScoreColor = (score: number): string => {
-  if (score >= 80) return "hsl(var(--score-excellent))";
-  if (score >= 70) return "hsl(var(--score-good))";
-  if (score >= 60) return "hsl(var(--score-average))";
-  if (score >= 50) return "hsl(var(--score-poor))";
-  return "hsl(var(--score-bad))";
-};
+import { TrendingUp, TrendingDown, DollarSign, Leaf, Users } from "lucide-react";
 
 // PAC dependence color scale: higher = more red (more PAC dependent)
 const getPacDependenceColor = (score: number | null): string => {
@@ -33,14 +21,8 @@ interface USMapProps {
 export function USMap({ onStateClick, showStats = true }: USMapProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
-  const [activeLayer, setActiveLayer] = useState<MapLayer>("behavior");
   
-  const { data: stateScores, isLoading: scoresLoading } = useStateScores();
-  const { data: fundingScores, isLoading: fundingLoading } = useStateFundingScores();
-  const { data: partyScores } = usePartyScores();
-  const { data: chamberScores } = useChamberScores();
-
-  const isLoading = scoresLoading || (activeLayer === "funding" && fundingLoading);
+  const { data: fundingScores, isLoading } = useStateFundingScores();
 
   const handleStateClick = (abbr: string) => {
     if (onStateClick) {
@@ -50,30 +32,9 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
     }
   };
 
-  const hoveredBehaviorData = hoveredState 
-    ? stateScores?.find(s => s.abbr === hoveredState) 
-    : null;
-
   const hoveredFundingData = hoveredState
     ? fundingScores?.find(s => s.abbr === hoveredState)
     : null;
-
-  // Calculate behavior statistics
-  const stats = useMemo(() => {
-    if (!stateScores || stateScores.length === 0) return null;
-    
-    const validStates = stateScores.filter(s => s.score > 0);
-    if (validStates.length === 0) return null;
-
-    const totalScore = validStates.reduce((sum, s) => sum + s.score, 0);
-    const nationalAvg = Math.round(totalScore / validStates.length);
-    
-    const sorted = [...validStates].sort((a, b) => b.score - a.score);
-    const highest = sorted.slice(0, 3);
-    const lowest = sorted.slice(-3).reverse();
-    
-    return { nationalAvg, highest, lowest };
-  }, [stateScores]);
 
   // Calculate funding statistics
   const fundingStats = useMemo(() => {
@@ -132,54 +93,10 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
     );
   }
 
-  const hasFundingData = fundingScores && fundingScores.length > 0;
-
   return (
     <div className="relative w-full">
-      {/* Layer Toggle */}
-      {showStats && (
-        <div className="px-4 pb-4">
-          <ToggleGroup 
-            type="single" 
-            value={activeLayer} 
-            onValueChange={(val) => val && setActiveLayer(val as MapLayer)}
-            className="justify-start"
-          >
-            <ToggleGroupItem value="behavior" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Behavior Score
-            </ToggleGroupItem>
-            <ToggleGroupItem value="funding" className="gap-2" disabled={!hasFundingData}>
-              <DollarSign className="h-4 w-4" />
-              Funding Influence
-              {!hasFundingData && <span className="text-xs">(No data)</span>}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      )}
-
-      {/* Behavior Layer Tooltip */}
-      {activeLayer === "behavior" && hoveredBehaviorData && (
-        <div className="absolute top-4 left-4 z-10 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[180px] animate-scale-in">
-          <h4 className="font-serif font-semibold text-foreground">{hoveredBehaviorData.name}</h4>
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-sm text-muted-foreground">Avg. Score</span>
-            <span 
-              className="text-lg font-bold"
-              style={{ color: getScoreColor(hoveredBehaviorData.score) }}
-            >
-              {hoveredBehaviorData.score}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-xs text-muted-foreground">Members</span>
-            <span className="text-sm font-medium text-foreground">{hoveredBehaviorData.memberCount}</span>
-          </div>
-        </div>
-      )}
-
       {/* Funding Layer Tooltip */}
-      {activeLayer === "funding" && hoveredFundingData && (
+      {hoveredFundingData && (
         <div className="absolute top-4 left-4 z-10 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[220px] animate-scale-in">
           <h4 className="font-serif font-semibold text-foreground">{hoveredFundingData.name}</h4>
           <div className="mt-3 space-y-2">
@@ -229,22 +146,10 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
                 return <div key={`${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
               }
 
-              const behaviorData = stateScores?.find(s => s.abbr === stateAbbr);
               const fundingData = fundingScores?.find(s => s.abbr === stateAbbr);
-              
-              let bgColor: string;
-              let textColor: string;
-
-              if (activeLayer === "behavior") {
-                const score = behaviorData?.score ?? 50;
-                bgColor = getScoreColor(score);
-                textColor = score >= 60 ? "hsl(var(--background))" : "hsl(var(--foreground))";
-              } else {
-                bgColor = getPacDependenceColor(fundingData?.avgPacDependence ?? null);
-                textColor = "hsl(var(--background))";
-              }
-
-              const hasData = activeLayer === "behavior" ? !!behaviorData : !!fundingData;
+              const bgColor = getPacDependenceColor(fundingData?.avgPacDependence ?? null);
+              const textColor = "hsl(var(--background))";
+              const hasData = !!fundingData;
 
               return (
                 <button
@@ -267,135 +172,8 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
         ))}
       </div>
 
-      {/* Behavior Layer Statistics */}
-      {showStats && activeLayer === "behavior" && stats && (
-        <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* National Average */}
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">National Average</span>
-            </div>
-            <div 
-              className="text-3xl font-bold"
-              style={{ color: getScoreColor(stats.nationalAvg) }}
-            >
-              {stats.nationalAvg}
-            </div>
-          </div>
-
-          {/* Party Breakdown */}
-          {partyScores && (
-            <div className="p-4 rounded-lg bg-card border border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">By Party</span>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500" />
-                    <span className="text-sm text-foreground">Democrats</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">({partyScores.democratic.count})</span>
-                    <span className="text-sm font-bold" style={{ color: getScoreColor(partyScores.democratic.avg) }}>
-                      {partyScores.democratic.avg}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm text-foreground">Republicans</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">({partyScores.republican.count})</span>
-                    <span className="text-sm font-bold" style={{ color: getScoreColor(partyScores.republican.avg) }}>
-                      {partyScores.republican.avg}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Chamber Breakdown */}
-          {chamberScores && (
-            <div className="p-4 rounded-lg bg-card border border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">By Chamber</span>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-amber-500" />
-                    <span className="text-sm text-foreground">House</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">({chamberScores.house.count})</span>
-                    <span className="text-sm font-bold" style={{ color: getScoreColor(chamberScores.house.avg) }}>
-                      {chamberScores.house.avg}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-purple-500" />
-                    <span className="text-sm text-foreground">Senate</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">({chamberScores.senate.count})</span>
-                    <span className="text-sm font-bold" style={{ color: getScoreColor(chamberScores.senate.avg) }}>
-                      {chamberScores.senate.avg}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Highest Scoring */}
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-score-excellent" />
-              <span className="text-sm font-medium text-muted-foreground">Top Performing</span>
-            </div>
-            <div className="space-y-1">
-              {stats.highest.map((state, i) => (
-                <div key={state.abbr} className="flex items-center justify-between">
-                  <span className="text-sm text-foreground">{i + 1}. {state.name}</span>
-                  <span className="text-sm font-bold" style={{ color: getScoreColor(state.score) }}>
-                    {state.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Lowest Scoring */}
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingDown className="h-4 w-4 text-score-bad" />
-              <span className="text-sm font-medium text-muted-foreground">Needs Improvement</span>
-            </div>
-            <div className="space-y-1">
-              {stats.lowest.map((state, i) => (
-                <div key={state.abbr} className="flex items-center justify-between">
-                  <span className="text-sm text-foreground">{i + 1}. {state.name}</span>
-                  <span className="text-sm font-bold" style={{ color: getScoreColor(state.score) }}>
-                    {state.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Funding Layer Statistics */}
-      {showStats && activeLayer === "funding" && fundingStats && (
+      {showStats && fundingStats && (
         <div className="mx-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* National PAC Average */}
           <div className="p-4 rounded-lg bg-card border border-border">
@@ -471,31 +249,8 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
         </div>
       )}
 
-      {/* Behavior Score Legend */}
-      {showStats && activeLayer === "behavior" && (
-        <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
-          <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {[
-              { color: "hsl(var(--score-bad))", range: "0-49", label: "Needs Improvement" },
-              { color: "hsl(var(--score-poor))", range: "50-59", label: "Below Average" },
-              { color: "hsl(var(--score-average))", range: "60-69", label: "Average" },
-              { color: "hsl(var(--score-good))", range: "70-79", label: "Good" },
-              { color: "hsl(var(--score-excellent))", range: "80-100", label: "Excellent" },
-            ].map((item) => (
-              <div key={item.range} className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{item.range}</span> {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Funding Legend */}
-      {showStats && activeLayer === "funding" && (
+      {showStats && (
         <div className="mx-4 mb-4 p-4 rounded-lg bg-card border border-border">
           <p className="text-sm font-medium text-foreground mb-3">PAC Dependence Guide</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
