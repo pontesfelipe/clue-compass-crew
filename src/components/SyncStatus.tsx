@@ -8,7 +8,8 @@ import {
   Calculator,
   DollarSign,
   CheckCircle,
-  Clock
+  Clock,
+  Brain
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -17,12 +18,22 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
 
 interface SyncItem {
   id: string;
   status: string | null;
   last_run_at: string | null;
   total_processed: number | null;
+}
+
+interface ClassificationProgress {
+  house: { total: number; classified: number };
+  senate: { total: number; classified: number };
+}
+
+interface DataStatus {
+  classification?: ClassificationProgress;
 }
 
 const syncConfig: Record<string, { label: string; icon: typeof Users }> = {
@@ -45,7 +56,17 @@ export function SyncStatus() {
       if (error) throw error;
       return data as SyncItem[];
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
+  });
+
+  const { data: dataStatus } = useQuery({
+    queryKey: ["data-status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("data-status");
+      if (error) throw error;
+      return data as DataStatus;
+    },
+    refetchInterval: 60000,
   });
 
   if (isLoading) {
@@ -56,6 +77,10 @@ export function SyncStatus() {
       </div>
     );
   }
+
+  const classification = dataStatus?.classification;
+  const houseProgress = classification ? (classification.house.classified / Math.max(classification.house.total, 1)) * 100 : 0;
+  const senateProgress = classification ? (classification.senate.classified / Math.max(classification.senate.total, 1)) * 100 : 0;
 
   return (
     <TooltipProvider>
@@ -99,6 +124,40 @@ export function SyncStatus() {
             </Tooltip>
           );
         })}
+
+        {/* Classification Progress Indicator */}
+        {classification && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-primary/10 text-primary">
+                <Brain className="h-3 w-3" />
+                <span className="hidden sm:inline">AI</span>
+                <span className="text-[10px] font-medium">
+                  {Math.round((houseProgress + senateProgress) / 2)}%
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs w-56">
+              <p className="font-medium mb-2">Bill Classification Progress</p>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-muted-foreground mb-1">
+                    <span>House (HR)</span>
+                    <span>{classification.house.classified}/{classification.house.total}</span>
+                  </div>
+                  <Progress value={houseProgress} className="h-1.5" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-muted-foreground mb-1">
+                    <span>Senate (S)</span>
+                    <span>{classification.senate.classified}/{classification.senate.total}</span>
+                  </div>
+                  <Progress value={senateProgress} className="h-1.5" />
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </TooltipProvider>
   );
