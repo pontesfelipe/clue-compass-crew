@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
+import { ResetProfileDialog } from "@/components/ResetProfileDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,6 +109,14 @@ export function Header() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                <ResetProfileDialog
+                  trigger={
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Reset Profile Data
+                    </DropdownMenuItem>
+                  }
+                />
                 <DeleteAccountDialog />
                 <DropdownMenuItem onClick={signOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
