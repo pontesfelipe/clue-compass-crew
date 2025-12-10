@@ -1,15 +1,19 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProfileWizard } from "@/features/alignment";
 import { useAuth } from "@/hooks/useAuth";
+import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Helmet } from "react-helmet";
+import { Bookmark, Heart, ChevronRight } from "lucide-react";
 
 export default function MyProfilePage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading } = useAuth();
+  const { trackedMembers } = useMemberTracking();
   
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -57,6 +61,28 @@ export default function MyProfilePage() {
             </p>
           </div>
           
+          {/* Quick Links */}
+          <div className="flex flex-wrap gap-3 mb-8">
+            <Button variant="civic-outline" size="sm" asChild>
+              <Link to="/my-matches">
+                <Heart className="mr-2 h-4 w-4" />
+                My Matches
+              </Link>
+            </Button>
+            <Button variant="civic-outline" size="sm" asChild>
+              <Link to="/tracked-members">
+                <Bookmark className="mr-2 h-4 w-4" />
+                Tracked Members
+                {trackedMembers.length > 0 && (
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    {trackedMembers.length}
+                  </span>
+                )}
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
           <ProfileWizard />
         </div>
       </main>

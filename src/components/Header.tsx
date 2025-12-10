@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -84,6 +84,12 @@ export function Header() {
                   <Link to="/my-profile" className="flex items-center">
                     <UserCircle className="mr-2 h-4 w-4" />
                     My Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/tracked-members" className="flex items-center">
+                    <Bookmark className="mr-2 h-4 w-4" />
+                    Tracked Members
                   </Link>
                 </DropdownMenuItem>
                 {isAdmin && (

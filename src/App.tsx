@@ -21,6 +21,7 @@ import AuthPage from "./pages/AuthPage";
 import AdminPage from "./pages/AdminPage";
 import MyProfilePage from "./pages/MyProfilePage";
 import MyMatchesPage from "./pages/MyMatchesPage";
+import TrackedMembersPage from "./pages/TrackedMembersPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/my-profile" element={<MyProfilePage />} />
             <Route path="/my-matches" element={<MyMatchesPage />} />
+            <Route path="/tracked-members" element={<TrackedMembersPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/state/:stateAbbr" element={<StatePage />} />
