@@ -2,6 +2,7 @@
 export * from "./types";
 export * from "./hooks/useMemberFinance";
 export * from "./components/MemberFinanceSection";
+export * from "./components/FundingProfile";
 export * from "./components/FinanceOverview";
 export * from "./components/ContributorsList";
 export * from "./components/LobbyingList";

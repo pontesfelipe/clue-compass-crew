@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
 import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
-import { MemberFinanceSection } from "@/features/finance";
+import { MemberFinanceSection, FundingProfile } from "@/features/finance";
 import { MemberAISummary } from "@/components/MemberAISummary";
 import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
@@ -456,6 +456,11 @@ export default function MemberPage() {
             party={member.party as "D" | "R" | "I" | "L"} 
             state={member.state} 
           />
+        </div>
+
+        {/* Funding Profile (FEC Data) */}
+        <div className="mb-8">
+          <FundingProfile memberId={member.id} />
         </div>
 
         {/* Recent Activity */}
