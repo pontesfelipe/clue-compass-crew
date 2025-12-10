@@ -14,6 +14,9 @@ import BillsPage from "./pages/BillsPage";
 import VotesPage from "./pages/VotesPage";
 import ComparePage from "./pages/ComparePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
+import MethodologyPage from "./pages/MethodologyPage";
+import DataSourcesPage from "./pages/DataSourcesPage";
+import FAQPage from "./pages/FAQPage";
 import AuthPage from "./pages/AuthPage";
 import AdminPage from "./pages/AdminPage";
 import MyProfilePage from "./pages/MyProfilePage";
@@ -37,7 +40,9 @@ const App = () => (
             <Route path="/bills" element={<BillsPage />} />
             <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />
-            <Route path="/methodology" element={<HowItWorksPage />} />
+            <Route path="/methodology" element={<MethodologyPage />} />
+            <Route path="/data-sources" element={<DataSourcesPage />} />
+            <Route path="/faq" element={<FAQPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/my-profile" element={<MyProfilePage />} />

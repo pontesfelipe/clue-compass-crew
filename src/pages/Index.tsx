@@ -20,9 +20,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTopMembers } from "@/hooks/useMembers";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
   const { data: topMembers, isLoading } = useTopMembers(4);
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
@@ -212,39 +214,35 @@ export default function Index() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="relative overflow-hidden py-20 lg:py-28">
-        <div className="absolute inset-0" style={{ background: 'var(--gradient-hero)' }} />
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 30% 30%, hsl(var(--civic-gold) / 0.3) 0%, transparent 40%)`
-          }} />
-        </div>
-        
-        <div className="civic-container relative">
-          <div className="text-center max-w-3xl mx-auto">
-            <h2 className="font-serif text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl mb-6">
-              Ready to make informed decisions?
-            </h2>
-            <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
-              Create an account to save your scoring preferences, 
-              track your representatives, and get personalized insights.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="hero" size="xl">
-                Create Free Account
-              </Button>
-              <Button 
-                variant="outline" 
-                size="xl" 
-                className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              >
-                Continue as Guest
+      {/* CTA Section - Only show for non-authenticated users */}
+      {!isAuthenticated && (
+        <section className="relative overflow-hidden py-20 lg:py-28">
+          <div className="absolute inset-0" style={{ background: 'var(--gradient-hero)' }} />
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute inset-0" style={{
+              backgroundImage: `radial-gradient(circle at 30% 30%, hsl(var(--civic-gold) / 0.3) 0%, transparent 40%)`
+            }} />
+          </div>
+          
+          <div className="civic-container relative">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 className="font-serif text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl mb-6">
+                Get Personalized Insights
+              </h2>
+              <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
+                Create a free account to save your scoring preferences, 
+                track your representatives, and see how they align with your values.
+              </p>
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/auth">
+                  Create Free Account
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
               </Button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <Footer />
     </div>
