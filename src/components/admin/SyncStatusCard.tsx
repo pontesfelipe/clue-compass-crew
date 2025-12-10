@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap } from "lucide-react";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
 
@@ -31,50 +31,67 @@ interface SyncConfig {
 }
 
 const SYNC_CONFIGS: SyncConfig[] = [
+  // Congress data
   {
     id: "congress-members",
     label: "Congress Members",
-    description: "Syncs all 539 members of Congress from Congress.gov",
+    description: "Syncs all 539 members of Congress from Congress.gov (Daily at midnight)",
     expectedTotal: 539,
     icon: <Users className="h-4 w-4" />,
+    functionName: "sync-congress-members",
+    category: "congress",
+  },
+  {
+    id: "member-details",
+    label: "Member Details",
+    description: "Syncs committees & statements for all members (Daily at 1 AM)",
+    expectedTotal: 539,
+    icon: <Briefcase className="h-4 w-4" />,
+    functionName: "sync-member-details",
     category: "congress",
   },
   {
     id: "bills",
     label: "Bills & Sponsorships",
-    description: "Syncs all bills from Congress 118 & 119 with sponsorship data",
+    description: "Syncs all bills from Congress 118 & 119 with sponsorship data (Every 6 hours)",
     expectedTotal: 20000,
     icon: <FileText className="h-4 w-4" />,
+    functionName: "sync-bills",
     category: "congress",
   },
   {
     id: "votes",
     label: "Votes & Positions",
-    description: "Syncs House and Senate votes with individual member positions",
+    description: "Syncs House and Senate votes with individual member positions (Every 2 hours)",
     expectedTotal: 2000,
     icon: <Vote className="h-4 w-4" />,
+    functionName: "sync-votes",
     category: "congress",
   },
+  // Finance data
   {
     id: "fec-finance",
     label: "FEC Contributions",
-    description: "Syncs itemized contributions from FEC API",
+    description: "Syncs itemized contributions from FEC API (Every 5 minutes)",
     expectedTotal: 539,
     icon: <DollarSign className="h-4 w-4" />,
+    functionName: "sync-fec-finance",
     category: "finance",
   },
   {
     id: "fec-funding",
     label: "FEC Funding Metrics",
-    description: "Computes grassroots/PAC/local scores per cycle",
+    description: "Computes grassroots/PAC/local scores per cycle (Nightly at 2 AM)",
     expectedTotal: 539,
     icon: <DollarSign className="h-4 w-4" />,
+    functionName: "sync-fec-funding",
     category: "finance",
   },
+  // Scores & Analysis
   {
     id: "member-scores",
     label: "Member Scores",
-    description: "Recalculates all member scores from latest data",
+    description: "Recalculates all member scores from latest data (Every 2 hours at :30)",
     expectedTotal: 539,
     icon: <Calculator className="h-4 w-4" />,
     functionName: "calculate-member-scores",
@@ -83,10 +100,37 @@ const SYNC_CONFIGS: SyncConfig[] = [
   {
     id: "state-scores",
     label: "State Aggregates",
-    description: "Recalculates state-level score averages",
+    description: "Recalculates state-level score averages (Every 2 hours at :45)",
     expectedTotal: 50,
     icon: <MapPin className="h-4 w-4" />,
     functionName: "recalculate-state-scores",
+    category: "scores",
+  },
+  {
+    id: "issue-signals",
+    label: "Issue Classification",
+    description: "AI classifies bills/votes into political issues (Every 6 hours at :15)",
+    expectedTotal: 5000,
+    icon: <Brain className="h-4 w-4" />,
+    functionName: "classify-issue-signals",
+    category: "scores",
+  },
+  {
+    id: "politician-positions",
+    label: "Politician Positions",
+    description: "Computes politician stances per issue from signals (Every 6 hours at :30)",
+    expectedTotal: 539,
+    icon: <BarChart3 className="h-4 w-4" />,
+    functionName: "compute-politician-positions",
+    category: "scores",
+  },
+  {
+    id: "notifications",
+    label: "Email Notifications",
+    description: "Sends tracked member vote alerts to users (Daily at 8 AM)",
+    expectedTotal: 100,
+    icon: <Bell className="h-4 w-4" />,
+    functionName: "send-member-notifications",
     category: "scores",
   },
 ];
