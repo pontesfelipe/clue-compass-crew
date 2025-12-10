@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.sync-member-details]
 verify_jwt = false
+
+[functions.data-status]
+verify_jwt = false

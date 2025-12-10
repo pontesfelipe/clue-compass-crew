@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SyncStatus } from "@/components/SyncStatus";
+import { DataFreshnessIndicator } from "@/components/DataFreshnessIndicator";
 
 export function Footer() {
   return (
@@ -56,9 +57,12 @@ export function Footer() {
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} CivicScore. All rights reserved.
             </p>
-            <p className="text-xs text-muted-foreground">
-              Data sourced from Congress.gov API
-            </p>
+            <div className="flex items-center gap-4">
+              <DataFreshnessIndicator />
+              <p className="text-xs text-muted-foreground">
+                Data sourced from Congress.gov & FEC
+              </p>
+            </div>
           </div>
         </div>
       </div>
