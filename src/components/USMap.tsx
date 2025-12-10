@@ -16,19 +16,20 @@ const getScoreColor = (score: number | null): string => {
 };
 
 // Fixed US state grid layout - DO NOT REORDER
+// Column 14 contains territories (non-voting delegates)
 const US_GRID: (string | null)[][] = [
-  ["WA", "MT", "ND", "MN", "WI", "MI", "NY", "VT", "NH", "ME", null, null, null],
-  ["OR", "ID", "WY", "SD", "IA", "IL", "IN", "OH", "PA", "NJ", "CT", "RI", "MA"],
-  ["CA", "NV", "UT", "CO", "NE", "MO", "KY", "WV", "VA", "MD", "DE", null, null],
-  ["AZ", "NM", "KS", "AR", "TN", "NC", "SC", null, null, null, null, null, null],
-  ["TX", "OK", "LA", "MS", "AL", "GA", null, null, null, null, null, null, null],
-  ["HI", "AK", "FL", null, null, null, null, null, null, null, null, null, null],
+  ["WA", "MT", "ND", "MN", "WI", "MI", "NY", "VT", "NH", "ME", null, null, null, "DC"],
+  ["OR", "ID", "WY", "SD", "IA", "IL", "IN", "OH", "PA", "NJ", "CT", "RI", "MA", "PR"],
+  ["CA", "NV", "UT", "CO", "NE", "MO", "KY", "WV", "VA", "MD", "DE", null, null, "VI"],
+  ["AZ", "NM", "KS", "AR", "TN", "NC", "SC", null, null, null, null, null, null, "GU"],
+  ["TX", "OK", "LA", "MS", "AL", "GA", null, null, null, null, null, null, null, "AS"],
+  ["HI", "AK", "FL", null, null, null, null, null, null, null, null, null, null, "MP"],
 ];
 
-// Territories rendered separately - non-voting delegates
+// Territories - non-voting delegates (for filtering/stats purposes)
 const TERRITORIES = ["DC", "PR", "VI", "GU", "AS", "MP"];
 
-const GRID_COLUMNS = 13; // Longest row length
+const GRID_COLUMNS = 14; // 13 states + 1 territory column
 
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
@@ -150,17 +151,9 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
               if (stateAbbr === null) {
                 return <div key={`empty-${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
               }
-              return renderStateTile(stateAbbr);
+              return renderStateTile(stateAbbr, isTerritory(stateAbbr));
             })
           ))}
-        </div>
-
-        {/* Territories Section */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">Territories (Non-Voting)</p>
-          <div className="flex gap-1 flex-wrap" style={{ maxWidth: `calc(${TERRITORIES.length} * (100% / ${GRID_COLUMNS}) + ${TERRITORIES.length - 1} * 0.25rem)` }}>
-            {TERRITORIES.map(territory => renderStateTile(territory, true))}
-          </div>
         </div>
       </div>
 
