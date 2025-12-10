@@ -12,12 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
 import { EditUserDialog } from "@/components/admin/EditUserDialog";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
+import { UserActivityLog } from "@/components/admin/UserActivityLog";
 import {
   Select,
   SelectContent,
@@ -347,6 +348,10 @@ export default function AdminPage() {
               <TabsTrigger value="inspector" className="flex items-center gap-2">
                 <FileSearch className="h-4 w-4" />
                 Data Inspector
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Activity Log
               </TabsTrigger>
             </TabsList>
 
@@ -679,6 +684,10 @@ export default function AdminPage() {
 
             <TabsContent value="inspector">
               <DataInspectorContent />
+            </TabsContent>
+
+            <TabsContent value="activity">
+              <UserActivityLog />
             </TabsContent>
           </Tabs>
         </main>
