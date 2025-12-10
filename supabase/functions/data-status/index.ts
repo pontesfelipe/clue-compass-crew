@@ -24,6 +24,39 @@ Deno.serve(async (req) => {
       throw error;
     }
 
+    // Get bill classification progress by chamber
+    const { data: houseBills } = await supabase
+      .from("bills")
+      .select("id", { count: "exact", head: true })
+      .eq("bill_type", "hr");
+    
+    const { data: senateBills } = await supabase
+      .from("bills")
+      .select("id", { count: "exact", head: true })
+      .eq("bill_type", "s");
+
+    // Get classified bill IDs from issue_signals
+    const { data: classifiedSignals } = await supabase
+      .from("issue_signals")
+      .select("external_ref")
+      .eq("signal_type", "bill_sponsorship");
+
+    const classifiedBillIds = new Set(classifiedSignals?.map(s => s.external_ref) || []);
+
+    // Get bill IDs by chamber to count classified ones
+    const { data: houseBillIds } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("bill_type", "hr");
+    
+    const { data: senateBillIds } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("bill_type", "s");
+
+    const houseClassified = (houseBillIds || []).filter(b => classifiedBillIds.has(b.id)).length;
+    const senateClassified = (senateBillIds || []).filter(b => classifiedBillIds.has(b.id)).length;
+
     // Build response with last synced timestamps
     const syncMap = new Map(
       (syncProgress || []).map((s) => [s.id, s])
@@ -47,6 +80,18 @@ Deno.serve(async (req) => {
       
       member_scores_last_synced_at: syncMap.get("member-scores")?.last_run_at || null,
       member_scores_status: syncMap.get("member-scores")?.status || "idle",
+
+      // Bill classification progress by chamber
+      classification: {
+        house: {
+          total: houseBillIds?.length || 0,
+          classified: houseClassified,
+        },
+        senate: {
+          total: senateBillIds?.length || 0,
+          classified: senateClassified,
+        },
+      },
       
       // Computed freshness metadata
       last_updated: new Date().toISOString(),
