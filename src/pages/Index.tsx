@@ -1,5 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
 import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
 import { USMap } from "@/components/USMap";
@@ -26,6 +27,7 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <Header />
+      <ProfileCompletionBanner />
       
       {/* Hero Section */}
       <section className="relative overflow-hidden">
