@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause } from "lucide-react";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
 
@@ -16,6 +16,8 @@ interface SyncProgressData {
   current_offset: number;
   updated_at: string | null;
   metadata?: Json;
+  last_matched_count?: number | null;
+  error_message?: string | null;
 }
 
 interface SyncConfig {
@@ -24,6 +26,8 @@ interface SyncConfig {
   description: string;
   expectedTotal?: number;
   icon: React.ReactNode;
+  functionName?: string;
+  category: "congress" | "finance" | "scores";
 }
 
 const SYNC_CONFIGS: SyncConfig[] = [
@@ -32,45 +36,60 @@ const SYNC_CONFIGS: SyncConfig[] = [
     label: "Congress Members",
     description: "Syncs all 539 members of Congress from Congress.gov",
     expectedTotal: 539,
-    icon: <span className="text-lg">👥</span>,
+    icon: <Users className="h-4 w-4" />,
+    category: "congress",
   },
   {
     id: "bills",
     label: "Bills & Sponsorships",
     description: "Syncs all bills from Congress 118 & 119 with sponsorship data",
     expectedTotal: 20000,
-    icon: <span className="text-lg">📜</span>,
+    icon: <FileText className="h-4 w-4" />,
+    category: "congress",
   },
   {
     id: "votes",
     label: "Votes & Positions",
     description: "Syncs House and Senate votes with individual member positions",
     expectedTotal: 2000,
-    icon: <span className="text-lg">🗳️</span>,
+    icon: <Vote className="h-4 w-4" />,
+    category: "congress",
   },
   {
     id: "fec-finance",
-    label: "FEC Finance (Legacy)",
-    description: "Syncs campaign finance data from FEC API (old)",
+    label: "FEC Contributions",
+    description: "Syncs itemized contributions from FEC API",
     expectedTotal: 539,
-    icon: <span className="text-lg">💵</span>,
+    icon: <DollarSign className="h-4 w-4" />,
+    category: "finance",
   },
   {
     id: "fec-funding",
     label: "FEC Funding Metrics",
-    description: "Syncs funding metrics with grassroots/PAC/local scores per cycle",
+    description: "Computes grassroots/PAC/local scores per cycle",
     expectedTotal: 539,
-    icon: <span className="text-lg">💰</span>,
+    icon: <DollarSign className="h-4 w-4" />,
+    category: "finance",
   },
   {
-    id: "member-details",
-    label: "Member Details",
-    description: "Syncs additional member details and committee assignments",
+    id: "member-scores",
+    label: "Member Scores",
+    description: "Recalculates all member scores from latest data",
     expectedTotal: 539,
-    icon: <span className="text-lg">📋</span>,
+    icon: <Calculator className="h-4 w-4" />,
+    functionName: "calculate-member-scores",
+    category: "scores",
+  },
+  {
+    id: "state-scores",
+    label: "State Aggregates",
+    description: "Recalculates state-level score averages",
+    expectedTotal: 50,
+    icon: <MapPin className="h-4 w-4" />,
+    functionName: "recalculate-state-scores",
+    category: "scores",
   },
 ];
-
 function formatTimeAgo(dateString: string | null): string {
   if (!dateString) return "Never";
   
@@ -134,6 +153,7 @@ export function SyncStatusCard() {
   const [isLoading, setIsLoading] = useState(true);
   const [triggeringSyncId, setTriggeringSyncId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<"all" | "congress" | "finance" | "scores">("all");
 
   const fetchSyncProgress = async () => {
     try {
@@ -154,7 +174,6 @@ export function SyncStatusCard() {
   useEffect(() => {
     fetchSyncProgress();
     
-    // Auto-refresh every 5 seconds if any sync is running
     const interval = setInterval(() => {
       if (autoRefresh) {
         fetchSyncProgress();
@@ -164,33 +183,31 @@ export function SyncStatusCard() {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  // Check if any sync is running to enable auto-refresh
   useEffect(() => {
     const hasRunning = syncProgress.some((s) => s.status === "running");
     setAutoRefresh(hasRunning);
   }, [syncProgress]);
 
-  const triggerSync = async (syncType: string) => {
-    setTriggeringSyncId(syncType);
+  const triggerSync = async (config: SyncConfig) => {
+    setTriggeringSyncId(config.id);
     try {
-      const functionName = `sync-${syncType}`;
+      const functionName = config.functionName || `sync-${config.id}`;
       const { error } = await supabase.functions.invoke(functionName);
 
       if (error) throw error;
 
       toast({
         title: "Sync Started",
-        description: `${syncType.replace(/-/g, " ")} sync has been triggered.`,
+        description: `${config.label} sync has been triggered.`,
       });
 
-      // Start auto-refresh
       setAutoRefresh(true);
       setTimeout(fetchSyncProgress, 1000);
     } catch (error) {
       console.error("Error triggering sync:", error);
       toast({
         title: "Error",
-        description: `Failed to trigger ${syncType} sync`,
+        description: `Failed to trigger ${config.label} sync`,
         variant: "destructive",
       });
     } finally {
@@ -216,6 +233,20 @@ export function SyncStatusCard() {
     return null;
   };
 
+  const filteredConfigs = SYNC_CONFIGS.filter(
+    (c) => activeCategory === "all" || c.category === activeCategory
+  );
+
+  const getSyncStats = () => {
+    const running = syncProgress.filter((s) => s.status === "running").length;
+    const complete = syncProgress.filter((s) => s.status === "complete").length;
+    const errors = syncProgress.filter((s) => s.status === "error").length;
+    const total = SYNC_CONFIGS.length;
+    return { running, complete, errors, total };
+  };
+
+  const stats = getSyncStats();
+
   if (isLoading) {
     return (
       <Card>
@@ -227,121 +258,193 @@ export function SyncStatusCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            Data Synchronization Status
-            {autoRefresh && (
-              <Badge variant="outline" className="text-xs">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full mr-1 animate-pulse" />
-                Live
-              </Badge>
-            )}
-          </span>
-          <Button variant="outline" size="sm" onClick={fetchSyncProgress} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </CardTitle>
-        <CardDescription>
-          Monitor and trigger data sync operations from external APIs
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {SYNC_CONFIGS.map((config) => {
-            const progress = syncProgress.find((s) => s.id === config.id);
-            const percentage = getProgressPercentage(config, progress);
-            const metadataInfo = getMetadataInfo(progress);
-            const isRunning = progress?.status === "running";
-            const isTriggering = triggeringSyncId === config.id;
+    <div className="space-y-6">
+      {/* Summary Header */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Running</CardDescription>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              {stats.running > 0 && <Loader2 className="h-5 w-5 animate-spin text-amber-500" />}
+              {stats.running}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Complete</CardDescription>
+            <CardTitle className="text-2xl flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 className="h-5 w-5" />
+              {stats.complete}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Errors</CardDescription>
+            <CardTitle className="text-2xl flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              {stats.errors}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Total Sources</CardDescription>
+            <CardTitle className="text-2xl">{stats.total}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
 
-            return (
-              <div
-                key={config.id}
-                className={`p-4 rounded-lg border-2 transition-colors ${
-                  isRunning ? "border-amber-500/50 bg-amber-500/5" : "border-border"
-                }`}
+      {/* Main Sync Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Data Synchronization
+              {autoRefresh && (
+                <Badge variant="outline" className="text-xs ml-2">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full mr-1 animate-pulse" />
+                  Live
+                </Badge>
+              )}
+            </span>
+            <Button variant="outline" size="sm" onClick={fetchSyncProgress}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </CardTitle>
+          <CardDescription>
+            Monitor and trigger data sync from Congress.gov, FEC, and score calculations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Category Filter */}
+          <div className="flex gap-2 mb-6">
+            {(["all", "congress", "finance", "scores"] as const).map((cat) => (
+              <Button
+                key={cat}
+                variant={activeCategory === cat ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveCategory(cat)}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="mt-1">{config.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold">{config.label}</h3>
-                        {getStatusBadge(progress?.status || null)}
+                {cat === "all" ? "All" : cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            {filteredConfigs.map((config) => {
+              const progress = syncProgress.find((s) => s.id === config.id);
+              const percentage = getProgressPercentage(config, progress);
+              const metadataInfo = getMetadataInfo(progress);
+              const isRunning = progress?.status === "running";
+              const isTriggering = triggeringSyncId === config.id;
+
+              return (
+                <div
+                  key={config.id}
+                  className={`p-4 rounded-lg border-2 transition-colors ${
+                    isRunning ? "border-amber-500/50 bg-amber-500/5" : 
+                    progress?.status === "error" ? "border-destructive/50 bg-destructive/5" :
+                    "border-border"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="mt-1 p-2 rounded-md bg-muted">
+                        {config.icon}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{config.description}</p>
-                      
-                      {/* Progress info */}
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Processed: <span className="font-medium text-foreground">{(progress?.total_processed || 0).toLocaleString()}</span>
-                            {config.expectedTotal && (
-                              <span className="text-muted-foreground"> / ~{config.expectedTotal.toLocaleString()}</span>
-                            )}
-                          </span>
-                          <span className="font-medium">{percentage}%</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold">{config.label}</h3>
+                          {getStatusBadge(progress?.status || null)}
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {config.category}
+                          </Badge>
                         </div>
+                        <p className="text-sm text-muted-foreground mt-1">{config.description}</p>
                         
-                        <Progress 
-                          value={percentage} 
-                          className={`h-2 ${isRunning ? "animate-pulse" : ""}`}
-                        />
-                        
-                        {metadataInfo && (
-                          <p className="text-xs text-muted-foreground italic">
-                            Current: {metadataInfo}
-                          </p>
-                        )}
-                        
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            Last run: {formatTimeAgo(progress?.last_run_at || null)}
-                          </span>
-                          {progress?.updated_at && progress.status === "running" && (
-                            <span className="flex items-center gap-1">
-                              Updated: {formatTimeAgo(progress.updated_at)}
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Processed: <span className="font-medium text-foreground">{(progress?.total_processed || 0).toLocaleString()}</span>
+                              {config.expectedTotal && (
+                                <span className="text-muted-foreground"> / ~{config.expectedTotal.toLocaleString()}</span>
+                              )}
+                              {progress?.last_matched_count != null && progress.last_matched_count > 0 && (
+                                <span className="text-emerald-600 ml-2">
+                                  (+{progress.last_matched_count} matched)
+                                </span>
+                              )}
                             </span>
+                            <span className="font-medium">{percentage}%</span>
+                          </div>
+                          
+                          <Progress 
+                            value={percentage} 
+                            className={`h-2 ${isRunning ? "animate-pulse" : ""}`}
+                          />
+                          
+                          {metadataInfo && (
+                            <p className="text-xs text-muted-foreground italic">
+                              Current: {metadataInfo}
+                            </p>
                           )}
+
+                          {progress?.error_message && (
+                            <p className="text-xs text-destructive">
+                              Error: {progress.error_message}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Last run: {formatTimeAgo(progress?.last_run_at || null)}
+                            </span>
+                            {progress?.updated_at && progress.status === "running" && (
+                              <span className="flex items-center gap-1">
+                                Updated: {formatTimeAgo(progress.updated_at)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
+                    
+                    <Button
+                      variant={isRunning ? "outline" : "default"}
+                      size="sm"
+                      onClick={() => triggerSync(config)}
+                      disabled={isTriggering || isRunning}
+                      className="shrink-0"
+                    >
+                      {isTriggering ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Starting...
+                        </>
+                      ) : isRunning ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-1" />
+                          Run
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  
-                  <Button
-                    variant={isRunning ? "outline" : "default"}
-                    size="sm"
-                    onClick={() => triggerSync(config.id)}
-                    disabled={isTriggering || isRunning}
-                    className="shrink-0"
-                  >
-                    {isTriggering ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        Starting...
-                      </>
-                    ) : isRunning ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        Running...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4 mr-1" />
-                        Run Sync
-                      </>
-                    )}
-                  </Button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
