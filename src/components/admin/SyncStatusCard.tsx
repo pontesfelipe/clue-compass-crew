@@ -301,9 +301,14 @@ export function SyncStatusCard() {
     setTriggeringSyncId(config.id);
     try {
       const functionName = config.functionName || `sync-${config.id}`;
-      const { error } = await supabase.functions.invoke(functionName);
+      const { data, error } = await supabase.functions.invoke(functionName);
 
       if (error) throw error;
+      
+      // Check if the response contains an error
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       toast({
         title: "Sync Started",
@@ -316,9 +321,11 @@ export function SyncStatusCard() {
       console.error("Error triggering sync:", error);
       toast({
         title: "Error",
-        description: `Failed to trigger ${config.label} sync`,
+        description: error instanceof Error ? error.message : `Failed to trigger ${config.label} sync`,
         variant: "destructive",
       });
+      // Refresh to show error in dashboard
+      setTimeout(fetchSyncProgress, 500);
     } finally {
       setTriggeringSyncId(null);
     }
