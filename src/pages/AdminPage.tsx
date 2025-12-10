@@ -585,19 +585,6 @@ export default function AdminPage() {
                                   <SelectItem value="admin">Admin</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {currentRole && (
-                                <Badge 
-                                  variant={
-                                    currentRole === "admin" 
-                                      ? "default" 
-                                      : currentRole === "moderator" 
-                                        ? "secondary" 
-                                        : "outline"
-                                  }
-                                >
-                                  {currentRole}
-                                </Badge>
-                              )}
                               <Button
                                 variant="outline"
                                 size="icon"
