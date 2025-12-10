@@ -20,6 +20,238 @@ interface DataSourceInfo {
   fields: { name: string; source: string; notes: string }[];
 }
 
+// UI Section to Data Source mapping - mirrors MemberPage layout
+interface UISectionMapping {
+  section: string;
+  description: string;
+  component?: string;
+  tables: string[];
+  syncFunctions: string[];
+  fields: { uiField: string; dbField: string; table: string; source: string }[];
+}
+
+const uiSectionMappings: UISectionMapping[] = [
+  {
+    section: "Member Header",
+    description: "Photo, name, party, state, chamber, district badges",
+    component: "MemberPage (inline)",
+    tables: ["members"],
+    syncFunctions: ["sync-congress-members"],
+    fields: [
+      { uiField: "Photo", dbField: "image_url", table: "members", source: "Congress.gov /member/{id} → depiction.imageUrl" },
+      { uiField: "Full Name", dbField: "full_name", table: "members", source: "Congress.gov /member → name" },
+      { uiField: "First Name", dbField: "first_name", table: "members", source: "Congress.gov /member → parsed from name" },
+      { uiField: "Last Name", dbField: "last_name", table: "members", source: "Congress.gov /member → parsed from name" },
+      { uiField: "Party Badge", dbField: "party", table: "members", source: "Congress.gov /member → partyName (D/R/I)" },
+      { uiField: "Chamber Badge", dbField: "chamber", table: "members", source: "Inferred: has district = house, else senate" },
+      { uiField: "District Badge", dbField: "district", table: "members", source: "Congress.gov /member → district (House only)" },
+      { uiField: "State", dbField: "state", table: "members", source: "Congress.gov /member → state" },
+      { uiField: "Website Button", dbField: "website_url", table: "members", source: "Congress.gov /member/{id} → officialWebsiteUrl" },
+      { uiField: "Twitter Button", dbField: "twitter_handle", table: "members", source: "Congress.gov /member/{id} → depiction or manual" },
+    ],
+  },
+  {
+    section: "Score Card",
+    description: "Overall score ring in the header",
+    component: "ScoreRing",
+    tables: ["member_scores"],
+    syncFunctions: ["calculate-member-scores"],
+    fields: [
+      { uiField: "Overall Score", dbField: "overall_score", table: "member_scores", source: "Calculated: weighted avg of sub-scores" },
+    ],
+  },
+  {
+    section: "Stats Row",
+    description: "6 stat cards below header",
+    component: "StatsCard",
+    tables: ["member_scores", "members"],
+    syncFunctions: ["calculate-member-scores", "sync-congress-members"],
+    fields: [
+      { uiField: "Bills Sponsored", dbField: "bills_sponsored", table: "member_scores", source: "COUNT from bill_sponsorships WHERE is_sponsor=true" },
+      { uiField: "Bills Co-sponsored", dbField: "bills_cosponsored", table: "member_scores", source: "COUNT from bill_sponsorships WHERE is_sponsor=false" },
+      { uiField: "Attendance Rate", dbField: "attendance_score", table: "member_scores", source: "Calculated: votes_cast / total_votes × 100" },
+      { uiField: "Time in Office", dbField: "start_date", table: "members", source: "Congress.gov /member/{id} → terms[0].startDate" },
+      { uiField: "Term", dbField: "start_date", table: "members", source: "Calculated from start_date + chamber type" },
+      { uiField: "Next Election", dbField: "start_date", table: "members", source: "Calculated from start_date + chamber (2yr House, 6yr Senate)" },
+    ],
+  },
+  {
+    section: "Contact Information",
+    description: "Phone and office address",
+    component: "MemberPage (inline)",
+    tables: ["members"],
+    syncFunctions: ["sync-congress-members"],
+    fields: [
+      { uiField: "Phone", dbField: "phone", table: "members", source: "Congress.gov /member/{id} → addressInformation.phoneNumber" },
+      { uiField: "Office Address", dbField: "office_address", table: "members", source: "Congress.gov /member/{id} → addressInformation.officeAddress" },
+      { uiField: "Office City", dbField: "office_city", table: "members", source: "Congress.gov /member/{id} → addressInformation.city" },
+      { uiField: "Office State", dbField: "office_state", table: "members", source: "Congress.gov /member/{id} → addressInformation.district" },
+      { uiField: "Office Zip", dbField: "office_zip", table: "members", source: "Congress.gov /member/{id} → addressInformation.zipCode" },
+    ],
+  },
+  {
+    section: "Your Alignment",
+    description: "Personalized alignment score widget",
+    component: "AlignmentWidget",
+    tables: ["user_politician_alignment", "politician_issue_positions", "user_answers", "user_issue_priorities"],
+    syncFunctions: ["compute-politician-positions", "classify-issue-signals"],
+    fields: [
+      { uiField: "Alignment Score", dbField: "overall_alignment", table: "user_politician_alignment", source: "Calculated: user answers vs politician positions" },
+      { uiField: "Issue Breakdown", dbField: "breakdown", table: "user_politician_alignment", source: "JSON: per-issue alignment scores" },
+      { uiField: "Politician Position", dbField: "score_value", table: "politician_issue_positions", source: "Calculated from issue_signals (bills/votes)" },
+    ],
+  },
+  {
+    section: "AI Summary",
+    description: "AI-generated activity summary",
+    component: "MemberAISummary",
+    tables: ["member_summaries"],
+    syncFunctions: ["generate-member-summary (on-demand)"],
+    fields: [
+      { uiField: "Summary Text", dbField: "summary", table: "member_summaries", source: "AI Generated via Lovable AI (gemini-2.5-flash)" },
+      { uiField: "Generated Date", dbField: "generated_at", table: "member_summaries", source: "Timestamp when generated (1/month limit)" },
+    ],
+  },
+  {
+    section: "Policy Areas",
+    description: "Top 10 policy areas with state/party comparison",
+    component: "MemberPolicyAreas",
+    tables: ["bill_sponsorships", "bills"],
+    syncFunctions: ["sync-bills"],
+    fields: [
+      { uiField: "Policy Area Name", dbField: "policy_area", table: "bills", source: "Congress.gov /bill/{id} → policyArea.name" },
+      { uiField: "Bill Count", dbField: "count(*)", table: "bill_sponsorships", source: "Aggregated from bill_sponsorships JOIN bills" },
+    ],
+  },
+  {
+    section: "Committees",
+    description: "Committee assignments with roles",
+    component: "MemberCommittees",
+    tables: ["member_committees"],
+    syncFunctions: ["sync-member-details"],
+    fields: [
+      { uiField: "Committee Name", dbField: "committee_name", table: "member_committees", source: "Congress.gov /member/{id} → committeeAssignments[].name" },
+      { uiField: "Committee Code", dbField: "committee_code", table: "member_committees", source: "Congress.gov /member/{id} → committeeAssignments[].systemCode" },
+      { uiField: "Chamber", dbField: "chamber", table: "member_committees", source: "Congress.gov /member/{id} → committeeAssignments[].chamber" },
+      { uiField: "Chair Badge", dbField: "is_chair", table: "member_committees", source: "Inferred from assignment data" },
+      { uiField: "Ranking Badge", dbField: "is_ranking_member", table: "member_committees", source: "Inferred from assignment data" },
+    ],
+  },
+  {
+    section: "Voting Comparison",
+    description: "Party and state delegation alignment",
+    component: "MemberVotingComparison",
+    tables: ["member_votes", "members"],
+    syncFunctions: ["sync-votes"],
+    fields: [
+      { uiField: "Party Alignment %", dbField: "position", table: "member_votes", source: "Calculated: member votes vs party majority on each vote" },
+      { uiField: "State Alignment %", dbField: "position", table: "member_votes", source: "Calculated: member votes vs state delegation majority" },
+      { uiField: "Total Votes", dbField: "count(*)", table: "member_votes", source: "Count of member_votes records" },
+    ],
+  },
+  {
+    section: "Funding Profile",
+    description: "Campaign finance metrics and charts",
+    component: "FundingProfile",
+    tables: ["funding_metrics"],
+    syncFunctions: ["sync-fec-funding"],
+    fields: [
+      { uiField: "Total Receipts", dbField: "total_receipts", table: "funding_metrics", source: "FEC API /candidate/{id}/totals → receipts" },
+      { uiField: "Individual %", dbField: "pct_from_individuals", table: "funding_metrics", source: "Calculated: individual_contributions / total" },
+      { uiField: "PAC %", dbField: "pct_from_committees", table: "funding_metrics", source: "Calculated: committee_contributions / total" },
+      { uiField: "Small Donor %", dbField: "pct_from_small_donors", table: "funding_metrics", source: "Calculated: contributions < $200 / total" },
+      { uiField: "In-State %", dbField: "pct_from_in_state", table: "funding_metrics", source: "Calculated from contributor_state matching member state" },
+      { uiField: "Grassroots Score", dbField: "grassroots_support_score", table: "funding_metrics", source: "Calculated: based on small donor %" },
+      { uiField: "PAC Dependence", dbField: "pac_dependence_score", table: "funding_metrics", source: "Calculated: based on PAC %" },
+      { uiField: "Local Money Score", dbField: "local_money_score", table: "funding_metrics", source: "Calculated: based on in-state %" },
+    ],
+  },
+  {
+    section: "Recent Activity",
+    description: "Member statements and recent actions",
+    component: "MemberActivity",
+    tables: ["member_statements"],
+    syncFunctions: ["sync-member-details"],
+    fields: [
+      { uiField: "Activity Title", dbField: "title", table: "member_statements", source: "Congress.gov /member/{id}/sponsored-legislation → title" },
+      { uiField: "Activity Date", dbField: "statement_date", table: "member_statements", source: "Congress.gov → introducedDate" },
+      { uiField: "Activity Type", dbField: "statement_type", table: "member_statements", source: "Hardcoded: 'sponsored_bill'" },
+      { uiField: "Subjects", dbField: "subjects", table: "member_statements", source: "Congress.gov → policyArea.name" },
+    ],
+  },
+  {
+    section: "Score Breakdown",
+    description: "Detailed score categories with weights",
+    component: "ScoreBreakdown",
+    tables: ["member_scores"],
+    syncFunctions: ["calculate-member-scores"],
+    fields: [
+      { uiField: "Productivity Score", dbField: "productivity_score", table: "member_scores", source: "Calculated: bills sponsored × weight + enacted × bonus" },
+      { uiField: "Attendance Score", dbField: "attendance_score", table: "member_scores", source: "Calculated: votes_cast / total_votes × 100" },
+      { uiField: "Bipartisanship Score", dbField: "bipartisanship_score", table: "member_scores", source: "Calculated: cross-party bill collaborations" },
+      { uiField: "Issue Alignment", dbField: "issue_alignment_score", table: "member_scores", source: "Calculated: based on user preferences (if set)" },
+    ],
+  },
+  {
+    section: "Sponsored Bills",
+    description: "List of bills where member is primary sponsor",
+    component: "MemberPage (inline)",
+    tables: ["bill_sponsorships", "bills"],
+    syncFunctions: ["sync-bills"],
+    fields: [
+      { uiField: "Bill Title", dbField: "short_title, title", table: "bills", source: "Congress.gov /bill → title or shortTitle[0].title" },
+      { uiField: "Bill Number", dbField: "bill_type, bill_number", table: "bills", source: "Congress.gov /bill → type + number (e.g., H.R. 123)" },
+      { uiField: "Status Badge", dbField: "enacted, latest_action_text", table: "bills", source: "Congress.gov /bill → latestAction.text, actions" },
+      { uiField: "Policy Area", dbField: "policy_area", table: "bills", source: "Congress.gov /bill → policyArea.name" },
+    ],
+  },
+  {
+    section: "Cosponsored Bills",
+    description: "List of bills where member is cosponsor",
+    component: "MemberPage (inline)",
+    tables: ["bill_sponsorships", "bills"],
+    syncFunctions: ["sync-bills"],
+    fields: [
+      { uiField: "Bill Title", dbField: "short_title, title", table: "bills", source: "Congress.gov /bill → title or shortTitle[0].title" },
+      { uiField: "Bill Number", dbField: "bill_type, bill_number", table: "bills", source: "Congress.gov /bill → type + number" },
+      { uiField: "Status Badge", dbField: "enacted, latest_action_text", table: "bills", source: "Congress.gov /bill → latestAction.text" },
+      { uiField: "Policy Area", dbField: "policy_area", table: "bills", source: "Congress.gov /bill → policyArea.name" },
+    ],
+  },
+  {
+    section: "Recent Votes",
+    description: "Vote history with position badges",
+    component: "MemberPage (inline)",
+    tables: ["member_votes", "votes"],
+    syncFunctions: ["sync-votes"],
+    fields: [
+      { uiField: "Vote Question", dbField: "question", table: "votes", source: "Congress.gov /vote → question OR House Clerk XML" },
+      { uiField: "Vote Date", dbField: "vote_date", table: "votes", source: "Congress.gov /vote → date" },
+      { uiField: "Position Badge", dbField: "position", table: "member_votes", source: "House Clerk XML or Senate.gov XML → Yea/Nay/Present/NotVoting" },
+      { uiField: "Result", dbField: "result", table: "votes", source: "Congress.gov /vote → result" },
+      { uiField: "Yea/Nay Counts", dbField: "total_yea, total_nay", table: "votes", source: "Congress.gov /vote → count.yea, count.nay" },
+    ],
+  },
+  {
+    section: "Financial Relationships",
+    description: "Contributors, lobbying, and sponsors tabs",
+    component: "MemberFinanceSection",
+    tables: ["member_contributions", "member_lobbying", "member_sponsors"],
+    syncFunctions: ["sync-fec-finance"],
+    fields: [
+      { uiField: "Contributor Name", dbField: "contributor_name", table: "member_contributions", source: "FEC API /schedules/schedule_a → contributor_name" },
+      { uiField: "Contribution Amount", dbField: "amount", table: "member_contributions", source: "FEC API /schedules/schedule_a → contribution_receipt_amount" },
+      { uiField: "Contributor Type", dbField: "contributor_type", table: "member_contributions", source: "Inferred from employer/occupation/entity_type" },
+      { uiField: "Contributor State", dbField: "contributor_state", table: "member_contributions", source: "FEC API /schedules/schedule_a → contributor_state" },
+      { uiField: "Industry", dbField: "industry", table: "member_contributions", source: "Inferred from contributor employer/occupation" },
+      { uiField: "Lobbying Industry", dbField: "industry", table: "member_lobbying", source: "OpenSecrets/lobbying data (if integrated)" },
+      { uiField: "Lobbying Amount", dbField: "total_spent", table: "member_lobbying", source: "OpenSecrets/lobbying data (if integrated)" },
+      { uiField: "Sponsor Name", dbField: "sponsor_name", table: "member_sponsors", source: "Aggregated from major contributors > $5000" },
+      { uiField: "Sponsor Total", dbField: "total_support", table: "member_sponsors", source: "SUM(contributions) from same contributor" },
+    ],
+  },
+];
+
 const dataSources: DataSourceInfo[] = [
   {
     table: "members",
@@ -54,91 +286,6 @@ const dataSources: DataSourceInfo[] = [
       { name: "attendance_score", source: "Calculated", notes: "votes_cast / total_votes * 100" },
       { name: "bipartisanship_score", source: "Calculated", notes: "Cross-party bill collaboration" },
       { name: "overall_score", source: "Calculated", notes: "Weighted average of sub-scores" },
-    ],
-  },
-  {
-    table: "bill_sponsorships",
-    source: "Congress.gov API",
-    syncFunction: "sync-bills",
-    fields: [
-      { name: "bill_id", source: "/bill/{congress}/{type}/{number}", notes: "Foreign key to bills table" },
-      { name: "member_id", source: "Mapped from bioguideId", notes: "Foreign key to members table" },
-      { name: "is_sponsor", source: "/bill sponsors endpoint", notes: "Primary sponsor = true" },
-      { name: "is_original_cosponsor", source: "/bill cosponsors endpoint", notes: "From isOriginalCosponsor" },
-      { name: "cosponsored_date", source: "/bill cosponsors endpoint", notes: "From sponsorshipDate" },
-    ],
-  },
-  {
-    table: "member_votes",
-    source: "Congress.gov API + House Clerk XML",
-    syncFunction: "sync-votes",
-    fields: [
-      { name: "vote_id", source: "/vote endpoint", notes: "Foreign key to votes table" },
-      { name: "member_id", source: "Mapped from bioguideId", notes: "Foreign key to members table" },
-      { name: "position", source: "Vote roll call data", notes: "yea, nay, present, not_voting" },
-      { name: "position_normalized", source: "Parsed from raw", notes: "Standardized position" },
-    ],
-  },
-  {
-    table: "member_committees",
-    source: "Congress.gov API",
-    syncFunction: "sync-member-details",
-    fields: [
-      { name: "committee_code", source: "/member/{id} committeeAssignments", notes: "Committee systemCode" },
-      { name: "committee_name", source: "/member/{id} committeeAssignments", notes: "Committee name" },
-      { name: "is_chair", source: "/member/{id} committeeAssignments", notes: "Chair position" },
-      { name: "is_ranking_member", source: "/member/{id} committeeAssignments", notes: "Ranking member" },
-      { name: "rank", source: "Index position", notes: "Order in list" },
-    ],
-  },
-  {
-    table: "member_contributions",
-    source: "FEC API (api.open.fec.gov)",
-    syncFunction: "sync-fec-finance",
-    fields: [
-      { name: "contributor_name", source: "/schedules/schedule_a", notes: "From contributor_name field - should be actual donor name" },
-      { name: "contributor_type", source: "Inferred from employer/occupation", notes: "individual, pac, corporate, union" },
-      { name: "amount", source: "/schedules/schedule_a", notes: "contribution_receipt_amount" },
-      { name: "cycle", source: "Request parameter", notes: "Election cycle (e.g., 2024)" },
-      { name: "industry", source: "Inferred from employer/occupation", notes: "e.g., Technology, Finance" },
-      { name: "contributor_state", source: "/schedules/schedule_a", notes: "contributor_state field" },
-    ],
-  },
-  {
-    table: "member_sponsors",
-    source: "FEC API (api.open.fec.gov)",
-    syncFunction: "sync-fec-finance",
-    fields: [
-      { name: "sponsor_name", source: "Aggregated from contributions", notes: "Major donors > $5000" },
-      { name: "sponsor_type", source: "Inferred from contributor type", notes: "pac, corporate, union, party" },
-      { name: "relationship_type", source: "Categorized", notes: "major_donor, contributor, party_support" },
-      { name: "total_support", source: "SUM of contributions", notes: "Total from this sponsor" },
-    ],
-  },
-  {
-    table: "funding_metrics",
-    source: "FEC API (api.open.fec.gov)",
-    syncFunction: "sync-fec-funding",
-    fields: [
-      { name: "total_receipts", source: "/candidate/{id}/totals", notes: "Total campaign receipts" },
-      { name: "pct_from_individuals", source: "Calculated", notes: "individual_contributions / total" },
-      { name: "pct_from_committees", source: "Calculated", notes: "committee_contributions / total" },
-      { name: "pct_from_small_donors", source: "Calculated", notes: "Contributions < $200" },
-      { name: "pct_from_in_state", source: "Calculated", notes: "In-state / total contributions" },
-      { name: "grassroots_support_score", source: "Calculated", notes: "Based on small donor %" },
-      { name: "pac_dependence_score", source: "Calculated", notes: "Based on PAC contribution %" },
-      { name: "local_money_score", source: "Calculated", notes: "Based on in-state %" },
-    ],
-  },
-  {
-    table: "member_statements",
-    source: "Congress.gov API",
-    syncFunction: "sync-member-details",
-    fields: [
-      { name: "title", source: "/member/{id}/sponsored-legislation", notes: "Bill title as activity" },
-      { name: "statement_date", source: "introducedDate", notes: "Date bill was introduced" },
-      { name: "statement_type", source: "Hardcoded", notes: "'sponsored_bill'" },
-      { name: "subjects", source: "policyArea", notes: "Policy area name" },
     ],
   },
 ];
@@ -585,33 +732,61 @@ export default function AdminDataInspectorPage() {
           </TabsContent>
 
           <TabsContent value="sources" className="space-y-6">
-            {dataSources.map((ds) => (
-              <Card key={ds.table}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database className="h-5 w-5" />
-                    {ds.table}
-                  </CardTitle>
-                  <CardDescription>
-                    Source: {ds.source} | Sync Function: <code className="bg-muted px-1 rounded">{ds.syncFunction}</code>
-                  </CardDescription>
+            <Card>
+              <CardHeader>
+                <CardTitle>Member Page Data Sources</CardTitle>
+                <CardDescription>
+                  Maps each UI section on the Member Detail page to its database tables and sync functions
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            {uiSectionMappings.map((section, idx) => (
+              <Card key={idx}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">{section.section}</CardTitle>
+                      <CardDescription>{section.description}</CardDescription>
+                    </div>
+                    {section.component && (
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {section.component}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {section.tables.map((table) => (
+                      <Badge key={table} variant="secondary" className="font-mono text-xs">
+                        <Database className="h-3 w-3 mr-1" />
+                        {table}
+                      </Badge>
+                    ))}
+                    {section.syncFunctions.map((fn) => (
+                      <Badge key={fn} variant="outline" className="font-mono text-xs bg-primary/5">
+                        ⚡ {fn}
+                      </Badge>
+                    ))}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 px-3 font-medium">Field</th>
-                          <th className="text-left py-2 px-3 font-medium">Source</th>
-                          <th className="text-left py-2 px-3 font-medium">Notes</th>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left py-2 px-3 font-medium">UI Element</th>
+                          <th className="text-left py-2 px-3 font-medium">DB Field</th>
+                          <th className="text-left py-2 px-3 font-medium">Table</th>
+                          <th className="text-left py-2 px-3 font-medium">Data Source</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {ds.fields.map((f) => (
-                          <tr key={f.name} className="border-b">
-                            <td className="py-2 px-3 font-mono text-xs">{f.name}</td>
-                            <td className="py-2 px-3 text-muted-foreground">{f.source}</td>
-                            <td className="py-2 px-3 text-muted-foreground">{f.notes}</td>
+                        {section.fields.map((f, fIdx) => (
+                          <tr key={fIdx} className="border-b hover:bg-muted/30">
+                            <td className="py-2 px-3 font-medium">{f.uiField}</td>
+                            <td className="py-2 px-3 font-mono text-xs text-primary">{f.dbField}</td>
+                            <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{f.table}</td>
+                            <td className="py-2 px-3 text-xs text-muted-foreground max-w-md">{f.source}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -620,6 +795,31 @@ export default function AdminDataInspectorPage() {
                 </CardContent>
               </Card>
             ))}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5" />
+                  Raw Table Reference
+                </CardTitle>
+                <CardDescription>Quick reference for database tables and their sync functions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {dataSources.map((ds) => (
+                    <div key={ds.table} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-mono font-medium">{ds.table}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {ds.syncFunction}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{ds.source}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
