@@ -15,6 +15,9 @@ const getScoreColor = (score: number | null): string => {
   return "hsl(0 72% 51%)";                      // Below 60 - red
 };
 
+// US Territories with non-voting delegates
+const TERRITORIES = new Set(['GU', 'AS', 'VI', 'MP', 'PR', 'DC']);
+
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
   showStats?: boolean;
@@ -37,12 +40,14 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
   const hoveredStateData = hoveredState
     ? stateScores?.find(s => s.abbr === hoveredState)
     : null;
+  
+  const isTerritory = (abbr: string) => TERRITORIES.has(abbr);
 
-  // Calculate statistics
+  // Calculate statistics (exclude territories from national stats)
   const stats = useMemo(() => {
     if (!stateScores || stateScores.length === 0) return null;
 
-    const validStates = stateScores.filter(s => s.score != null);
+    const validStates = stateScores.filter(s => s.score != null && !TERRITORIES.has(s.abbr));
     if (validStates.length === 0) return null;
 
     const avgScore = Math.round(
@@ -73,6 +78,8 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
     VT: { col: 11, row: 0 }, CT: { col: 11, row: 1 }, DE: { col: 11, row: 2 },
     NH: { col: 12, row: 0 }, RI: { col: 12, row: 1 }, DC: { col: 12, row: 2 },
     ME: { col: 13, row: 0 }, MA: { col: 13, row: 1 },
+    // Territories (bottom row)
+    PR: { col: 1, row: 4 }, VI: { col: 2, row: 4 }, GU: { col: 3, row: 4 }, AS: { col: 4, row: 4 }, MP: { col: 4, row: 3 },
   };
 
   const allStates = Object.keys(stateGrid);
@@ -95,6 +102,9 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
       {hoveredStateData && (
         <div className="absolute top-4 left-4 z-10 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[200px] animate-scale-in">
           <h4 className="font-serif font-semibold text-foreground">{hoveredStateData.name}</h4>
+          {isTerritory(hoveredState!) && (
+            <span className="text-xs text-muted-foreground italic">Non-voting delegate</span>
+          )}
           <div className="mt-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Average Score</span>
@@ -103,7 +113,7 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
               </span>
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-border">
-              <span className="text-xs text-muted-foreground">Members</span>
+              <span className="text-xs text-muted-foreground">{isTerritory(hoveredState!) ? 'Delegate' : 'Members'}</span>
               <span className="text-sm font-medium">{hoveredStateData.memberCount}</span>
             </div>
           </div>
@@ -128,6 +138,7 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
               const bgColor = getScoreColor(stateData?.score ?? null);
               const textColor = "hsl(var(--background))";
               const hasData = !!stateData;
+              const isTerritoryTile = isTerritory(stateAbbr);
 
               return (
                 <button
@@ -136,11 +147,13 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
                   onMouseEnter={() => setHoveredState(stateAbbr)}
                   onMouseLeave={() => setHoveredState(null)}
                   className={cn(
-                    "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10 shadow-civic-sm",
+                    "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10",
                     hoveredState === stateAbbr && "ring-2 ring-primary ring-offset-2",
-                    !hasData && "opacity-50"
+                    !hasData && "opacity-50",
+                    isTerritoryTile ? "border-2 border-dashed border-white/50 opacity-75 shadow-none" : "shadow-civic-sm"
                   )}
                   style={{ backgroundColor: bgColor, color: textColor }}
+                  title={isTerritoryTile ? "Territory (non-voting delegate)" : undefined}
                 >
                   {stateAbbr}
                 </button>
@@ -221,6 +234,10 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
                   </span>
                 </div>
               ))}
+              <div className="flex items-center gap-2 pt-1 border-t border-border mt-2">
+                <div className="w-3 h-3 rounded-sm shrink-0 border-2 border-dashed border-muted-foreground opacity-75" />
+                <span className="text-xs text-muted-foreground">Territory (non-voting)</span>
+              </div>
             </div>
           </div>
         </div>
