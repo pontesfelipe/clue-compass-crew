@@ -8,6 +8,7 @@ import { ComparisonBar } from "@/components/ComparisonBar";
 import Index from "./pages/Index";
 import MapPage from "./pages/MapPage";
 import StatePage from "./pages/StatePage";
+import MembersPage from "./pages/MembersPage";
 import MemberPage from "./pages/MemberPage";
 import BillPage from "./pages/BillPage";
 import BillsPage from "./pages/BillsPage";
@@ -39,6 +40,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/map" element={<MapPage />} />
+            <Route path="/members" element={<MembersPage />} />
             <Route path="/bills" element={<BillsPage />} />
             <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />

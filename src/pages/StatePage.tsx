@@ -53,8 +53,10 @@ export default function StatePage() {
     return memberList.filter(m => (m.score ?? 0) >= filter.min && (m.score ?? 0) <= filter.max);
   };
 
-  const senators = filterByScore(members?.filter(m => m.chamber === "senate"));
-  const representatives = filterByScore(members?.filter(m => m.chamber === "house"));
+  const senators = filterByScore(members?.filter(m => m.chamber === "senate"))
+    ?.sort((a, b) => a.fullName.split(" ").pop()!.localeCompare(b.fullName.split(" ").pop()!));
+  const representatives = filterByScore(members?.filter(m => m.chamber === "house"))
+    ?.sort((a, b) => a.fullName.split(" ").pop()!.localeCompare(b.fullName.split(" ").pop()!));
 
   const isLoading = membersLoading || statsLoading;
 

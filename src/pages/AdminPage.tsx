@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
+import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
 import {
   Select,
   SelectContent,
@@ -667,28 +668,7 @@ export default function AdminPage() {
             </TabsContent>
 
             <TabsContent value="inspector">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileSearch className="h-5 w-5" />
-                    Data Inspector
-                  </CardTitle>
-                  <CardDescription>
-                    Inspect data sources and field mappings for member pages
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    View the full Data Inspector for detailed field mappings and data flow visualization.
-                  </p>
-                  <Button variant="civic" asChild>
-                    <Link to="/admin/data-inspector">
-                      <Search className="h-4 w-4 mr-2" />
-                      Open Full Data Inspector
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+              <DataInspectorContent />
             </TabsContent>
           </Tabs>
         </main>
