@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.classify-issue-signals]
 verify_jwt = false
+
+[functions.send-member-notifications]
+verify_jwt = false
+
+[functions.send-weekly-digest]
+verify_jwt = false
