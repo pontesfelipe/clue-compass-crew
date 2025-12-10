@@ -45,7 +45,7 @@ serve(async (req) => {
 
     // Group signals by type and external_ref
     const voteSignals = signals?.filter(s => s.signal_type === "vote") || [];
-    const billSignals = signals?.filter(s => s.signal_type === "bill") || [];
+    const billSignals = signals?.filter(s => s.signal_type === "bill_sponsorship") || [];
 
     // Get politicians to process
     let politiciansQuery = supabase
