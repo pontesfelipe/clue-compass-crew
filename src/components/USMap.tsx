@@ -18,7 +18,7 @@ const getScoreColor = (score: number | null): string => {
 // Fixed US state grid layout - VERTICAL COLUMNS - DO NOT REORDER
 // Each array is a vertical column, rendered top to bottom
 const STATE_COLUMNS: string[][] = [
-  ["WA", "OR", "CA"],                           // Column 1: Pacific Coast
+  ["WA", "OR", "CA", "HI", "AK"],               // Column 1: Pacific Coast + Pacific
   ["ID", "NV", "AZ"],                           // Column 2: Inner West
   ["MT", "WY", "UT", "CO", "NM"],               // Column 3: Rockies
   ["ND", "SD", "NE", "KS", "OK", "TX"],         // Column 4: High Plains to South
