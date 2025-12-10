@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase } from "lucide-react";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
+import { CronExpressionParser } from "cron-parser";
 
 interface SyncProgressData {
   id: string;
@@ -28,6 +29,7 @@ interface SyncConfig {
   icon: React.ReactNode;
   functionName?: string;
   category: "congress" | "finance" | "scores";
+  cronSchedule: string;
 }
 
 const SYNC_CONFIGS: SyncConfig[] = [
@@ -35,105 +37,117 @@ const SYNC_CONFIGS: SyncConfig[] = [
   {
     id: "congress-members",
     label: "Congress Members",
-    description: "Syncs all 539 members of Congress from Congress.gov (Daily at midnight)",
+    description: "Syncs all 539 members of Congress from Congress.gov",
     expectedTotal: 539,
     icon: <Users className="h-4 w-4" />,
     functionName: "sync-congress-members",
     category: "congress",
+    cronSchedule: "0 0 * * *", // Daily at midnight
   },
   {
     id: "member-details",
     label: "Member Details",
-    description: "Syncs committees & statements for all members (Daily at 1 AM)",
+    description: "Syncs committees & statements for all members",
     expectedTotal: 539,
     icon: <Briefcase className="h-4 w-4" />,
     functionName: "sync-member-details",
     category: "congress",
+    cronSchedule: "0 1 * * *", // Daily at 1 AM
   },
   {
     id: "bills",
     label: "Bills & Sponsorships",
-    description: "Syncs all bills from Congress 118 & 119 with sponsorship data (Every 6 hours)",
+    description: "Syncs all bills from Congress 118 & 119 with sponsorship data",
     expectedTotal: 20000,
     icon: <FileText className="h-4 w-4" />,
     functionName: "sync-bills",
     category: "congress",
+    cronSchedule: "0 */6 * * *", // Every 6 hours
   },
   {
     id: "votes",
     label: "Votes & Positions",
-    description: "Syncs House and Senate votes with individual member positions (Every 2 hours)",
+    description: "Syncs House and Senate votes with individual member positions",
     expectedTotal: 2000,
     icon: <Vote className="h-4 w-4" />,
     functionName: "sync-votes",
     category: "congress",
+    cronSchedule: "0 */2 * * *", // Every 2 hours
   },
   // Finance data
   {
     id: "fec-finance",
     label: "FEC Contributions",
-    description: "Syncs itemized contributions from FEC API (Every 5 minutes)",
+    description: "Syncs itemized contributions from FEC API",
     expectedTotal: 539,
     icon: <DollarSign className="h-4 w-4" />,
     functionName: "sync-fec-finance",
     category: "finance",
+    cronSchedule: "*/5 * * * *", // Every 5 minutes
   },
   {
     id: "fec-funding",
     label: "FEC Funding Metrics",
-    description: "Computes grassroots/PAC/local scores per cycle (Nightly at 2 AM)",
+    description: "Computes grassroots/PAC/local scores per cycle",
     expectedTotal: 539,
     icon: <DollarSign className="h-4 w-4" />,
     functionName: "sync-fec-funding",
     category: "finance",
+    cronSchedule: "0 2 * * *", // Nightly at 2 AM
   },
   // Scores & Analysis
   {
     id: "member-scores",
     label: "Member Scores",
-    description: "Recalculates all member scores from latest data (Every 2 hours at :30)",
+    description: "Recalculates all member scores from latest data",
     expectedTotal: 539,
     icon: <Calculator className="h-4 w-4" />,
     functionName: "calculate-member-scores",
     category: "scores",
+    cronSchedule: "30 */2 * * *", // Every 2 hours at :30
   },
   {
     id: "state-scores",
     label: "State Aggregates",
-    description: "Recalculates state-level score averages (Every 2 hours at :45)",
+    description: "Recalculates state-level score averages",
     expectedTotal: 50,
     icon: <MapPin className="h-4 w-4" />,
     functionName: "recalculate-state-scores",
     category: "scores",
+    cronSchedule: "45 */2 * * *", // Every 2 hours at :45
   },
   {
     id: "issue-signals",
     label: "Issue Classification",
-    description: "AI classifies bills/votes into political issues (Every 6 hours at :15)",
+    description: "AI classifies bills/votes into political issues",
     expectedTotal: 5000,
     icon: <Brain className="h-4 w-4" />,
     functionName: "classify-issue-signals",
     category: "scores",
+    cronSchedule: "15 */6 * * *", // Every 6 hours at :15
   },
   {
     id: "politician-positions",
     label: "Politician Positions",
-    description: "Computes politician stances per issue from signals (Every 6 hours at :30)",
+    description: "Computes politician stances per issue from signals",
     expectedTotal: 539,
     icon: <BarChart3 className="h-4 w-4" />,
     functionName: "compute-politician-positions",
     category: "scores",
+    cronSchedule: "30 */6 * * *", // Every 6 hours at :30
   },
   {
     id: "notifications",
     label: "Email Notifications",
-    description: "Sends tracked member vote alerts to users (Daily at 8 AM)",
+    description: "Sends tracked member vote alerts to users",
     expectedTotal: 100,
     icon: <Bell className="h-4 w-4" />,
     functionName: "send-member-notifications",
     category: "scores",
+    cronSchedule: "0 8 * * *", // Daily at 8 AM
   },
 ];
+
 function formatTimeAgo(dateString: string | null): string {
   if (!dateString) return "Never";
   
@@ -149,6 +163,50 @@ function formatTimeAgo(dateString: string | null): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${diffDays}d ago`;
+}
+
+function formatTimeUntil(date: Date): string {
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  
+  if (diffMs < 0) return "now";
+  
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return `in ${diffSecs}s`;
+  if (diffMins < 60) return `in ${diffMins}m`;
+  if (diffHours < 24) return `in ${diffHours}h ${diffMins % 60}m`;
+  return `in ${diffDays}d ${diffHours % 24}h`;
+}
+
+function getNextRunTime(cronSchedule: string): Date | null {
+  try {
+    const interval = CronExpressionParser.parse(cronSchedule, {
+      tz: "UTC",
+    });
+    return interval.next().toDate();
+  } catch {
+    return null;
+  }
+}
+
+function getCronDescription(cronSchedule: string): string {
+  // Simple human-readable descriptions for common patterns
+  if (cronSchedule === "*/5 * * * *") return "Every 5 min";
+  if (cronSchedule === "0 */2 * * *") return "Every 2h";
+  if (cronSchedule === "30 */2 * * *") return "Every 2h at :30";
+  if (cronSchedule === "45 */2 * * *") return "Every 2h at :45";
+  if (cronSchedule === "0 */6 * * *") return "Every 6h";
+  if (cronSchedule === "15 */6 * * *") return "Every 6h at :15";
+  if (cronSchedule === "30 */6 * * *") return "Every 6h at :30";
+  if (cronSchedule === "0 0 * * *") return "Daily 00:00 UTC";
+  if (cronSchedule === "0 1 * * *") return "Daily 01:00 UTC";
+  if (cronSchedule === "0 2 * * *") return "Daily 02:00 UTC";
+  if (cronSchedule === "0 8 * * *") return "Daily 08:00 UTC";
+  return cronSchedule;
 }
 
 function getStatusBadge(status: string | null) {
@@ -198,6 +256,13 @@ export function SyncStatusCard() {
   const [triggeringSyncId, setTriggeringSyncId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeCategory, setActiveCategory] = useState<"all" | "congress" | "finance" | "scores">("all");
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute for next run calculations
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchSyncProgress = async () => {
     try {
@@ -290,6 +355,15 @@ export function SyncStatusCard() {
   };
 
   const stats = getSyncStats();
+
+  // Memoize next run times to avoid recalculating on every render
+  const nextRunTimes = useMemo(() => {
+    const times: Record<string, Date | null> = {};
+    SYNC_CONFIGS.forEach((config) => {
+      times[config.id] = getNextRunTime(config.cronSchedule);
+    });
+    return times;
+  }, [currentTime]);
 
   if (isLoading) {
     return (
@@ -385,6 +459,7 @@ export function SyncStatusCard() {
               const metadataInfo = getMetadataInfo(progress);
               const isRunning = progress?.status === "running";
               const isTriggering = triggeringSyncId === config.id;
+              const nextRun = nextRunTimes[config.id];
 
               return (
                 <div
@@ -406,6 +481,10 @@ export function SyncStatusCard() {
                           {getStatusBadge(progress?.status || null)}
                           <Badge variant="outline" className="text-xs capitalize">
                             {config.category}
+                          </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            <Timer className="h-3 w-3 mr-1" />
+                            {getCronDescription(config.cronSchedule)}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{config.description}</p>
@@ -443,11 +522,17 @@ export function SyncStatusCard() {
                             </p>
                           )}
                           
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              Last run: {formatTimeAgo(progress?.last_run_at || null)}
+                              Last: {formatTimeAgo(progress?.last_run_at || null)}
                             </span>
+                            {nextRun && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Timer className="h-3 w-3" />
+                                Next: {formatTimeUntil(nextRun)}
+                              </span>
+                            )}
                             {progress?.updated_at && progress.status === "running" && (
                               <span className="flex items-center gap-1">
                                 Updated: {formatTimeAgo(progress.updated_at)}
