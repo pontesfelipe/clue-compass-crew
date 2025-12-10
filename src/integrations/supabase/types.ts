@@ -193,6 +193,68 @@ export type Database = {
         }
         Relationships: []
       }
+      funding_metrics: {
+        Row: {
+          computed_at: string
+          created_at: string | null
+          cycle: number
+          grassroots_support_score: number | null
+          id: string
+          local_money_score: number | null
+          member_id: string
+          pac_dependence_score: number | null
+          pct_from_committees: number | null
+          pct_from_in_state: number | null
+          pct_from_individuals: number | null
+          pct_from_out_of_state: number | null
+          pct_from_small_donors: number | null
+          total_receipts: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          computed_at?: string
+          created_at?: string | null
+          cycle: number
+          grassroots_support_score?: number | null
+          id?: string
+          local_money_score?: number | null
+          member_id: string
+          pac_dependence_score?: number | null
+          pct_from_committees?: number | null
+          pct_from_in_state?: number | null
+          pct_from_individuals?: number | null
+          pct_from_out_of_state?: number | null
+          pct_from_small_donors?: number | null
+          total_receipts?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          computed_at?: string
+          created_at?: string | null
+          cycle?: number
+          grassroots_support_score?: number | null
+          id?: string
+          local_money_score?: number | null
+          member_id?: string
+          pac_dependence_score?: number | null
+          pct_from_committees?: number | null
+          pct_from_in_state?: number | null
+          pct_from_individuals?: number | null
+          pct_from_out_of_state?: number | null
+          pct_from_small_donors?: number | null
+          total_receipts?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_metrics_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_committees: {
         Row: {
           chamber: string
@@ -571,6 +633,9 @@ export type Database = {
           created_at: string | null
           district: string | null
           end_date: string | null
+          fec_candidate_id: string | null
+          fec_committee_ids: string[] | null
+          fec_last_synced_at: string | null
           first_name: string
           full_name: string
           id: string
@@ -595,6 +660,9 @@ export type Database = {
           created_at?: string | null
           district?: string | null
           end_date?: string | null
+          fec_candidate_id?: string | null
+          fec_committee_ids?: string[] | null
+          fec_last_synced_at?: string | null
           first_name: string
           full_name: string
           id?: string
@@ -619,6 +687,9 @@ export type Database = {
           created_at?: string | null
           district?: string | null
           end_date?: string | null
+          fec_candidate_id?: string | null
+          fec_committee_ids?: string[] | null
+          fec_last_synced_at?: string | null
           first_name?: string
           full_name?: string
           id?: string
@@ -679,8 +750,12 @@ export type Database = {
         Row: {
           avg_attendance: number | null
           avg_bipartisanship: number | null
+          avg_grassroots_support: number | null
           avg_issue_alignment: number | null
+          avg_local_money: number | null
           avg_member_score: number | null
+          avg_pac_dependence: number | null
+          avg_pct_out_of_state: number | null
           avg_productivity: number | null
           created_at: string | null
           democrat_count: number | null
@@ -697,8 +772,12 @@ export type Database = {
         Insert: {
           avg_attendance?: number | null
           avg_bipartisanship?: number | null
+          avg_grassroots_support?: number | null
           avg_issue_alignment?: number | null
+          avg_local_money?: number | null
           avg_member_score?: number | null
+          avg_pac_dependence?: number | null
+          avg_pct_out_of_state?: number | null
           avg_productivity?: number | null
           created_at?: string | null
           democrat_count?: number | null
@@ -715,8 +794,12 @@ export type Database = {
         Update: {
           avg_attendance?: number | null
           avg_bipartisanship?: number | null
+          avg_grassroots_support?: number | null
           avg_issue_alignment?: number | null
+          avg_local_money?: number | null
           avg_member_score?: number | null
+          avg_pac_dependence?: number | null
+          avg_pct_out_of_state?: number | null
           avg_productivity?: number | null
           created_at?: string | null
           democrat_count?: number | null

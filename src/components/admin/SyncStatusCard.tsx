@@ -50,8 +50,15 @@ const SYNC_CONFIGS: SyncConfig[] = [
   },
   {
     id: "fec-finance",
-    label: "FEC Finance Data",
-    description: "Syncs campaign finance data from FEC API",
+    label: "FEC Finance (Legacy)",
+    description: "Syncs campaign finance data from FEC API (old)",
+    expectedTotal: 539,
+    icon: <span className="text-lg">💵</span>,
+  },
+  {
+    id: "fec-funding",
+    label: "FEC Funding Metrics",
+    description: "Syncs funding metrics with grassroots/PAC/local scores per cycle",
     expectedTotal: 539,
     icon: <span className="text-lg">💰</span>,
   },
