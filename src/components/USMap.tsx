@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useStateScores } from "@/hooks/useStateData";
@@ -15,21 +15,28 @@ const getScoreColor = (score: number | null): string => {
   return "hsl(0 72% 51%)";                      // Below 60 - red
 };
 
-// Fixed US state grid layout - DO NOT REORDER
-// Column 14 contains territories (non-voting delegates)
-const US_GRID: (string | null)[][] = [
-  ["WA", "MT", "ND", "MN", "WI", "MI", "NY", "VT", "NH", "ME", null, null, null, "DC"],
-  ["OR", "ID", "WY", "SD", "IA", "IL", "IN", "OH", "PA", "NJ", "CT", "RI", "MA", "PR"],
-  ["CA", "NV", "UT", "CO", "NE", "MO", "KY", "WV", "VA", "MD", "DE", null, null, "VI"],
-  ["AZ", "NM", "KS", "AR", "TN", "NC", "SC", null, null, null, null, null, null, "GU"],
-  ["TX", "OK", "LA", "MS", "AL", "GA", null, null, null, null, null, null, null, "AS"],
-  ["HI", "AK", "FL", null, null, null, null, null, null, null, null, null, null, "MP"],
+// Fixed US state grid layout - VERTICAL COLUMNS - DO NOT REORDER
+// Each array is a vertical column, rendered top to bottom
+const STATE_COLUMNS: string[][] = [
+  ["WA", "OR", "CA"],                           // Column 1: Pacific Coast
+  ["ID", "NV", "AZ"],                           // Column 2: Inner West
+  ["MT", "WY", "UT", "CO", "NM"],               // Column 3: Rockies
+  ["ND", "SD", "NE", "KS", "OK", "TX"],         // Column 4: High Plains to South
+  ["MN", "IA", "MO", "AR", "LA"],               // Column 5: Upper Midwest / Central
+  ["WI", "IL", "KY", "TN", "MS"],               // Column 6: Midwest / Lower Mississippi
+  ["MI", "IN", "AL", "GA", "FL"],               // Column 7: Great Lakes to Deep South
+  ["NY", "PA", "VA", "SC"],                     // Column 8: Mid-Atlantic / Southeast
+  ["VT", "NH", "WV", "NC"],                     // Column 9: New England / Appalachia
+  ["ME", "NJ", "MD", "DE"],                     // Column 10: Northeast / Mid-Atlantic
+  ["MA", "CT", "RI"],                           // Column 11: New England
 ];
 
-// Territories - non-voting delegates (for filtering/stats purposes)
+// Territories - non-voting delegates (separate column)
 const TERRITORIES = ["DC", "PR", "VI", "GU", "AS", "MP"];
 
-const GRID_COLUMNS = 14; // 13 states + 1 territory column
+// Calculate grid dimensions
+const MAX_ROWS = Math.max(...STATE_COLUMNS.map(col => col.length), TERRITORIES.length);
+const GRID_COLUMNS = STATE_COLUMNS.length + 1; // 11 state columns + 1 territory column
 
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
@@ -108,7 +115,7 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
         >
-          {Array.from({ length: GRID_COLUMNS * 6 }).map((_, i) => (
+          {Array.from({ length: GRID_COLUMNS * MAX_ROWS }).map((_, i) => (
             <Skeleton key={i} className="w-full aspect-square rounded-md" />
           ))}
         </div>
@@ -140,19 +147,30 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
         </div>
       )}
 
-      {/* State Grid Map - Fixed Layout */}
+      {/* State Grid Map - Fixed Vertical Column Layout */}
       <div className="p-4">
         <div 
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
         >
-          {US_GRID.map((row, rowIndex) => (
-            row.map((stateAbbr, colIndex) => {
-              if (stateAbbr === null) {
-                return <div key={`empty-${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
-              }
-              return renderStateTile(stateAbbr, isTerritory(stateAbbr));
-            })
+          {/* Render row by row, column by column */}
+          {Array.from({ length: MAX_ROWS }).map((_, rowIndex) => (
+            <React.Fragment key={`row-${rowIndex}`}>
+              {/* State columns */}
+              {STATE_COLUMNS.map((column, colIndex) => {
+                const stateAbbr = column[rowIndex];
+                if (!stateAbbr) {
+                  return <div key={`empty-${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
+                }
+                return renderStateTile(stateAbbr, false);
+              })}
+              {/* Territory column */}
+              {TERRITORIES[rowIndex] ? (
+                renderStateTile(TERRITORIES[rowIndex], true)
+              ) : (
+                <div key={`empty-territory-${rowIndex}`} className="w-full aspect-square" />
+              )}
+            </React.Fragment>
           ))}
         </div>
       </div>
