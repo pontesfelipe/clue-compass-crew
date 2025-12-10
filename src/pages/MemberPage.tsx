@@ -35,6 +35,7 @@ import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
 import { toast } from "@/hooks/use-toast";
 import { VoteDetailDialog } from "@/components/VoteDetailDialog";
+import { BillDetailDialog } from "@/components/BillDetailDialog";
 import { MemberCommittees } from "@/features/members/components/MemberCommittees";
 import { MemberVotingComparison } from "@/features/members/components/MemberVotingComparison";
 import { MemberActivity } from "@/features/members/components/MemberActivity";
@@ -144,6 +145,7 @@ export default function MemberPage() {
   const { isTracking, trackMember, untrackMember, isTrackingPending } = useMemberTracking();
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [selectedVotePosition, setSelectedVotePosition] = useState<string | undefined>();
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -532,10 +534,10 @@ export default function MemberPage() {
                 member.sponsoredBills.map((bill: any, index: number) => {
                   const status = getBillStatus(bill);
                   return (
-                    <Link 
-                      to={`/bill/${bill.id}`}
+                    <button 
                       key={bill.id}
-                      className="block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors"
+                      onClick={() => setSelectedBillId(bill.id)}
+                      className="w-full text-left block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -561,7 +563,7 @@ export default function MemberPage() {
                       {bill.policy_area && (
                         <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
                       )}
-                    </Link>
+                    </button>
                   );
                 })
               ) : (
@@ -588,10 +590,10 @@ export default function MemberPage() {
                 member.cosponsoredBills.map((bill: any, index: number) => {
                   const status = getBillStatus(bill);
                   return (
-                    <Link 
-                      to={`/bill/${bill.id}`}
+                    <button 
                       key={bill.id}
-                      className="block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors"
+                      onClick={() => setSelectedBillId(bill.id)}
+                      className="w-full text-left block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -617,7 +619,7 @@ export default function MemberPage() {
                       {bill.policy_area && (
                         <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
                       )}
-                    </Link>
+                    </button>
                   );
                 })
               ) : (
@@ -695,6 +697,12 @@ export default function MemberPage() {
             setSelectedVoteId(null);
             setSelectedVotePosition(undefined);
           }}
+        />
+
+        {/* Bill Detail Dialog */}
+        <BillDetailDialog 
+          billId={selectedBillId}
+          onClose={() => setSelectedBillId(null)}
         />
 
         {/* Financial Relationships Section */}
