@@ -36,7 +36,7 @@ const TERRITORIES = ["DC", "PR", "VI", "GU", "AS", "MP"];
 
 // Calculate grid dimensions
 const MAX_ROWS = Math.max(...STATE_COLUMNS.map(col => col.length), TERRITORIES.length);
-const GRID_COLUMNS = STATE_COLUMNS.length + 1; // 11 state columns + 1 territory column
+const GRID_COLUMNS = STATE_COLUMNS.length + 2; // 11 state columns + 1 spacer + 1 territory column
 
 interface USMapProps {
   onStateClick?: (stateAbbr: string) => void;
@@ -164,6 +164,8 @@ export function USMap({ onStateClick, showStats = true }: USMapProps) {
                 }
                 return renderStateTile(stateAbbr, false);
               })}
+              {/* Spacer column between states and territories */}
+              <div key={`spacer-${rowIndex}`} className="w-full aspect-square" />
               {/* Territory column */}
               {TERRITORIES[rowIndex] ? (
                 renderStateTile(TERRITORIES[rowIndex], true)
