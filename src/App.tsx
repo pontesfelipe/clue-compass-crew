@@ -17,6 +17,7 @@ import HowItWorksPage from "./pages/HowItWorksPage";
 import AuthPage from "./pages/AuthPage";
 import AdminPage from "./pages/AdminPage";
 import MyProfilePage from "./pages/MyProfilePage";
+import MyMatchesPage from "./pages/MyMatchesPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/my-profile" element={<MyProfilePage />} />
+            <Route path="/my-matches" element={<MyMatchesPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/state/:stateAbbr" element={<StatePage />} />
