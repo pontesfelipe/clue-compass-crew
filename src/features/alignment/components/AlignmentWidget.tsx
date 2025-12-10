@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { useAlignmentProfile } from "../hooks/useAlignmentProfile";
 import { usePoliticianAlignment } from "../hooks/useAlignment";
+import { useFeatureToggles } from "@/hooks/useFeatureToggles";
 import { UserCircle, TrendingUp, Info } from "lucide-react";
 
 interface AlignmentWidgetProps {
@@ -16,12 +17,18 @@ interface AlignmentWidgetProps {
 
 export function AlignmentWidget({ politicianId, politicianName }: AlignmentWidgetProps) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const { data: profile, isLoading: profileLoading } = useAlignmentProfile();
   const { data: alignment, isLoading: alignmentLoading } = usePoliticianAlignment(
     profile?.profile_complete ? politicianId : undefined
   );
   
-  if (authLoading) {
+  // Check if feature is disabled
+  if (!togglesLoading && !isFeatureEnabled("alignment_widget")) {
+    return null;
+  }
+  
+  if (authLoading || togglesLoading) {
     return <Skeleton className="h-32" />;
   }
   

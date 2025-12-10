@@ -139,18 +139,27 @@ export function BillDetailDialog({ billId, onClose }: BillDetailDialogProps) {
               )}
             </div>
 
-            {/* Summary */}
-            {bill.summary && (
-              <div className="p-4 rounded-lg bg-muted/50">
-                <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Summary
-                </h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {bill.summary}
-                </p>
-              </div>
-            )}
+            {/* Summary or Description */}
+            <div className="p-4 rounded-lg bg-muted/50">
+              <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                About this Bill
+              </h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {bill.summary || (
+                  <>
+                    This {bill.bill_type === 's' ? 'Senate' : 'House'} bill 
+                    {bill.policy_area ? ` addresses ${bill.policy_area.toLowerCase()}` : ' was introduced'} 
+                    {bill.introduced_date ? ` on ${format(new Date(bill.introduced_date), 'MMMM d, yyyy')}` : ''}
+                    . {bill.enacted 
+                      ? `It was signed into law${bill.enacted_date ? ` on ${format(new Date(bill.enacted_date), 'MMMM d, yyyy')}` : ''}.` 
+                      : bill.latest_action_text 
+                        ? `Most recent action: ${bill.latest_action_text}` 
+                        : 'It is currently under consideration.'}
+                  </>
+                )}
+              </p>
+            </div>
 
             {/* Meta Info */}
             <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50">
