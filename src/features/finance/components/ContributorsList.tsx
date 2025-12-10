@@ -10,6 +10,8 @@ const typeColors: Record<Contribution["contributorType"], string> = {
   individual: "bg-civic-blue/10 text-civic-blue border-civic-blue/30",
   pac: "bg-civic-gold/10 text-civic-gold border-civic-gold/30",
   organization: "bg-civic-slate/10 text-civic-slate border-civic-slate/30",
+  corporate: "bg-civic-red/10 text-civic-red border-civic-red/30",
+  union: "bg-civic-blue/10 text-civic-blue border-civic-blue/30",
 };
 
 export function ContributorsList({ contributions }: ContributorsListProps) {

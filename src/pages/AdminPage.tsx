@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3 } from "lucide-react";
+import { Loader2, Users, Database, Bot, RefreshCw, Shield, Trash2, BarChart3, Search } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import {
@@ -384,9 +384,17 @@ export default function AdminPage() {
         <Header />
 
         <main className="flex-1 container mx-auto py-8 px-4">
-          <div className="flex items-center gap-3 mb-8">
-            <Shield className="h-8 w-8 text-primary" />
-            <h1 className="font-serif text-3xl font-bold">Admin Dashboard</h1>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <Shield className="h-8 w-8 text-primary" />
+              <h1 className="font-serif text-3xl font-bold">Admin Dashboard</h1>
+            </div>
+            <Button variant="outline" asChild>
+              <Link to="/admin/data-inspector">
+                <Search className="h-4 w-4 mr-2" />
+                Data Inspector
+              </Link>
+            </Button>
           </div>
 
           <Tabs defaultValue="analytics" className="w-full">
