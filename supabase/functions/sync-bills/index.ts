@@ -5,10 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface BillSponsor {
-  bioguideId: string
-  fullName: string
-  isByRequest?: string
+interface SyncProgress {
+  currentCongress: number
+  currentBillType: string
+  currentOffset: number
 }
 
 Deno.serve(async (req) => {
@@ -16,17 +16,45 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  const congressApiKey = Deno.env.get('CONGRESS_GOV_API_KEY')
+  if (!congressApiKey) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'CONGRESS_GOV_API_KEY is not configured' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  console.log('Starting bills sync with background processing...')
+
+  // Start background task using globalThis for Deno edge runtime
+  const runtime = (globalThis as any).EdgeRuntime
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(syncBillsBackground(supabase, congressApiKey))
+  } else {
+    // Fallback: run sync inline (will timeout for large syncs)
+    await syncBillsBackground(supabase, congressApiKey)
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, message: 'Bills sync started in background' }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+})
+
+async function syncBillsBackground(supabase: any, congressApiKey: string) {
   try {
-    const congressApiKey = Deno.env.get('CONGRESS_GOV_API_KEY')
-    if (!congressApiKey) {
-      throw new Error('CONGRESS_GOV_API_KEY is not configured')
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    console.log('Starting bills sync...')
+    // Update status to running
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'bills',
+        status: 'running',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
 
     // Get all members from DB to map bioguide_id to member id
     const { data: members, error: membersError } = await supabase
@@ -35,31 +63,67 @@ Deno.serve(async (req) => {
     
     if (membersError) throw membersError
     
-    const memberMap = new Map(members?.map(m => [m.bioguide_id, m.id]) || [])
+    const memberMap = new Map<string, string>(members?.map((m: any) => [m.bioguide_id as string, m.id as string]) || [])
     console.log(`Loaded ${memberMap.size} members for mapping`)
 
-    // Fetch recent bills from Congress 118 and 119
-    const billTypes = ['hr', 's', 'hjres', 'sjres']
-    const congresses = [118, 119]
-    let totalBillsProcessed = 0
-    let totalSponsorshipsCreated = 0
+    // Get current sync progress
+    const { data: progress } = await supabase
+      .from('sync_progress')
+      .select('*')
+      .eq('id', 'bills')
+      .single()
 
-    for (const congress of congresses) {
-      for (const billType of billTypes) {
-        console.log(`Fetching ${billType} bills from Congress ${congress}...`)
+    // Parse metadata for progress tracking
+    let syncState: SyncProgress = {
+      currentCongress: 118,
+      currentBillType: 'hr',
+      currentOffset: 0
+    }
+
+    if (progress?.metadata) {
+      try {
+        syncState = progress.metadata as SyncProgress
+      } catch (e) {
+        console.log('Starting fresh sync')
+      }
+    }
+
+    const billTypes = ['hr', 's', 'hjres', 'sjres', 'hconres', 'sconres', 'hres', 'sres']
+    const congresses = [118, 119]
+    
+    let totalBillsProcessed = progress?.total_processed || 0
+    let totalSponsorshipsCreated = 0
+    let batchCount = 0
+    const maxBatchesPerRun = 20 // Process in smaller chunks to avoid timeout
+    const limit = 50
+
+    // Find starting point
+    let startCongressIndex = congresses.indexOf(syncState.currentCongress)
+    if (startCongressIndex === -1) startCongressIndex = 0
+    
+    let startTypeIndex = billTypes.indexOf(syncState.currentBillType)
+    if (startTypeIndex === -1) startTypeIndex = 0
+
+    outerLoop:
+    for (let ci = startCongressIndex; ci < congresses.length; ci++) {
+      const congress = congresses[ci]
+      
+      for (let ti = (ci === startCongressIndex ? startTypeIndex : 0); ti < billTypes.length; ti++) {
+        const billType = billTypes[ti]
         
-        let offset = 0
-        const limit = 250
+        let offset = (ci === startCongressIndex && ti === startTypeIndex) ? syncState.currentOffset : 0
         let hasMore = true
-        let billsInType = 0
         
-        while (hasMore && billsInType < 500) { // Limit per type to avoid timeout
+        while (hasMore && batchCount < maxBatchesPerRun) {
+          console.log(`Fetching ${billType} bills from Congress ${congress}, offset ${offset}...`)
+          
           const url = `https://api.congress.gov/v3/bill/${congress}/${billType}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
           
           const response = await fetch(url)
           
           if (!response.ok) {
             console.error(`Congress API error for ${billType}: ${response.status}`)
+            hasMore = false
             break
           }
           
@@ -74,148 +138,159 @@ Deno.serve(async (req) => {
           // Process each bill
           for (const bill of bills) {
             try {
-              // Fetch bill details to get sponsor info
-              const detailUrl = `https://api.congress.gov/v3/bill/${congress}/${billType}/${bill.number}?format=json&api_key=${congressApiKey}`
-              const detailResponse = await fetch(detailUrl)
-              
-              if (!detailResponse.ok) {
-                console.log(`Skipping bill ${bill.number}: detail fetch failed`)
-                continue
-              }
-              
-              const detailData = await detailResponse.json()
-              const billDetail = detailData.bill
-
-              // Map bill type
-              const billTypeMap: Record<string, string> = {
-                'hr': 'hr',
-                's': 's',
-                'hjres': 'hjres',
-                'sjres': 'sjres',
-                'hconres': 'hconres',
-                'sconres': 'sconres',
-                'hres': 'hres',
-                'sres': 'sres'
-              }
-
-              const billRecord = {
-                congress: congress,
-                bill_type: billTypeMap[billType] || 'hr',
-                bill_number: bill.number,
-                title: billDetail.title || bill.title || 'Untitled',
-                short_title: billDetail.shortTitle || null,
-                introduced_date: billDetail.introducedDate || null,
-                latest_action_date: billDetail.latestAction?.actionDate || null,
-                latest_action_text: billDetail.latestAction?.text || null,
-                policy_area: billDetail.policyArea?.name || null,
-                subjects: billDetail.subjects?.legislativeSubjects?.map((s: any) => s.name) || null,
-                url: bill.url || null,
-                enacted: billDetail.laws?.length > 0,
-                enacted_date: billDetail.laws?.[0]?.date || null,
-                summary: null,
-                updated_at: new Date().toISOString(),
-              }
-
-              // Upsert bill
-              const { data: upsertedBill, error: billError } = await supabase
-                .from('bills')
-                .upsert(billRecord, {
-                  onConflict: 'congress,bill_type,bill_number',
-                  ignoreDuplicates: false
-                })
-                .select('id')
-                .single()
-
-              if (billError) {
-                // Try to get existing bill
-                const { data: existingBill } = await supabase
-                  .from('bills')
-                  .select('id')
-                  .eq('congress', congress)
-                  .eq('bill_type', billTypeMap[billType] || 'hr')
-                  .eq('bill_number', bill.number)
-                  .single()
-                
-                if (!existingBill) {
-                  console.log(`Error upserting bill ${billType}${bill.number}: ${billError.message}`)
-                  continue
-                }
-                
-                // Process sponsorships for existing bill
-                const billId = existingBill.id
-                await processSponsorships(supabase, billDetail, billId, memberMap)
-                totalBillsProcessed++
-                continue
-              }
-
-              if (upsertedBill) {
-                const sponsorshipsCreated = await processSponsorships(supabase, billDetail, upsertedBill.id, memberMap)
-                totalSponsorshipsCreated += sponsorshipsCreated
-                totalBillsProcessed++
-              }
-
+              const sponsorshipsCreated = await processBill(supabase, bill, congress, billType, memberMap, congressApiKey)
+              totalSponsorshipsCreated += sponsorshipsCreated
+              totalBillsProcessed++
             } catch (billError) {
-              console.log(`Error processing bill: ${billError}`)
+              console.log(`Error processing bill ${billType}${bill.number}: ${billError}`)
             }
           }
 
-          billsInType += bills.length
           offset += limit
           hasMore = bills.length === limit
+          batchCount++
           
-          console.log(`Processed ${billsInType} ${billType} bills from Congress ${congress}`)
+          // Save progress after each batch
+          await supabase
+            .from('sync_progress')
+            .upsert({
+              id: 'bills',
+              status: 'running',
+              total_processed: totalBillsProcessed,
+              current_offset: offset,
+              metadata: {
+                currentCongress: congress,
+                currentBillType: billType,
+                currentOffset: offset
+              },
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' })
+          
+          console.log(`Batch complete: ${totalBillsProcessed} bills processed, ${totalSponsorshipsCreated} sponsorships`)
           
           // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100))
+          await new Promise(resolve => setTimeout(resolve, 200))
         }
+
+        if (batchCount >= maxBatchesPerRun) {
+          console.log('Reached batch limit, will continue on next run')
+          break outerLoop
+        }
+        
+        // Reset offset for next bill type
+        syncState.currentOffset = 0
       }
     }
 
-    // Update sync progress
+    // Check if we've completed all types
+    const isComplete = batchCount < maxBatchesPerRun
+
     await supabase
       .from('sync_progress')
       .upsert({
         id: 'bills',
         last_run_at: new Date().toISOString(),
-        status: 'complete',
+        status: isComplete ? 'complete' : 'partial',
         total_processed: totalBillsProcessed,
-        current_offset: 0,
+        updated_at: new Date().toISOString(),
+        metadata: isComplete ? null : syncState,
       }, { onConflict: 'id' })
 
-    const result = {
-      success: true,
-      billsProcessed: totalBillsProcessed,
-      sponsorshipsCreated: totalSponsorshipsCreated,
-      message: `Successfully synced ${totalBillsProcessed} bills with ${totalSponsorshipsCreated} sponsorships`
-    }
-
-    console.log('Bills sync completed:', result)
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    console.log(`Bills sync ${isComplete ? 'completed' : 'paused'}: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships`)
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('Bills sync error:', errorMessage)
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: errorMessage 
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    )
+    console.error('Bills sync background error:', error)
+    
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'bills',
+        status: 'error',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
   }
-})
+}
+
+async function processBill(
+  supabase: any,
+  bill: any,
+  congress: number,
+  billType: string,
+  memberMap: Map<string, string>,
+  congressApiKey: string
+): Promise<number> {
+  // Fetch bill details
+  const detailUrl = `https://api.congress.gov/v3/bill/${congress}/${billType}/${bill.number}?format=json&api_key=${congressApiKey}`
+  const detailResponse = await fetch(detailUrl)
+  
+  if (!detailResponse.ok) {
+    return 0
+  }
+  
+  const detailData = await detailResponse.json()
+  const billDetail = detailData.bill
+
+  const billTypeMap: Record<string, string> = {
+    'hr': 'hr', 's': 's', 'hjres': 'hjres', 'sjres': 'sjres',
+    'hconres': 'hconres', 'sconres': 'sconres', 'hres': 'hres', 'sres': 'sres'
+  }
+
+  const billRecord = {
+    congress: congress,
+    bill_type: billTypeMap[billType] || 'hr',
+    bill_number: bill.number,
+    title: billDetail.title || bill.title || 'Untitled',
+    short_title: billDetail.shortTitle || null,
+    introduced_date: billDetail.introducedDate || null,
+    latest_action_date: billDetail.latestAction?.actionDate || null,
+    latest_action_text: billDetail.latestAction?.text || null,
+    policy_area: billDetail.policyArea?.name || null,
+    subjects: billDetail.subjects?.legislativeSubjects?.map((s: any) => s.name) || null,
+    url: bill.url || null,
+    enacted: billDetail.laws?.length > 0,
+    enacted_date: billDetail.laws?.[0]?.date || null,
+    summary: null,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Upsert bill
+  const { data: upsertedBill, error: billError } = await supabase
+    .from('bills')
+    .upsert(billRecord, { onConflict: 'congress,bill_type,bill_number', ignoreDuplicates: false })
+    .select('id')
+    .single()
+
+  let billId: string | null = null
+
+  if (billError) {
+    // Try to get existing bill
+    const { data: existingBill } = await supabase
+      .from('bills')
+      .select('id')
+      .eq('congress', congress)
+      .eq('bill_type', billTypeMap[billType] || 'hr')
+      .eq('bill_number', bill.number)
+      .single()
+    
+    if (existingBill) {
+      billId = existingBill.id
+    }
+  } else if (upsertedBill) {
+    billId = upsertedBill.id
+  }
+
+  if (!billId) return 0
+
+  // Process sponsorships
+  return await processSponsorships(supabase, billDetail, billId, memberMap, congressApiKey)
+}
 
 async function processSponsorships(
   supabase: any,
   billDetail: any,
   billId: string,
-  memberMap: Map<string, string>
+  memberMap: Map<string, string>,
+  congressApiKey: string
 ): Promise<number> {
   let created = 0
 
@@ -233,27 +308,23 @@ async function processSponsorships(
           is_sponsor: true,
           is_original_cosponsor: false,
           cosponsored_date: billDetail.introducedDate || null,
-        }, {
-          onConflict: 'bill_id,member_id',
-          ignoreDuplicates: true
-        })
+        }, { onConflict: 'bill_id,member_id', ignoreDuplicates: true })
       
       if (!error) created++
     }
   }
 
-  // Fetch and process cosponsors if available
+  // Fetch and process cosponsors
   if (billDetail.cosponsors?.count > 0 && billDetail.cosponsors?.url) {
     try {
-      const congressApiKey = Deno.env.get('CONGRESS_GOV_API_KEY')
-      const cosponsorsUrl = `${billDetail.cosponsors.url}&format=json&api_key=${congressApiKey}`
+      const cosponsorsUrl = `${billDetail.cosponsors.url}&format=json&api_key=${congressApiKey}&limit=100`
       const response = await fetch(cosponsorsUrl)
       
       if (response.ok) {
         const data = await response.json()
         const cosponsors = data.cosponsors || []
         
-        for (const cosponsor of cosponsors.slice(0, 50)) { // Limit cosponsors per bill
+        for (const cosponsor of cosponsors) {
           const memberId = memberMap.get(cosponsor.bioguideId)
           
           if (memberId) {
@@ -265,10 +336,7 @@ async function processSponsorships(
                 is_sponsor: false,
                 is_original_cosponsor: cosponsor.isOriginalCosponsor || false,
                 cosponsored_date: cosponsor.sponsorshipDate || null,
-              }, {
-                onConflict: 'bill_id,member_id',
-                ignoreDuplicates: true
-              })
+              }, { onConflict: 'bill_id,member_id', ignoreDuplicates: true })
             
             if (!error) created++
           }
@@ -281,3 +349,7 @@ async function processSponsorships(
 
   return created
 }
+
+addEventListener('beforeunload', (ev) => {
+  console.log('Bills sync function shutting down:', (ev as any).detail?.reason)
+})
