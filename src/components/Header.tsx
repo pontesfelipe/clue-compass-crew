@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -74,6 +74,12 @@ export function Header() {
                   {user?.email}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/my-profile" className="flex items-center">
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    My Profile
+                  </Link>
+                </DropdownMenuItem>
                 {isAdmin && (
                   <DropdownMenuItem asChild>
                     <Link to="/admin" className="flex items-center">
@@ -82,6 +88,7 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
