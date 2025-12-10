@@ -24,9 +24,9 @@ serve(async (req) => {
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { batch_size = 20, force_reclassify = false } = await req.json().catch(() => ({}));
+    const { batch_size = 50, force_reclassify = false, prioritize_chamber } = await req.json().catch(() => ({}));
 
-    console.log("Starting AI issue classification...");
+    console.log(`Starting AI issue classification (batch_size: ${batch_size}, prioritize: ${prioritize_chamber || 'none'})...`);
 
     // Get active issues for classification
     const { data: issues, error: issuesError } = await supabase
@@ -44,26 +44,36 @@ serve(async (req) => {
     const issueMap = new Map(issues.map(i => [i.slug, i.id]));
     const issueDescriptions = issues.map(i => `- ${i.slug}: ${i.label} - ${i.description || ""}`).join("\n");
 
-    // Get bills that haven't been classified yet
+    // Get already classified bill IDs to exclude
+    const { data: existingSignals } = await supabase
+      .from("issue_signals")
+      .select("external_ref")
+      .eq("signal_type", "bill_sponsorship");
+    
+    const classifiedBillIds = new Set(existingSignals?.map(s => s.external_ref) || []);
+
+    // Get all unclassified bills, prioritizing Senate bills if requested
     let billsQuery = supabase
       .from("bills")
-      .select("id, title, short_title, summary, policy_area, subjects")
+      .select("id, title, short_title, summary, policy_area, subjects, bill_type")
       .not("title", "is", null);
 
-    if (!force_reclassify) {
-      // Exclude already classified bills
-      const { data: existingSignals } = await supabase
-        .from("issue_signals")
-        .select("external_ref")
-        .eq("signal_type", "bill_sponsorship");
-      
-      const classifiedBillIds = existingSignals?.map(s => s.external_ref) || [];
-      if (classifiedBillIds.length > 0) {
-        billsQuery = billsQuery.not("id", "in", `(${classifiedBillIds.join(",")})`);
-      }
+    // Prioritize Senate bills to fix gap in senator positions
+    if (prioritize_chamber === 'senate') {
+      billsQuery = billsQuery.eq("bill_type", "s");
+    } else if (prioritize_chamber === 'house') {
+      billsQuery = billsQuery.eq("bill_type", "hr");
     }
 
-    const { data: bills, error: billsError } = await billsQuery.limit(batch_size);
+    const { data: allBills, error: billsError } = await billsQuery.limit(batch_size * 2);
+    if (billsError) throw billsError;
+
+    // Filter out already classified bills and take batch_size
+    const bills = (allBills || [])
+      .filter(b => !classifiedBillIds.has(b.id) || force_reclassify)
+      .slice(0, batch_size);
+
+    console.log(`Found ${allBills?.length || 0} bills, ${bills.length} unclassified`);
     if (billsError) throw billsError;
 
     console.log(`Processing ${bills?.length || 0} unclassified bills`);
@@ -159,8 +169,10 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
             continue;
           }
 
-          // Only store high-confidence classifications
+          // Only store high-confidence, non-neutral classifications
+          // Skip direction=0 (neutral) as they don't contribute to alignment and violate DB constraint
           if (classification.confidence < 0.6) continue;
+          if (classification.direction === 0) continue;
 
           const { error: insertError } = await supabase
             .from("issue_signals")
