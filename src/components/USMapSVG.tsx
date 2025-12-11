@@ -64,6 +64,14 @@ const GRID_COLUMNS = STATE_COLUMNS.length + 2;
 
 type ViewMode = "geographic" | "tiles";
 
+const STORAGE_KEY = "civicscore-map-view-preference";
+
+const getStoredViewMode = (): ViewMode => {
+  if (typeof window === "undefined") return "geographic";
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === "tiles" ? "tiles" : "geographic";
+};
+
 interface USMapSVGProps {
   onStateClick?: (stateAbbr: string) => void;
   showStats?: boolean;
@@ -72,7 +80,12 @@ interface USMapSVGProps {
 export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("geographic");
+  const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
+  
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem(STORAGE_KEY, mode);
+  };
   
   const { data: stateScores, isLoading } = useStateScores();
 
@@ -220,14 +233,14 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-card border border-border z-50">
             <DropdownMenuItem 
-              onClick={() => setViewMode("geographic")}
+              onClick={() => handleViewModeChange("geographic")}
               className={cn(viewMode === "geographic" && "bg-accent")}
             >
               <Map className="h-4 w-4 mr-2" />
               Geographic Map
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={() => setViewMode("tiles")}
+              onClick={() => handleViewModeChange("tiles")}
               className={cn(viewMode === "tiles" && "bg-accent")}
             >
               <Grid3X3 className="h-4 w-4 mr-2" />
