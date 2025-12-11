@@ -3,7 +3,7 @@ import { Footer } from "@/components/Footer";
 import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
 import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
-import { USMap } from "@/components/USMap";
+import { USMapSVG } from "@/components/USMapSVG";
 import { MemberCard } from "@/components/MemberCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,7 +96,7 @@ export default function Index() {
                   <h3 className="font-serif text-lg font-semibold text-foreground">National Overview</h3>
                   <ScoreRing score={67} size="md" />
                 </div>
-                <USMap showStats={false} />
+                <USMapSVG showStats={false} />
               </div>
             </div>
           </div>
