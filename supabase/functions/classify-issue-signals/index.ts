@@ -262,6 +262,17 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
 
     console.log(`Completed: processed ${results.length} bills, created ${signalsCreated} signals (${policyMappingUsed} from policy mapping, ${aiClassificationUsed} from AI)`);
 
+    // Update sync progress
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'issue-signals',
+        last_run_at: new Date().toISOString(),
+        status: 'complete',
+        total_processed: signalsCreated,
+        current_offset: 0,
+      }, { onConflict: 'id' });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -276,6 +287,20 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
   } catch (error) {
     console.error("Error in AI classification:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    // Update sync progress with error status
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'issue-signals',
+        last_run_at: new Date().toISOString(),
+        status: 'error',
+        error_message: message,
+      }, { onConflict: 'id' });
+
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
