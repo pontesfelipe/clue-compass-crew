@@ -9,6 +9,29 @@ const FEC_API_BASE = "https://api.open.fec.gov/v1";
 const CYCLES = [2020, 2022, 2024];
 const BATCH_SIZE = 10;
 
+// State name to abbreviation mapping
+const STATE_ABBREVS: Record<string, string> = {
+  "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
+  "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
+  "Florida": "FL", "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID",
+  "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS",
+  "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+  "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
+  "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+  "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+  "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK",
+  "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT",
+  "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
+  "Wisconsin": "WI", "Wyoming": "WY", "District of Columbia": "DC",
+  "Puerto Rico": "PR", "Guam": "GU", "American Samoa": "AS",
+  "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
+};
+
+function getStateAbbrev(stateName: string): string {
+  return STATE_ABBREVS[stateName] || stateName;
+}
+
 interface FundingMetrics {
   totalReceipts: number;
   fromIndividuals: number;
@@ -190,10 +213,11 @@ async function processMember(
   
   // Find FEC candidate ID if not stored
   if (!fecCandidateId) {
-    fecCandidateId = await findCandidateId(member.full_name, member.state, apiKey);
+    const stateAbbrev = getStateAbbrev(member.state);
+    fecCandidateId = await findCandidateId(member.full_name, stateAbbrev, apiKey);
     
     if (!fecCandidateId) {
-      console.log(`No FEC candidate found for ${member.full_name} (${member.state})`);
+      console.log(`No FEC candidate found for ${member.full_name} (${member.state} -> ${stateAbbrev})`);
       return { success: false, cyclesProcessed: 0 };
     }
     
@@ -242,7 +266,7 @@ async function processMember(
       }
       
       const stateBreakdown = await getCommitteeContributionsByState(
-        committeeId, cycle, member.state, apiKey
+        committeeId, cycle, getStateAbbrev(member.state), apiKey
       );
       
       inStateAmount += stateBreakdown.inState;
