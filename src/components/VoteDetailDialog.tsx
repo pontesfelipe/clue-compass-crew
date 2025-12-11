@@ -105,22 +105,64 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
               <h3 className="font-semibold text-lg text-foreground mb-2">
                 {vote.question || `Roll Call Vote #${vote.roll_number}`}
               </h3>
-              <div className="p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {vote.description || (
-                    <>
-                      This {vote.chamber === 'house' ? 'House' : 'Senate'} vote took place on{' '}
-                      {vote.vote_date ? new Date(vote.vote_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      }) : 'an unknown date'}
-                      {vote.result && `. The vote ${vote.result.toLowerCase().includes('passed') ? 'passed' : vote.result.toLowerCase().includes('failed') ? 'failed' : 'concluded'} with ${vote.total_yea || 0} in favor and ${vote.total_nay || 0} against`}
-                      {vote.bills ? ` regarding ${vote.bills.short_title || vote.bills.title || 'a piece of legislation'}` : ''}.
-                    </>
+              <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+                {vote.description ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {vote.description}
+                  </p>
+                ) : null}
+                
+                {/* Context explanation */}
+                <div className="text-sm text-foreground leading-relaxed">
+                  <p>
+                    <span className="font-medium">What happened:</span>{' '}
+                    This {vote.chamber === 'house' ? 'House' : 'Senate'} roll call vote took place on{' '}
+                    {vote.vote_date ? new Date(vote.vote_date).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    }) : 'an unknown date'}.
+                    {vote.result && (
+                      <> The measure <span className={vote.result.toLowerCase().includes('passed') ? 'text-score-excellent font-medium' : 'text-score-bad font-medium'}>
+                        {vote.result.toLowerCase().includes('passed') ? 'passed' : vote.result.toLowerCase().includes('failed') ? 'failed' : vote.result.toLowerCase()}
+                      </span> with {vote.total_yea || 0} voting in favor and {vote.total_nay || 0} against.</>
+                    )}
+                  </p>
+                </div>
+
+                {/* Why it matters */}
+                {vote.bills && (
+                  <div className="text-sm text-foreground leading-relaxed border-t border-border pt-3 mt-3">
+                    <p>
+                      <span className="font-medium">What it's about:</span>{' '}
+                      This vote {vote.question?.toLowerCase().includes('passage') ? 'determined whether to pass' : 
+                        vote.question?.toLowerCase().includes('amendment') ? 'decided on an amendment to' :
+                        vote.question?.toLowerCase().includes('cloture') ? 'was a procedural vote (cloture) related to' :
+                        vote.question?.toLowerCase().includes('motion') ? 'was a procedural motion regarding' :
+                        'pertained to'}{' '}
+                      <span className="font-medium">{vote.bills.short_title || vote.bills.title}</span>.
+                      {vote.bills.policy_area && (
+                        <> This legislation falls under the policy area of <span className="font-medium">{vote.bills.policy_area}</span>.</>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {/* Vote type explanation */}
+                <div className="text-xs text-muted-foreground border-t border-border pt-3 mt-3">
+                  {vote.question?.toLowerCase().includes('passage') ? (
+                    <p><span className="font-medium">Vote type:</span> Passage votes determine whether a bill or resolution will advance. A "Yea" vote supports the measure; a "Nay" vote opposes it.</p>
+                  ) : vote.question?.toLowerCase().includes('cloture') ? (
+                    <p><span className="font-medium">Vote type:</span> Cloture votes are procedural votes in the Senate to end debate and proceed to a final vote. 60 votes are typically required for cloture to pass.</p>
+                  ) : vote.question?.toLowerCase().includes('amendment') ? (
+                    <p><span className="font-medium">Vote type:</span> Amendment votes decide whether to modify a bill's text before final passage. Amendments can significantly change what a bill does.</p>
+                  ) : vote.question?.toLowerCase().includes('motion to recommit') ? (
+                    <p><span className="font-medium">Vote type:</span> A motion to recommit sends a bill back to committee, often effectively killing it or forcing changes.</p>
+                  ) : (
+                    <p><span className="font-medium">Vote type:</span> This is a roll call vote where each member's position is recorded. "Yea" means support, "Nay" means opposition.</p>
                   )}
-                </p>
+                </div>
               </div>
             </div>
 
