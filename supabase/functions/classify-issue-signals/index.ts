@@ -71,7 +71,7 @@ serve(async (req) => {
     // Get all unclassified bills, prioritizing Senate bills if requested
     let billsQuery = supabase
       .from("bills")
-      .select("id, title, short_title, summary, policy_area, subjects, bill_type")
+      .select("id, title, short_title, summary, policy_area, subjects, bill_type, bill_number")
       .not("title", "is", null);
 
     // Prioritize Senate bills to fix gap in senator positions
@@ -206,6 +206,16 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
 
         const aiData = await aiResponse.json();
         const content = aiData.choices?.[0]?.message?.content || "";
+        const tokensUsed = aiData.usage?.total_tokens;
+        
+        // Log AI usage for classification
+        await supabase.from('ai_usage_log').insert({
+          operation_type: 'issue_classification',
+          tokens_used: tokensUsed,
+          model: 'google/gemini-2.5-flash',
+          success: true,
+          metadata: { bill_id: bill.id, bill_number: `${bill.bill_type?.toUpperCase() || ''}${bill.bill_number || ''}` }
+        });
         
         // Parse JSON from response
         const jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -257,6 +267,14 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
 
       } catch (billError) {
         console.error(`Error processing bill ${bill.id}:`, billError);
+        // Log failed AI usage
+        await supabase.from('ai_usage_log').insert({
+          operation_type: 'issue_classification',
+          model: 'google/gemini-2.5-flash',
+          success: false,
+          error_message: String(billError),
+          metadata: { bill_id: bill.id }
+        });
       }
     }
 

@@ -190,12 +190,22 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
 
     const aiData = await aiResponse.json()
     const summary = aiData.choices?.[0]?.message?.content
+    const tokensUsed = aiData.usage?.total_tokens
 
     if (!summary) {
       throw new Error('No summary generated')
     }
 
     console.log('Summary generated, saving to database...')
+
+    // Log AI usage
+    await supabase.from('ai_usage_log').insert({
+      operation_type: 'member_summary',
+      tokens_used: tokensUsed,
+      model: 'google/gemini-2.5-flash',
+      success: true,
+      metadata: { member_id: memberId, member_name: member.full_name }
+    })
 
     // Save or update the summary
     const { error: upsertError } = await supabase
@@ -221,6 +231,18 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Generate summary error:', errorMessage)
+    
+    // Log failed AI usage
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    await supabase.from('ai_usage_log').insert({
+      operation_type: 'member_summary',
+      model: 'google/gemini-2.5-flash',
+      success: false,
+      error_message: errorMessage
+    })
+    
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

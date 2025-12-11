@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity, Brain } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
@@ -48,13 +48,15 @@ interface UserRole {
 interface AnalyticsData {
   userSignups: { date: string; count: number }[];
   dataCounts: { name: string; count: number }[];
-  aiSummaries: { date: string; count: number }[];
+  aiUsageByDate: { date: string; member_summary: number; bill_impact: number; issue_classification: number; admin_chat: number }[];
+  aiUsageByType: { name: string; count: number; successRate: number }[];
   totals: {
     members: number;
     bills: number;
     votes: number;
     users: number;
-    aiSummaries: number;
+    totalAiCalls: number;
+    totalTokens: number;
   };
 }
 
@@ -141,12 +143,12 @@ export default function AdminPage() {
     setIsLoadingAnalytics(true);
     try {
       // Fetch all data in parallel
-      const [profilesRes, membersRes, billsRes, votesRes, summariesRes] = await Promise.all([
+      const [profilesRes, membersRes, billsRes, votesRes, aiUsageRes] = await Promise.all([
         supabase.from("profiles").select("created_at"),
         supabase.from("members").select("id", { count: "exact", head: true }),
         supabase.from("bills").select("id", { count: "exact", head: true }),
         supabase.from("votes").select("id", { count: "exact", head: true }),
-        supabase.from("member_summaries").select("generated_at"),
+        supabase.from("ai_usage_log").select("*").order("created_at", { ascending: false }),
       ]);
 
       // Process user signups by date (last 30 days)
@@ -172,46 +174,83 @@ export default function AdminPage() {
         count,
       }));
 
-      // Process AI summaries by date (last 30 days)
-      const summariesByDate = new Map<string, number>();
+      // Process AI usage by date (last 30 days)
+      const aiUsageByDateMap = new Map<string, { member_summary: number; bill_impact: number; issue_classification: number; admin_chat: number }>();
       for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
-        summariesByDate.set(date.toISOString().split("T")[0], 0);
+        aiUsageByDateMap.set(date.toISOString().split("T")[0], { member_summary: 0, bill_impact: 0, issue_classification: 0, admin_chat: 0 });
       }
 
-      (summariesRes.data || []).forEach((summary) => {
-        if (summary.generated_at) {
-          const date = summary.generated_at.split("T")[0];
-          if (summariesByDate.has(date)) {
-            summariesByDate.set(date, (summariesByDate.get(date) || 0) + 1);
+      // Count AI usage by type
+      const aiUsageByTypeMap = new Map<string, { count: number; success: number; tokens: number }>();
+      
+      (aiUsageRes.data || []).forEach((log: any) => {
+        const opType = log.operation_type || 'unknown';
+        
+        // Count by type
+        if (!aiUsageByTypeMap.has(opType)) {
+          aiUsageByTypeMap.set(opType, { count: 0, success: 0, tokens: 0 });
+        }
+        const typeStats = aiUsageByTypeMap.get(opType)!;
+        typeStats.count++;
+        if (log.success) typeStats.success++;
+        if (log.tokens_used) typeStats.tokens += log.tokens_used;
+        
+        // Count by date
+        if (log.created_at) {
+          const date = log.created_at.split("T")[0];
+          if (aiUsageByDateMap.has(date)) {
+            const dayStats = aiUsageByDateMap.get(date)!;
+            if (opType === 'member_summary') dayStats.member_summary++;
+            else if (opType === 'bill_impact') dayStats.bill_impact++;
+            else if (opType === 'issue_classification') dayStats.issue_classification++;
+            else if (opType === 'admin_chat') dayStats.admin_chat++;
           }
         }
       });
 
-      const aiSummaries = Array.from(summariesByDate.entries()).map(([date, count]) => ({
+      const aiUsageByDate = Array.from(aiUsageByDateMap.entries()).map(([date, stats]) => ({
         date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        count,
+        ...stats
       }));
+
+      const operationLabels: Record<string, string> = {
+        member_summary: "Member Summaries",
+        bill_impact: "Bill Impacts",
+        issue_classification: "Issue Classification",
+        admin_chat: "Admin Chat"
+      };
+
+      const aiUsageByType = Array.from(aiUsageByTypeMap.entries()).map(([type, stats]) => ({
+        name: operationLabels[type] || type,
+        count: stats.count,
+        successRate: stats.count > 0 ? Math.round((stats.success / stats.count) * 100) : 0,
+      }));
+
+      // Calculate totals
+      const totalAiCalls = (aiUsageRes.data || []).length;
+      const totalTokens = (aiUsageRes.data || []).reduce((sum: number, log: any) => sum + (log.tokens_used || 0), 0);
 
       // Data counts for pie chart
       const dataCounts = [
         { name: "Members", count: membersRes.count || 0 },
         { name: "Bills", count: billsRes.count || 0 },
         { name: "Votes", count: votesRes.count || 0 },
-        { name: "AI Summaries", count: summariesRes.data?.length || 0 },
       ];
 
       setAnalytics({
         userSignups,
         dataCounts,
-        aiSummaries,
+        aiUsageByDate,
+        aiUsageByType,
         totals: {
           members: membersRes.count || 0,
           bills: billsRes.count || 0,
           votes: votesRes.count || 0,
           users: profilesRes.data?.length || 0,
-          aiSummaries: summariesRes.data?.length || 0,
+          totalAiCalls,
+          totalTokens,
         },
       });
     } catch (error) {
@@ -393,13 +432,39 @@ export default function AdminPage() {
                   </Card>
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardDescription>AI Summaries</CardDescription>
+                      <CardDescription>Total AI Calls</CardDescription>
                       <CardTitle className="text-3xl">
-                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.aiSummaries || 0}
+                        {isLoadingAnalytics ? <Loader2 className="h-6 w-6 animate-spin" /> : analytics?.totals.totalAiCalls.toLocaleString() || 0}
                       </CardTitle>
                     </CardHeader>
                   </Card>
                 </div>
+
+                {/* AI Usage Summary Cards */}
+                {analytics?.aiUsageByType && analytics.aiUsageByType.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Brain className="h-5 w-5" />
+                        AI Usage by Operation Type
+                      </CardTitle>
+                      <CardDescription>Breakdown of AI operations across all features</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        {analytics.aiUsageByType.map((item) => (
+                          <div key={item.name} className="p-4 rounded-lg border bg-card">
+                            <div className="text-sm text-muted-foreground">{item.name}</div>
+                            <div className="text-2xl font-bold">{item.count.toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.successRate}% success rate
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Charts */}
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -445,7 +510,7 @@ export default function AdminPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>AI Summaries Generated (Last 30 Days)</CardTitle>
+                      <CardTitle>AI Usage (Last 30 Days)</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {isLoadingAnalytics ? (
@@ -454,7 +519,7 @@ export default function AdminPage() {
                         </div>
                       ) : (
                         <ResponsiveContainer width="100%" height={250}>
-                          <BarChart data={analytics?.aiSummaries || []}>
+                          <BarChart data={analytics?.aiUsageByDate || []}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
                             <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
@@ -465,7 +530,10 @@ export default function AdminPage() {
                                 borderRadius: "8px"
                               }} 
                             />
-                            <Bar dataKey="count" fill="hsl(var(--chart-2))" name="Summaries" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="member_summary" fill="hsl(var(--primary))" name="Member Summaries" stackId="a" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="bill_impact" fill="hsl(var(--chart-2))" name="Bill Impacts" stackId="a" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="issue_classification" fill="hsl(var(--chart-3))" name="Issue Classification" stackId="a" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="admin_chat" fill="hsl(var(--chart-4))" name="Admin Chat" stackId="a" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       )}

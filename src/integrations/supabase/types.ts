@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          model: string | null
+          operation_type: string
+          success: boolean | null
+          tokens_used: number | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          operation_type: string
+          success?: boolean | null
+          tokens_used?: number | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          operation_type?: string
+          success?: boolean | null
+          tokens_used?: number | null
+        }
+        Relationships: []
+      }
       api_sources: {
         Row: {
           base_url: string | null
