@@ -1,6 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { USMap } from "@/components/USMap";
+import { USMapSVG } from "@/components/USMapSVG";
 import { StatsCard } from "@/components/StatsCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
@@ -130,7 +130,7 @@ export default function MapPage() {
             </p>
           </div>
           <div className="p-4 lg:p-8">
-            <USMap />
+            <USMapSVG />
           </div>
         </div>
 
