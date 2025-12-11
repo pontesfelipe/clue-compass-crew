@@ -30,6 +30,61 @@ const STATE_NAMES: Record<string, string> = {
   DC: "District of Columbia"
 };
 
+// Approximate state label positions (percentage based for responsive sizing)
+const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
+  AL: { x: 65.5, y: 67 },
+  AK: { x: 17, y: 83 },
+  AZ: { x: 23, y: 60 },
+  AR: { x: 55, y: 58 },
+  CA: { x: 10, y: 50 },
+  CO: { x: 32, y: 47 },
+  CT: { x: 90, y: 32 },
+  DE: { x: 85, y: 42 },
+  FL: { x: 77, y: 78 },
+  GA: { x: 72, y: 64 },
+  HI: { x: 27, y: 88 },
+  ID: { x: 20, y: 28 },
+  IL: { x: 60, y: 44 },
+  IN: { x: 65, y: 44 },
+  IA: { x: 52, y: 38 },
+  KS: { x: 42, y: 50 },
+  KY: { x: 68, y: 50 },
+  LA: { x: 56, y: 72 },
+  ME: { x: 93, y: 18 },
+  MD: { x: 82, y: 42 },
+  MA: { x: 92, y: 28 },
+  MI: { x: 67, y: 30 },
+  MN: { x: 52, y: 24 },
+  MS: { x: 60, y: 65 },
+  MO: { x: 54, y: 50 },
+  MT: { x: 27, y: 20 },
+  NE: { x: 41, y: 40 },
+  NV: { x: 15, y: 42 },
+  NH: { x: 91, y: 23 },
+  NJ: { x: 87, y: 38 },
+  NM: { x: 29, y: 58 },
+  NY: { x: 83, y: 28 },
+  NC: { x: 78, y: 54 },
+  ND: { x: 42, y: 22 },
+  OH: { x: 71, y: 42 },
+  OK: { x: 44, y: 57 },
+  OR: { x: 13, y: 26 },
+  PA: { x: 79, y: 36 },
+  RI: { x: 93, y: 30 },
+  SC: { x: 76, y: 60 },
+  SD: { x: 42, y: 30 },
+  TN: { x: 66, y: 55 },
+  TX: { x: 40, y: 70 },
+  UT: { x: 22, y: 44 },
+  VT: { x: 88, y: 20 },
+  VA: { x: 78, y: 47 },
+  WA: { x: 14, y: 14 },
+  WV: { x: 75, y: 45 },
+  WI: { x: 58, y: 28 },
+  WY: { x: 30, y: 34 },
+  DC: { x: 83, y: 45 }
+};
+
 // Territories with full names
 const TERRITORY_INFO: Record<string, string> = {
   DC: "District of Columbia",
@@ -50,7 +105,6 @@ interface USMapSVGProps {
 export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   
   const { data: stateScores, isLoading } = useStateScores();
 
@@ -68,21 +122,21 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
   const handleStateHover = (event: React.MouseEvent<SVGPathElement>) => {
     const stateAbbr = event.currentTarget.dataset.name;
     setHoveredState(stateAbbr || null);
-    setMousePos({ x: event.clientX, y: event.clientY });
-  };
-
-  const handleMouseMove = (event: React.MouseEvent) => {
-    if (hoveredState) {
-      setMousePos({ x: event.clientX, y: event.clientY });
-    }
   };
 
   const handleStateLeave = () => {
     setHoveredState(null);
-    setMousePos(null);
   };
 
   const handleTerritoryClick = (abbr: string) => {
+    if (onStateClick) {
+      onStateClick(abbr);
+    } else {
+      navigate(`/state/${abbr}`);
+    }
+  };
+
+  const handleLabelClick = (abbr: string) => {
     if (onStateClick) {
       onStateClick(abbr);
     } else {
@@ -152,21 +206,6 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
 
   return (
     <div className="relative w-full">
-      {/* Floating State Abbreviation Label */}
-      {hoveredState && mousePos && (
-        <div 
-          className="fixed z-50 pointer-events-none"
-          style={{ 
-            left: mousePos.x + 12, 
-            top: mousePos.y - 30,
-          }}
-        >
-          <div className="px-2 py-1 rounded bg-foreground text-background text-sm font-bold shadow-lg">
-            {hoveredState}
-          </div>
-        </div>
-      )}
-
       {/* Tooltip */}
       {hoveredStateData && (
         <div className="absolute top-4 left-4 z-20 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[200px] animate-scale-in pointer-events-none">
@@ -183,7 +222,7 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-border">
               <span className="text-xs text-muted-foreground">
-                {TERRITORIES.includes(hoveredState!) ? 'Delegate' : 'Members'}
+                {TERRITORIES.includes(hoveredState!) ? "Delegate" : "Members"}
               </span>
               <span className="text-sm font-medium">{hoveredStateData.memberCount}</span>
             </div>
@@ -191,11 +230,10 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
         </div>
       )}
 
-      {/* SVG Map */}
+      {/* SVG Map with Labels */}
       <div 
-        className="p-4 [&_path]:cursor-pointer [&_path]:transition-opacity [&_path:hover]:opacity-70 [&_path]:stroke-background [&_path]:stroke-[0.5]"
+        className="relative p-4 [&_path]:cursor-pointer [&_path]:transition-opacity [&_path:hover]:opacity-70 [&_path]:stroke-background [&_path]:stroke-[0.5]"
         onMouseLeave={handleStateLeave}
-        onMouseMove={handleMouseMove}
       >
         <USAMap
           customize={statesCustomConfig}
@@ -205,6 +243,29 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
           width="100%"
           title="US State Performance Map"
         />
+        
+        {/* State Abbreviation Labels Overlay */}
+        <div className="absolute inset-0 pointer-events-none p-4">
+          {Object.entries(STATE_LABEL_POSITIONS).map(([abbr, pos]) => (
+            <div
+              key={abbr}
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer"
+              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+              onClick={() => handleLabelClick(abbr)}
+              onMouseEnter={() => setHoveredState(abbr)}
+              onMouseLeave={() => setHoveredState(null)}
+            >
+              <span 
+                className={`text-[10px] sm:text-xs font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] transition-transform ${
+                  hoveredState === abbr ? "scale-125" : ""
+                }`}
+                style={{ color: "white" }}
+              >
+                {abbr}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Territories Section */}
@@ -227,13 +288,13 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
               <div className="text-center">
                 <div className="text-lg font-bold text-white drop-shadow-md">{territory.abbr}</div>
                 <div className="text-xs text-white/80 drop-shadow-sm">
-                  {territory.score ?? 'N/A'}
+                  {territory.score ?? "N/A"}
                 </div>
               </div>
               {/* Hover tooltip */}
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg z-10">
                 <div className="font-medium text-foreground">{territory.name}</div>
-                <div className="text-muted-foreground">Score: {territory.score ?? 'No data'}</div>
+                <div className="text-muted-foreground">Score: {territory.score ?? "No data"}</div>
               </div>
             </button>
           ))}
