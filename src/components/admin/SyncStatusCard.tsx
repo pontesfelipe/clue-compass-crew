@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer } from "lucide-react";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
 import { CronExpressionParser } from "cron-parser";
@@ -287,6 +287,8 @@ export function SyncStatusCard() {
     setAutoRefresh(hasRunning);
   }, [syncProgress]);
 
+  const [isResetting, setIsResetting] = useState(false);
+
   const logSyncTrigger = async (config: SyncConfig, success: boolean, errorMessage?: string) => {
     try {
       await supabase.from("ai_usage_log").insert({
@@ -305,6 +307,54 @@ export function SyncStatusCard() {
       });
     } catch (logError) {
       console.error("Failed to log sync trigger:", logError);
+    }
+  };
+
+  const resetAllSyncProgress = async () => {
+    setIsResetting(true);
+    try {
+      // Reset all sync progress entries
+      const resetPromises = SYNC_CONFIGS.map(config => 
+        supabase
+          .from('sync_progress')
+          .upsert({
+            id: config.id,
+            status: 'idle',
+            last_run_at: null,
+            total_processed: 0,
+            current_offset: 0,
+            error_message: null,
+            metadata: null,
+          }, { onConflict: 'id' })
+      );
+
+      await Promise.all(resetPromises);
+
+      // Log the reset action
+      await supabase.from("ai_usage_log").insert({
+        operation_type: "sync_reset_all",
+        success: true,
+        metadata: {
+          reset_at: new Date().toISOString(),
+          configs_reset: SYNC_CONFIGS.length,
+        },
+      });
+
+      toast({
+        title: "Sync Progress Reset",
+        description: `All ${SYNC_CONFIGS.length} sync progress entries have been reset.`,
+      });
+
+      await fetchSyncProgress();
+    } catch (error) {
+      console.error("Error resetting sync progress:", error);
+      toast({
+        title: "Reset Failed",
+        description: error instanceof Error ? error.message : "Failed to reset sync progress",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -453,10 +503,26 @@ export function SyncStatusCard() {
                 </Badge>
               )}
             </span>
-            <Button variant="outline" size="sm" onClick={fetchSyncProgress}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={resetAllSyncProgress}
+                disabled={isResetting}
+                className="text-destructive hover:text-destructive"
+              >
+                {isResetting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                )}
+                Reset All
+              </Button>
+              <Button variant="outline" size="sm" onClick={fetchSyncProgress}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
           </CardTitle>
           <CardDescription>
             Monitor and trigger data sync from Congress.gov, FEC, and score calculations
