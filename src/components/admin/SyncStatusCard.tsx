@@ -136,16 +136,6 @@ const SYNC_CONFIGS: SyncConfig[] = [
     category: "scores",
     cronSchedule: "30 */6 * * *", // Every 6 hours at :30
   },
-  {
-    id: "notifications",
-    label: "Email Notifications",
-    description: "Sends tracked member vote alerts to users",
-    expectedTotal: 100,
-    icon: <Bell className="h-4 w-4" />,
-    functionName: "send-member-notifications",
-    category: "scores",
-    cronSchedule: "0 8 * * *", // Daily at 8 AM
-  },
 ];
 
 function formatTimeAgo(dateString: string | null): string {
