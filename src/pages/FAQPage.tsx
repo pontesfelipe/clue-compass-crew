@@ -20,7 +20,7 @@ export default function FAQPage() {
     },
     {
       question: "How often is the data updated?",
-      answer: "We update our data on a regular schedule: voting records every 2 hours, bills every 6 hours, member information daily, and campaign finance data nightly. This 'near real-time' approach ensures you have access to recent data."
+      answer: "We update our data automatically: voting records every 2 hours, bills every 6 hours, member information daily, and campaign finance data nightly. This 'near real-time' approach ensures you have access to recent congressional activity."
     },
     {
       question: "How are the scores calculated?",
@@ -36,7 +36,7 @@ export default function FAQPage() {
     },
     {
       question: "What is the alignment score?",
-      answer: "The alignment score shows how closely a representative's voting record and legislative activity match your personal positions on key issues. Complete your profile to see personalized alignment scores for all representatives."
+      answer: "The alignment score shows how closely a representative's voting record and legislative activity match your personal positions on key issues. Complete your profile questionnaire to see personalized alignment scores for all representatives."
     },
     {
       question: "Why is a representative's score different from what I expected?",
@@ -44,7 +44,7 @@ export default function FAQPage() {
     },
     {
       question: "How can I find my representatives?",
-      answer: "Use the interactive map on our homepage to explore representatives by state. You can also use the search feature to find specific members by name, state, or district."
+      answer: "Use the interactive map on our homepage to explore representatives by state. You can also browse all members on the Members page or use the search feature to find specific members by name, state, or district."
     },
     {
       question: "Is CivicScore free to use?",
@@ -52,11 +52,19 @@ export default function FAQPage() {
     },
     {
       question: "How do you handle campaign finance data?",
-      answer: "We display campaign finance data from the FEC, including individual contributions, PAC donations, and funding sources. This helps you understand potential influences on your representatives' decision-making."
+      answer: "We display campaign finance data from the FEC, including individual contributions, PAC donations, corporate sponsors, and funding sources. This transparency helps you understand potential influences on your representatives' decision-making."
     },
     {
       question: "Can I compare multiple representatives?",
       answer: "Yes! Use our Compare feature to see side-by-side comparisons of multiple representatives, including their scores, voting records, and policy area focus."
+    },
+    {
+      question: "What is the AI-generated summary on member pages?",
+      answer: "Authenticated users can generate an AI-powered summary that explains a representative's recent activity, voting patterns, and legislative priorities in plain language. Summaries are refreshed monthly and help make complex congressional data more accessible."
+    },
+    {
+      question: "How do I track representatives I'm interested in?",
+      answer: "Once logged in, click the 'Track' button on any member's page. You can view all your tracked representatives from your profile, where you'll see their recent activity including votes and bill sponsorships."
     }
   ];
 

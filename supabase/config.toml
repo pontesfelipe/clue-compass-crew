@@ -1,7 +1,21 @@
 project_id = "ifdorcgbhxzwktjlxqfo"
 
-[functions.recalculate-state-scores]
+# === CORE DATA SYNC JOBS ===
+# Order: Members → Details → Bills → Votes → Finance → AI Processing → Scores
+
+[functions.sync-congress-members]
 verify_jwt = false
+
+[functions.sync-member-details]
+verify_jwt = false
+
+[functions.sync-bills]
+verify_jwt = false
+
+[functions.sync-votes]
+verify_jwt = false
+
+# === FEC FINANCE DATA ===
 
 [functions.sync-fec-finance]
 verify_jwt = false
@@ -9,16 +23,28 @@ verify_jwt = false
 [functions.sync-fec-funding]
 verify_jwt = false
 
-[functions.sync-congress-members]
+# === AI PROCESSING ===
+
+[functions.generate-bill-impact]
 verify_jwt = false
 
-[functions.sync-bills]
+[functions.classify-issue-signals]
 verify_jwt = false
+
+[functions.compute-politician-positions]
+verify_jwt = false
+
+# === SCORE CALCULATION ===
 
 [functions.calculate-member-scores]
 verify_jwt = false
 
-[functions.sync-votes]
+[functions.recalculate-state-scores]
+verify_jwt = false
+
+# === UTILITIES ===
+
+[functions.data-status]
 verify_jwt = false
 
 [functions.generate-member-summary]
@@ -27,23 +53,8 @@ verify_jwt = false
 [functions.admin-ai-chat]
 verify_jwt = false
 
-[functions.sync-member-details]
+[functions.delete-user]
 verify_jwt = false
 
-[functions.data-status]
-verify_jwt = false
-
-[functions.compute-politician-positions]
-verify_jwt = false
-
-[functions.classify-issue-signals]
-verify_jwt = false
-
-[functions.send-member-notifications]
-verify_jwt = false
-
-[functions.send-weekly-digest]
-verify_jwt = false
-
-[functions.generate-bill-impact]
+[functions.log-user-login]
 verify_jwt = false
