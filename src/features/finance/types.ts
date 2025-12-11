@@ -26,8 +26,8 @@ export interface Sponsor {
   id: string;
   memberId: string;
   sponsorName: string;
-  sponsorType: "corporation" | "nonprofit" | "trade_association" | "union";
-  relationshipType: "donor" | "endorsement" | "pac_support";
+  sponsorType: "pac" | "corporate" | "union" | "party";
+  relationshipType: "major_donor" | "contributor" | "party_support";
   totalSupport: number;
   cycle: number;
 }
@@ -50,16 +50,16 @@ export const contributorTypeLabels: Record<Contribution["contributorType"], stri
 };
 
 export const sponsorTypeLabels: Record<Sponsor["sponsorType"], string> = {
-  corporation: "Corporation",
-  nonprofit: "Non-profit",
-  trade_association: "Trade Association",
+  pac: "PAC",
+  corporate: "Corporate",
   union: "Union",
+  party: "Party Committee",
 };
 
 export const relationshipTypeLabels: Record<Sponsor["relationshipType"], string> = {
-  donor: "Donor",
-  endorsement: "Endorsement",
-  pac_support: "PAC Support",
+  major_donor: "Major Donor",
+  contributor: "Contributor",
+  party_support: "Party Support",
 };
 
 export function formatCurrency(amount: number): string {
