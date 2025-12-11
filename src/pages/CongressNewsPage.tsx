@@ -446,12 +446,31 @@ export default function CongressNewsPage() {
                     />
                   </div>
 
-                  {/* Primary type legend */}
-                  <div className="flex flex-wrap gap-1.5 text-xs">
-                    <Badge className={getPrimaryTypeColor("Open")}>Open</Badge>
-                    <Badge className={getPrimaryTypeColor("Closed")}>Closed</Badge>
-                    <Badge className={getPrimaryTypeColor("Semi-Closed")}>Semi</Badge>
-                    <Badge className={getPrimaryTypeColor("Top-Two")}>Top-Two</Badge>
+                  {/* Primary type explanations */}
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-medium text-foreground mb-2">Primary Types Explained:</p>
+                    <div className="grid gap-2 text-xs">
+                      <div className="flex items-start gap-2">
+                        <Badge className={`${getPrimaryTypeColor("Open")} shrink-0`}>Open</Badge>
+                        <span className="text-muted-foreground">Any registered voter can vote in either party's primary, regardless of their own party registration.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge className={`${getPrimaryTypeColor("Closed")} shrink-0`}>Closed</Badge>
+                        <span className="text-muted-foreground">Only voters registered with a party can vote in that party's primary election.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge className={`${getPrimaryTypeColor("Semi-Closed")} shrink-0`}>Semi-Closed</Badge>
+                        <span className="text-muted-foreground">Registered party members vote in their party's primary; independents may choose which primary to vote in.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge className={`${getPrimaryTypeColor("Top-Two")} shrink-0`}>Top-Two</Badge>
+                        <span className="text-muted-foreground">All candidates appear on one ballot. Top two vote-getters advance to general election, regardless of party.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge className={`${getPrimaryTypeColor("Jungle")} shrink-0`}>Jungle</Badge>
+                        <span className="text-muted-foreground">Similar to Top-Two; all candidates from all parties compete on one ballot in the primary.</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* State list */}
