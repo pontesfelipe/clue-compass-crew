@@ -31,15 +31,15 @@ const STATE_NAMES: Record<string, string> = {
 };
 
 // Approximate state label positions (percentage based for responsive sizing)
-const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
+const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number; offset?: boolean }> = {
   AL: { x: 65.5, y: 67 },
   AK: { x: 17, y: 83 },
   AZ: { x: 23, y: 60 },
   AR: { x: 55, y: 58 },
   CA: { x: 10, y: 50 },
   CO: { x: 32, y: 47 },
-  CT: { x: 90, y: 32 },
-  DE: { x: 85, y: 42 },
+  CT: { x: 96, y: 35, offset: true },
+  DE: { x: 96, y: 44, offset: true },
   FL: { x: 77, y: 78 },
   GA: { x: 72, y: 64 },
   HI: { x: 27, y: 88 },
@@ -51,8 +51,8 @@ const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
   KY: { x: 68, y: 50 },
   LA: { x: 56, y: 72 },
   ME: { x: 93, y: 18 },
-  MD: { x: 82, y: 42 },
-  MA: { x: 92, y: 28 },
+  MD: { x: 96, y: 48, offset: true },
+  MA: { x: 96, y: 31, offset: true },
   MI: { x: 67, y: 30 },
   MN: { x: 52, y: 24 },
   MS: { x: 60, y: 65 },
@@ -60,8 +60,8 @@ const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
   MT: { x: 27, y: 20 },
   NE: { x: 41, y: 40 },
   NV: { x: 15, y: 42 },
-  NH: { x: 91, y: 23 },
-  NJ: { x: 87, y: 38 },
+  NH: { x: 96, y: 24, offset: true },
+  NJ: { x: 96, y: 40, offset: true },
   NM: { x: 29, y: 58 },
   NY: { x: 83, y: 28 },
   NC: { x: 78, y: 54 },
@@ -70,19 +70,19 @@ const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
   OK: { x: 44, y: 57 },
   OR: { x: 13, y: 26 },
   PA: { x: 79, y: 36 },
-  RI: { x: 93, y: 30 },
+  RI: { x: 96, y: 33, offset: true },
   SC: { x: 76, y: 60 },
   SD: { x: 42, y: 30 },
   TN: { x: 66, y: 55 },
   TX: { x: 40, y: 70 },
   UT: { x: 22, y: 44 },
-  VT: { x: 88, y: 20 },
+  VT: { x: 96, y: 21, offset: true },
   VA: { x: 78, y: 47 },
   WA: { x: 14, y: 14 },
   WV: { x: 75, y: 45 },
   WI: { x: 58, y: 28 },
   WY: { x: 30, y: 34 },
-  DC: { x: 83, y: 45 }
+  DC: { x: 96, y: 51, offset: true }
 };
 
 // Territories with full names
@@ -246,7 +246,9 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
         
         {/* State Abbreviation Labels Overlay */}
         <div className="absolute inset-0 pointer-events-none p-4">
-          {Object.entries(STATE_LABEL_POSITIONS).map(([abbr, pos]) => (
+          {Object.entries(STATE_LABEL_POSITIONS)
+            .filter(([, pos]) => !pos.offset)
+            .map(([abbr, pos]) => (
             <div
               key={abbr}
               className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer"
@@ -265,6 +267,29 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
               </span>
             </div>
           ))}
+        </div>
+        
+        {/* Northeast Corridor Labels - Stacked on right side */}
+        <div className="absolute right-2 top-[18%] flex flex-col gap-0.5 pointer-events-auto">
+          {["VT", "NH", "MA", "RI", "CT", "NJ", "DE", "MD", "DC"]
+            .map((abbr) => {
+              const stateData = stateScores?.find(s => s.abbr === abbr);
+              const bgColor = getScoreColor(stateData?.score ?? null);
+              return (
+                <button
+                  key={abbr}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-bold transition-all hover:scale-105 ${
+                    hoveredState === abbr ? "ring-2 ring-primary" : ""
+                  }`}
+                  style={{ backgroundColor: bgColor, color: "white" }}
+                  onClick={() => handleLabelClick(abbr)}
+                  onMouseEnter={() => setHoveredState(abbr)}
+                  onMouseLeave={() => setHoveredState(null)}
+                >
+                  <span className="drop-shadow-sm">{abbr}</span>
+                </button>
+              );
+            })}
         </div>
       </div>
 
