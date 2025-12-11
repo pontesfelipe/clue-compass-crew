@@ -43,59 +43,60 @@ const UPCOMING_ELECTIONS: UpcomingElection[] = [
   },
 ];
 
-// All 50 states primary dates for 2026 (estimated based on historical patterns)
-const PRIMARY_DATES_2026 = [
-  { state: "Alabama", abbr: "AL", date: "2026-05-26", type: "Open" },
-  { state: "Alaska", abbr: "AK", date: "2026-08-18", type: "Open" },
-  { state: "Arizona", abbr: "AZ", date: "2026-08-04", type: "Closed" },
-  { state: "Arkansas", abbr: "AR", date: "2026-05-19", type: "Open" },
-  { state: "California", abbr: "CA", date: "2026-03-03", type: "Top-Two" },
-  { state: "Colorado", abbr: "CO", date: "2026-06-30", type: "Semi-Closed" },
-  { state: "Connecticut", abbr: "CT", date: "2026-08-11", type: "Closed" },
-  { state: "Delaware", abbr: "DE", date: "2026-09-08", type: "Closed" },
-  { state: "Florida", abbr: "FL", date: "2026-08-25", type: "Closed" },
-  { state: "Georgia", abbr: "GA", date: "2026-05-19", type: "Open" },
-  { state: "Hawaii", abbr: "HI", date: "2026-08-08", type: "Open" },
-  { state: "Idaho", abbr: "ID", date: "2026-05-19", type: "Closed" },
-  { state: "Illinois", abbr: "IL", date: "2026-03-17", type: "Open" },
-  { state: "Indiana", abbr: "IN", date: "2026-05-05", type: "Open" },
-  { state: "Iowa", abbr: "IA", date: "2026-06-02", type: "Semi-Closed" },
-  { state: "Kansas", abbr: "KS", date: "2026-08-04", type: "Semi-Closed" },
-  { state: "Kentucky", abbr: "KY", date: "2026-05-19", type: "Closed" },
-  { state: "Louisiana", abbr: "LA", date: "2026-11-03", type: "Jungle" },
-  { state: "Maine", abbr: "ME", date: "2026-06-09", type: "Semi-Closed" },
-  { state: "Maryland", abbr: "MD", date: "2026-06-23", type: "Closed" },
-  { state: "Massachusetts", abbr: "MA", date: "2026-09-01", type: "Semi-Closed" },
-  { state: "Michigan", abbr: "MI", date: "2026-08-04", type: "Open" },
-  { state: "Minnesota", abbr: "MN", date: "2026-08-11", type: "Open" },
-  { state: "Mississippi", abbr: "MS", date: "2026-06-02", type: "Open" },
-  { state: "Missouri", abbr: "MO", date: "2026-08-04", type: "Open" },
-  { state: "Montana", abbr: "MT", date: "2026-06-02", type: "Open" },
-  { state: "Nebraska", abbr: "NE", date: "2026-05-12", type: "Semi-Closed" },
-  { state: "Nevada", abbr: "NV", date: "2026-06-09", type: "Closed" },
-  { state: "New Hampshire", abbr: "NH", date: "2026-09-08", type: "Semi-Closed" },
-  { state: "New Jersey", abbr: "NJ", date: "2026-06-02", type: "Semi-Closed" },
-  { state: "New Mexico", abbr: "NM", date: "2026-06-02", type: "Closed" },
-  { state: "New York", abbr: "NY", date: "2026-06-23", type: "Closed" },
-  { state: "North Carolina", abbr: "NC", date: "2026-03-03", type: "Semi-Closed" },
-  { state: "North Dakota", abbr: "ND", date: "2026-06-09", type: "Open" },
-  { state: "Ohio", abbr: "OH", date: "2026-05-05", type: "Semi-Closed" },
-  { state: "Oklahoma", abbr: "OK", date: "2026-06-30", type: "Closed" },
-  { state: "Oregon", abbr: "OR", date: "2026-05-19", type: "Closed" },
-  { state: "Pennsylvania", abbr: "PA", date: "2026-05-19", type: "Closed" },
-  { state: "Rhode Island", abbr: "RI", date: "2026-09-08", type: "Semi-Closed" },
-  { state: "South Carolina", abbr: "SC", date: "2026-06-09", type: "Open" },
-  { state: "South Dakota", abbr: "SD", date: "2026-06-02", type: "Semi-Closed" },
-  { state: "Tennessee", abbr: "TN", date: "2026-08-06", type: "Open" },
-  { state: "Texas", abbr: "TX", date: "2026-03-03", type: "Open" },
-  { state: "Utah", abbr: "UT", date: "2026-06-30", type: "Closed" },
-  { state: "Vermont", abbr: "VT", date: "2026-08-11", type: "Open" },
-  { state: "Virginia", abbr: "VA", date: "2026-06-09", type: "Open" },
-  { state: "Washington", abbr: "WA", date: "2026-08-04", type: "Top-Two" },
-  { state: "West Virginia", abbr: "WV", date: "2026-05-12", type: "Semi-Closed" },
-  { state: "Wisconsin", abbr: "WI", date: "2026-08-11", type: "Open" },
-  { state: "Wyoming", abbr: "WY", date: "2026-08-18", type: "Closed" },
-].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+// All 50 states election info for 2026 (estimated based on historical patterns)
+// Registration deadlines: days before election, "SDR" = Same Day Registration, "None" = No registration required
+const STATE_ELECTION_INFO_2026 = [
+  { state: "Alabama", abbr: "AL", primaryDate: "2026-05-26", type: "Open", regDeadline: 15, regNote: null },
+  { state: "Alaska", abbr: "AK", primaryDate: "2026-08-18", type: "Open", regDeadline: 30, regNote: null },
+  { state: "Arizona", abbr: "AZ", primaryDate: "2026-08-04", type: "Closed", regDeadline: 29, regNote: null },
+  { state: "Arkansas", abbr: "AR", primaryDate: "2026-05-19", type: "Open", regDeadline: 30, regNote: null },
+  { state: "California", abbr: "CA", primaryDate: "2026-03-03", type: "Top-Two", regDeadline: 15, regNote: "SDR available" },
+  { state: "Colorado", abbr: "CO", primaryDate: "2026-06-30", type: "Semi-Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Connecticut", abbr: "CT", primaryDate: "2026-08-11", type: "Closed", regDeadline: 7, regNote: "SDR available" },
+  { state: "Delaware", abbr: "DE", primaryDate: "2026-09-08", type: "Closed", regDeadline: 24, regNote: null },
+  { state: "Florida", abbr: "FL", primaryDate: "2026-08-25", type: "Closed", regDeadline: 29, regNote: null },
+  { state: "Georgia", abbr: "GA", primaryDate: "2026-05-19", type: "Open", regDeadline: 29, regNote: null },
+  { state: "Hawaii", abbr: "HI", primaryDate: "2026-08-08", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Idaho", abbr: "ID", primaryDate: "2026-05-19", type: "Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Illinois", abbr: "IL", primaryDate: "2026-03-17", type: "Open", regDeadline: 28, regNote: "SDR available" },
+  { state: "Indiana", abbr: "IN", primaryDate: "2026-05-05", type: "Open", regDeadline: 29, regNote: null },
+  { state: "Iowa", abbr: "IA", primaryDate: "2026-06-02", type: "Semi-Closed", regDeadline: 15, regNote: "SDR available" },
+  { state: "Kansas", abbr: "KS", primaryDate: "2026-08-04", type: "Semi-Closed", regDeadline: 21, regNote: null },
+  { state: "Kentucky", abbr: "KY", primaryDate: "2026-05-19", type: "Closed", regDeadline: 29, regNote: null },
+  { state: "Louisiana", abbr: "LA", primaryDate: "2026-11-03", type: "Jungle", regDeadline: 30, regNote: null },
+  { state: "Maine", abbr: "ME", primaryDate: "2026-06-09", type: "Semi-Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Maryland", abbr: "MD", primaryDate: "2026-06-23", type: "Closed", regDeadline: 21, regNote: "SDR available" },
+  { state: "Massachusetts", abbr: "MA", primaryDate: "2026-09-01", type: "Semi-Closed", regDeadline: 10, regNote: null },
+  { state: "Michigan", abbr: "MI", primaryDate: "2026-08-04", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Minnesota", abbr: "MN", primaryDate: "2026-08-11", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Mississippi", abbr: "MS", primaryDate: "2026-06-02", type: "Open", regDeadline: 30, regNote: null },
+  { state: "Missouri", abbr: "MO", primaryDate: "2026-08-04", type: "Open", regDeadline: 27, regNote: null },
+  { state: "Montana", abbr: "MT", primaryDate: "2026-06-02", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Nebraska", abbr: "NE", primaryDate: "2026-05-12", type: "Semi-Closed", regDeadline: 18, regNote: null },
+  { state: "Nevada", abbr: "NV", primaryDate: "2026-06-09", type: "Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "New Hampshire", abbr: "NH", primaryDate: "2026-09-08", type: "Semi-Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "New Jersey", abbr: "NJ", primaryDate: "2026-06-02", type: "Semi-Closed", regDeadline: 21, regNote: null },
+  { state: "New Mexico", abbr: "NM", primaryDate: "2026-06-02", type: "Closed", regDeadline: 28, regNote: "SDR available" },
+  { state: "New York", abbr: "NY", primaryDate: "2026-06-23", type: "Closed", regDeadline: 25, regNote: null },
+  { state: "North Carolina", abbr: "NC", primaryDate: "2026-03-03", type: "Semi-Closed", regDeadline: 25, regNote: "SDR during early voting" },
+  { state: "North Dakota", abbr: "ND", primaryDate: "2026-06-09", type: "Open", regDeadline: -1, regNote: "No registration required" },
+  { state: "Ohio", abbr: "OH", primaryDate: "2026-05-05", type: "Semi-Closed", regDeadline: 30, regNote: null },
+  { state: "Oklahoma", abbr: "OK", primaryDate: "2026-06-30", type: "Closed", regDeadline: 25, regNote: null },
+  { state: "Oregon", abbr: "OR", primaryDate: "2026-05-19", type: "Closed", regDeadline: 21, regNote: null },
+  { state: "Pennsylvania", abbr: "PA", primaryDate: "2026-05-19", type: "Closed", regDeadline: 15, regNote: null },
+  { state: "Rhode Island", abbr: "RI", primaryDate: "2026-09-08", type: "Semi-Closed", regDeadline: 30, regNote: null },
+  { state: "South Carolina", abbr: "SC", primaryDate: "2026-06-09", type: "Open", regDeadline: 30, regNote: null },
+  { state: "South Dakota", abbr: "SD", primaryDate: "2026-06-02", type: "Semi-Closed", regDeadline: 15, regNote: null },
+  { state: "Tennessee", abbr: "TN", primaryDate: "2026-08-06", type: "Open", regDeadline: 30, regNote: null },
+  { state: "Texas", abbr: "TX", primaryDate: "2026-03-03", type: "Open", regDeadline: 30, regNote: null },
+  { state: "Utah", abbr: "UT", primaryDate: "2026-06-30", type: "Closed", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Vermont", abbr: "VT", primaryDate: "2026-08-11", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Virginia", abbr: "VA", primaryDate: "2026-06-09", type: "Open", regDeadline: 22, regNote: "SDR available" },
+  { state: "Washington", abbr: "WA", primaryDate: "2026-08-04", type: "Top-Two", regDeadline: 8, regNote: "SDR available" },
+  { state: "West Virginia", abbr: "WV", primaryDate: "2026-05-12", type: "Semi-Closed", regDeadline: 21, regNote: null },
+  { state: "Wisconsin", abbr: "WI", primaryDate: "2026-08-11", type: "Open", regDeadline: 0, regNote: "Same Day Registration" },
+  { state: "Wyoming", abbr: "WY", primaryDate: "2026-08-18", type: "Closed", regDeadline: 14, regNote: "SDR available" },
+].sort((a, b) => new Date(a.primaryDate).getTime() - new Date(b.primaryDate).getTime());
 
 export default function CongressNewsPage() {
   const [primarySearch, setPrimarySearch] = useState("");
@@ -177,17 +178,24 @@ export default function CongressNewsPage() {
     }
   };
 
-  // Filter primaries based on search
-  const filteredPrimaries = PRIMARY_DATES_2026.filter(
-    (primary) =>
-      primary.state.toLowerCase().includes(primarySearch.toLowerCase()) ||
-      primary.abbr.toLowerCase().includes(primarySearch.toLowerCase())
+  // Filter states based on search
+  const filteredStates = STATE_ELECTION_INFO_2026.filter(
+    (state) =>
+      state.state.toLowerCase().includes(primarySearch.toLowerCase()) ||
+      state.abbr.toLowerCase().includes(primarySearch.toLowerCase())
   );
 
-  // Show limited or all primaries
-  const displayedPrimaries = showAllPrimaries || primarySearch 
-    ? filteredPrimaries 
-    : filteredPrimaries.slice(0, 10);
+  // Show limited or all states
+  const displayedStates = showAllPrimaries || primarySearch 
+    ? filteredStates 
+    : filteredStates.slice(0, 10);
+
+  // Helper to format registration deadline
+  const formatRegDeadline = (days: number, note: string | null) => {
+    if (days === -1) return "None required";
+    if (days === 0) return note || "Election Day";
+    return `${days} days before`;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -456,12 +464,12 @@ export default function CongressNewsPage() {
                 </CardContent>
               </Card>
 
-              {/* 2026 Primary Dates */}
+              {/* 2026 State Election Info */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">2026 Primary Dates</CardTitle>
+                  <CardTitle className="text-lg">2026 Election Calendar</CardTitle>
                   <CardDescription>
-                    All 50 states primary elections
+                    Primary dates & voter registration deadlines
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -484,26 +492,42 @@ export default function CongressNewsPage() {
                     <Badge className={getPrimaryTypeColor("Top-Two")}>Top-Two</Badge>
                   </div>
 
-                  {/* Primary list */}
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {displayedPrimaries.length > 0 ? (
-                      displayedPrimaries.map((primary, idx) => (
+                  {/* State list */}
+                  <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                    {displayedStates.length > 0 ? (
+                      displayedStates.map((state, idx) => (
                         <div 
                           key={idx} 
-                          className="flex items-center justify-between text-sm py-2 border-b border-border/50 last:border-0"
+                          className="rounded-lg border border-border/50 p-3 hover:bg-muted/30 transition-colors"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium w-8 text-muted-foreground">{primary.abbr}</span>
-                            <span className="font-medium">{primary.state}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className={`${getPrimaryTypeColor(primary.type)} text-xs px-1.5 py-0`}>
-                              {primary.type}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-muted-foreground w-7">{state.abbr}</span>
+                              <span className="font-medium text-sm">{state.state}</span>
+                            </div>
+                            <Badge className={`${getPrimaryTypeColor(state.type)} text-xs px-1.5 py-0`}>
+                              {state.type}
                             </Badge>
-                            <span className="text-muted-foreground text-xs w-20 text-right">
-                              {format(new Date(primary.date), "MMM d")}
-                            </span>
                           </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Primary:</span>
+                              <span className="ml-1 font-medium">
+                                {format(new Date(state.primaryDate), "MMM d, yyyy")}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Registration:</span>
+                              <span className={`ml-1 font-medium ${state.regDeadline === 0 || state.regDeadline === -1 ? "text-green-600 dark:text-green-400" : ""}`}>
+                                {formatRegDeadline(state.regDeadline, state.regNote)}
+                              </span>
+                            </div>
+                          </div>
+                          {state.regNote && state.regDeadline !== 0 && state.regDeadline !== -1 && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">
+                              {state.regNote}
+                            </p>
+                          )}
                         </div>
                       ))
                     ) : (
@@ -514,7 +538,7 @@ export default function CongressNewsPage() {
                   </div>
 
                   {/* Show more/less button */}
-                  {!primarySearch && filteredPrimaries.length > 10 && (
+                  {!primarySearch && filteredStates.length > 10 && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -535,9 +559,10 @@ export default function CongressNewsPage() {
                     </Button>
                   )}
 
-                  <p className="text-xs text-muted-foreground">
-                    * Dates are estimates based on historical patterns. Check your state's election website for official dates.
-                  </p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>* Primary dates are estimates. Registration deadlines are days before election.</p>
+                    <p>* "SDR" = Same Day Registration option available at polls.</p>
+                  </div>
                 </CardContent>
               </Card>
 
