@@ -192,6 +192,17 @@ serve(async (req) => {
 
     console.log(`Completed processing ${results.length} politicians`);
 
+    // Update sync progress
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'politician-positions',
+        last_run_at: new Date().toISOString(),
+        status: 'complete',
+        total_processed: results.length,
+        current_offset: 0,
+      }, { onConflict: 'id' });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -203,6 +214,20 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error computing politician positions:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    // Update sync progress with error status
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    await supabase
+      .from('sync_progress')
+      .upsert({
+        id: 'politician-positions',
+        last_run_at: new Date().toISOString(),
+        status: 'error',
+        error_message: message,
+      }, { onConflict: 'id' });
+
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
