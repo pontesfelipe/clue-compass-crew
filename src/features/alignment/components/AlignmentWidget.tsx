@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdmin } from "@/hooks/useAdmin";
 import { useAlignmentProfile } from "../hooks/useAlignmentProfile";
 import { usePoliticianAlignment } from "../hooks/useAlignment";
 import { useFeatureToggles } from "@/hooks/useFeatureToggles";
@@ -17,6 +18,7 @@ interface AlignmentWidgetProps {
 
 export function AlignmentWidget({ politicianId, politicianName }: AlignmentWidgetProps) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAdmin } = useAdmin();
   const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const { data: profile, isLoading: profileLoading } = useAlignmentProfile();
   const { data: alignment, isLoading: alignmentLoading } = usePoliticianAlignment(
@@ -139,13 +141,15 @@ export function AlignmentWidget({ politicianId, politicianName }: AlignmentWidge
         className="h-2 mb-3"
       />
 
-      {/* Justification text */}
-      <div className="bg-muted/50 rounded-md p-3 mb-4">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{alignmentDescription}.</span>{" "}
-          This score compares your questionnaire answers to {politicianName}'s actual votes and sponsored legislation on your priority issues, weighted by how important each issue is to you.
-        </p>
-      </div>
+      {/* Justification text - admin only */}
+      {isAdmin && (
+        <div className="bg-muted/50 rounded-md p-3 mb-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{alignmentDescription}.</span>{" "}
+            This score compares your questionnaire answers to {politicianName}'s actual votes and sponsored legislation on your priority issues, weighted by how important each issue is to you.
+          </p>
+        </div>
+      )}
       
       {/* Issue breakdown */}
       {Object.keys(alignment.breakdown).length > 0 && (
