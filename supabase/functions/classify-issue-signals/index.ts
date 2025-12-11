@@ -280,15 +280,35 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
 
     console.log(`Completed: processed ${results.length} bills, created ${signalsCreated} signals (${policyMappingUsed} from policy mapping, ${aiClassificationUsed} from AI)`);
 
-    // Update sync progress
+    // Get current total for cumulative progress
+    const { data: currentProgress } = await supabase
+      .from('sync_progress')
+      .select('total_processed')
+      .eq('id', 'issue-signals')
+      .single();
+    
+    const previousTotal = currentProgress?.total_processed || 0;
+    
+    // Get total classified count for accurate progress
+    const { count: totalClassified } = await supabase
+      .from('issue_signals')
+      .select('*', { count: 'exact', head: true });
+
+    // Update sync progress with cumulative total
     await supabase
       .from('sync_progress')
       .upsert({
         id: 'issue-signals',
         last_run_at: new Date().toISOString(),
         status: 'complete',
-        total_processed: signalsCreated,
+        total_processed: totalClassified || 0,
         current_offset: 0,
+        metadata: {
+          last_batch_bills: results.length,
+          last_batch_signals: signalsCreated,
+          policy_mapping_used: policyMappingUsed,
+          ai_classification_used: aiClassificationUsed,
+        }
       }, { onConflict: 'id' });
 
     return new Response(
