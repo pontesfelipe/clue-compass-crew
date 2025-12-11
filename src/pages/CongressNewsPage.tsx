@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,20 +119,6 @@ export default function CongressNewsPage() {
     },
   });
 
-  // Fetch recent votes
-  const { data: recentVotes, isLoading: votesLoading } = useQuery({
-    queryKey: ["recent-votes-news"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("votes")
-        .select("id, chamber, congress, roll_number, vote_date, question, description, result, total_yea, total_nay")
-        .order("vote_date", { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      return data;
-    },
-  });
 
   // Fetch upcoming floor schedule from edge function
   const { data: floorSchedule, isLoading: scheduleLoading, error: scheduleError } = useQuery({
@@ -319,59 +306,23 @@ export default function CongressNewsPage() {
                 </CardContent>
               </Card>
 
-              {/* Recent Votes */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Vote className="h-5 w-5 text-primary" />
-                    Recent Votes
-                  </CardTitle>
-                  <CardDescription>
-                    Latest roll call votes from both chambers
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {votesLoading ? (
-                    <div className="space-y-4">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <Skeleton key={i} className="h-16 w-full" />
-                      ))}
+              {/* View All Votes Link */}
+              <Card className="bg-primary/5 border-primary/20">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Vote className="h-6 w-6 text-primary" />
+                      <div>
+                        <h3 className="font-semibold text-foreground">Congressional Votes</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Browse all roll call votes with detailed breakdowns
+                        </p>
+                      </div>
                     </div>
-                  ) : recentVotes && recentVotes.length > 0 ? (
-                    <div className="space-y-4">
-                      {recentVotes.map((vote) => (
-                        <div
-                          key={vote.id}
-                          className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Badge variant={vote.chamber === "house" ? "default" : "secondary"}>
-                                  {vote.chamber === "house" ? "House" : "Senate"}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  Roll #{vote.roll_number}
-                                </span>
-                              </div>
-                              <p className="text-sm font-medium line-clamp-2">
-                                {vote.question || vote.description || "Vote"}
-                              </p>
-                              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                <span>{format(new Date(vote.vote_date), "MMM d, yyyy")}</span>
-                                <span className={vote.result?.toLowerCase().includes("passed") ? "text-green-600" : "text-red-600"}>
-                                  {vote.result}
-                                </span>
-                                <span>Yea: {vote.total_yea} / Nay: {vote.total_nay}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-4">No recent votes found.</p>
-                  )}
+                    <Button variant="civic" asChild>
+                      <Link to="/votes">View All Votes</Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
