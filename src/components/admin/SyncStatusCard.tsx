@@ -287,6 +287,27 @@ export function SyncStatusCard() {
     setAutoRefresh(hasRunning);
   }, [syncProgress]);
 
+  const logSyncTrigger = async (config: SyncConfig, success: boolean, errorMessage?: string) => {
+    try {
+      await supabase.from("ai_usage_log").insert({
+        operation_type: "sync_trigger",
+        model: null,
+        tokens_used: null,
+        success,
+        error_message: errorMessage || null,
+        metadata: {
+          sync_id: config.id,
+          sync_label: config.label,
+          function_name: config.functionName || `sync-${config.id}`,
+          category: config.category,
+          triggered_at: new Date().toISOString(),
+        },
+      });
+    } catch (logError) {
+      console.error("Failed to log sync trigger:", logError);
+    }
+  };
+
   const triggerSync = async (config: SyncConfig) => {
     setTriggeringSyncId(config.id);
     try {
@@ -300,6 +321,9 @@ export function SyncStatusCard() {
         throw new Error(data.error);
       }
 
+      // Log successful sync trigger
+      await logSyncTrigger(config, true);
+
       toast({
         title: "Sync Started",
         description: `${config.label} sync has been triggered.`,
@@ -309,6 +333,10 @@ export function SyncStatusCard() {
       setTimeout(fetchSyncProgress, 1000);
     } catch (error) {
       console.error("Error triggering sync:", error);
+      
+      // Log failed sync trigger
+      await logSyncTrigger(config, false, error instanceof Error ? error.message : "Unknown error");
+      
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : `Failed to trigger ${config.label} sync`,
