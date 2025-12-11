@@ -7,10 +7,10 @@ interface SponsorsListProps {
 }
 
 const typeColors: Record<Sponsor["sponsorType"], string> = {
-  corporation: "bg-civic-blue/10 text-civic-blue border-civic-blue/30",
-  nonprofit: "bg-score-good/10 text-score-good border-score-good/30",
-  trade_association: "bg-civic-gold/10 text-civic-gold border-civic-gold/30",
+  pac: "bg-civic-blue/10 text-civic-blue border-civic-blue/30",
+  corporate: "bg-civic-gold/10 text-civic-gold border-civic-gold/30",
   union: "bg-civic-red/10 text-civic-red border-civic-red/30",
+  party: "bg-score-good/10 text-score-good border-score-good/30",
 };
 
 export function SponsorsList({ sponsors }: SponsorsListProps) {

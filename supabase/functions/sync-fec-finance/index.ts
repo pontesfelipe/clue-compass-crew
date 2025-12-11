@@ -240,7 +240,7 @@ serve(async (req) => {
 
             // Get actual donor name - use committee name for PACs, contributor name for individuals
             let contributorName = c.contributor_name || 'Unknown';
-            const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation);
+            const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation, contributorName);
             
             // For PACs/committees, use the committee name if available
             if (c.committee && c.committee.name) {
@@ -484,28 +484,52 @@ serve(async (req) => {
   }
 });
 
-function categorizeContributor(employer: string | null, occupation: string | null): string {
+function categorizeContributor(employer: string | null, occupation: string | null, contributorName: string | null = null): string {
   const emp = (employer || '').toLowerCase();
   const occ = (occupation || '').toLowerCase();
+  const name = (contributorName || '').toLowerCase();
 
-  // PACs and political committees
+  // Check contributor name for PAC/committee indicators first
+  const isPacByName = name.includes('pac') || name.includes('committee') || 
+      name.includes('for congress') || name.includes('for senate') || 
+      name.includes('for america') || name.includes('for us') ||
+      name.includes('victory fund') || name.includes('leadership fund') ||
+      name.includes('action fund') || name.includes('actblue') || name.includes('winred') ||
+      name.includes('democratic') || name.includes('republican') ||
+      (name.includes(' inc') && (name.includes('for ') || name.includes('elect')));
+  
+  if (isPacByName) {
+    return 'pac';
+  }
+
+  // PACs and political committees by employer
   if (emp.includes('pac') || emp.includes('committee') || emp.includes('political') || 
       emp.includes('action committee') || emp.includes('for congress') || emp.includes('for senate')) {
     return 'pac';
   }
   
   // Unions and labor organizations
-  if (emp.includes('union') || emp.includes('workers') || emp.includes('labor') || 
+  const isUnion = name.includes('union') || name.includes('brotherhood') || 
+      name.includes('afl-cio') || name.includes('teamsters') || name.includes('seiu') || 
+      name.includes('afscme') || name.includes('ufcw') || name.includes('ibew') ||
+      emp.includes('union') || emp.includes('workers') || emp.includes('labor') || 
       emp.includes('brotherhood') || emp.includes('afl-cio') || emp.includes('teamsters') ||
-      emp.includes('seiu') || emp.includes('afscme')) {
+      emp.includes('seiu') || emp.includes('afscme');
+  
+  if (isUnion) {
     return 'union';
   }
   
-  // Corporate entities
-  if (emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || 
+  // Corporate entities - check name and employer
+  const isCorporate = name.includes('llc') || name.includes(' inc') || name.includes('corp') ||
+      name.includes('company') || name.includes('holdings') || name.includes('partners llp') ||
+      emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || 
       emp.includes('co.') || emp.includes('company') || emp.includes('group') ||
       emp.includes('holdings') || emp.includes('partners') || emp.includes('capital') ||
-      emp.includes('associates') || emp.includes('industries')) {
+      emp.includes('associates') || emp.includes('industries');
+  
+  // Exclude from corporate if it looks like a campaign committee
+  if (isCorporate && !isPacByName && !name.includes('for ')) {
     return 'corporate';
   }
 
