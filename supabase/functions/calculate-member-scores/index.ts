@@ -288,15 +288,23 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Update sync progress
+    // Get total scores for accurate progress
+    const { count: totalScores } = await supabase
+      .from('member_scores')
+      .select('*', { count: 'exact', head: true });
+
+    // Update sync progress with cumulative total
     await supabase
       .from('sync_progress')
       .upsert({
         id: 'member-scores',
         last_run_at: new Date().toISOString(),
         status: 'complete',
-        total_processed: scoresUpdated,
+        total_processed: totalScores || scoresUpdated,
         current_offset: 0,
+        metadata: {
+          last_batch_scores: scoresUpdated,
+        }
       }, { onConflict: 'id' })
 
     const result = {
