@@ -24,6 +24,7 @@ import AdminDataInspectorPage from "./pages/AdminDataInspectorPage";
 import MyProfilePage from "./pages/MyProfilePage";
 import MyMatchesPage from "./pages/MyMatchesPage";
 import TrackedMembersPage from "./pages/TrackedMembersPage";
+import CongressNewsPage from "./pages/CongressNewsPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/bills" element={<BillsPage />} />
             <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/news" element={<CongressNewsPage />} />
             <Route path="/methodology" element={<MethodologyPage />} />
             <Route path="/data-sources" element={<DataSourcesPage />} />
             <Route path="/faq" element={<FAQPage />} />

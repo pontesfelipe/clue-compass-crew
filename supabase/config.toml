@@ -58,3 +58,6 @@ verify_jwt = false
 
 [functions.log-user-login]
 verify_jwt = false
+
+[functions.get-floor-schedule]
+verify_jwt = false
