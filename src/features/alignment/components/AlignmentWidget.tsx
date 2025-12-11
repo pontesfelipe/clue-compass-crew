@@ -103,6 +103,13 @@ export function AlignmentWidget({ politicianId, politicianName }: AlignmentWidge
     alignment.overall_alignment >= 70 ? "text-green-600" :
     alignment.overall_alignment >= 40 ? "text-amber-600" :
     "text-red-600";
+
+  const alignmentDescription = 
+    alignment.overall_alignment >= 70 
+      ? "Strong alignment based on voting patterns" 
+      : alignment.overall_alignment >= 40 
+      ? "Moderate alignment with some differences" 
+      : "Limited alignment on priority issues";
   
   return (
     <Card className="p-4">
@@ -129,8 +136,16 @@ export function AlignmentWidget({ politicianId, politicianName }: AlignmentWidge
       
       <Progress 
         value={alignment.overall_alignment} 
-        className="h-2 mb-4"
+        className="h-2 mb-3"
       />
+
+      {/* Justification text */}
+      <div className="bg-muted/50 rounded-md p-3 mb-4">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{alignmentDescription}.</span>{" "}
+          This score compares your questionnaire answers to {politicianName}'s actual votes and sponsored legislation on your priority issues, weighted by how important each issue is to you.
+        </p>
+      </div>
       
       {/* Issue breakdown */}
       {Object.keys(alignment.breakdown).length > 0 && (
