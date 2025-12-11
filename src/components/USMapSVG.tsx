@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 import USAMap from "react-usa-map";
 import { useStateScores } from "@/hooks/useStateData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Award, MapPin } from "lucide-react";
+import { TrendingUp, TrendingDown, Award, MapPin, Map, Grid3X3, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 // Score color scale: higher = more green (better score)
 const getScoreColor = (score: number | null): string => {
@@ -15,75 +23,30 @@ const getScoreColor = (score: number | null): string => {
   return "#dc2626";                    // Below 60 - red
 };
 
-// State name lookup
-const STATE_NAMES: Record<string, string> = {
-  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
-  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
-  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
-  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
-  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
-  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
-  DC: "District of Columbia"
+// HSL version for tiles
+const getScoreColorHSL = (score: number | null): string => {
+  if (score === null) return "hsl(var(--muted))";
+  if (score >= 81) return "hsl(142 76% 36%)";
+  if (score >= 71) return "hsl(142 71% 45%)";
+  if (score >= 66) return "hsl(38 92% 50%)";
+  if (score >= 61) return "hsl(25 95% 53%)";
+  return "hsl(0 72% 51%)";
 };
 
-// Approximate state label positions (percentage based, centered in each state)
-const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
-  AL: { x: 66, y: 66 },
-  AK: { x: 17, y: 83 },
-  AZ: { x: 22, y: 58 },
-  AR: { x: 55, y: 58 },
-  CA: { x: 9, y: 48 },
-  CO: { x: 31, y: 46 },
-  CT: { x: 89.5, y: 33 },
-  DE: { x: 85, y: 43 },
-  FL: { x: 76, y: 76 },
-  GA: { x: 71, y: 63 },
-  HI: { x: 27, y: 88 },
-  ID: { x: 19, y: 28 },
-  IL: { x: 61, y: 44 },
-  IN: { x: 66, y: 44 },
-  IA: { x: 53, y: 38 },
-  KS: { x: 43, y: 50 },
-  KY: { x: 69, y: 50 },
-  LA: { x: 56, y: 71 },
-  ME: { x: 92, y: 17 },
-  MD: { x: 82, y: 44 },
-  MA: { x: 90, y: 29 },
-  MI: { x: 68, y: 32 },
-  MN: { x: 53, y: 26 },
-  MS: { x: 61, y: 65 },
-  MO: { x: 55, y: 50 },
-  MT: { x: 27, y: 21 },
-  NE: { x: 42, y: 40 },
-  NV: { x: 14, y: 42 },
-  NH: { x: 90, y: 24 },
-  NJ: { x: 86, y: 39 },
-  NM: { x: 28, y: 58 },
-  NY: { x: 84, y: 30 },
-  NC: { x: 77, y: 55 },
-  ND: { x: 43, y: 23 },
-  OH: { x: 71, y: 42 },
-  OK: { x: 45, y: 56 },
-  OR: { x: 12, y: 26 },
-  PA: { x: 80, y: 37 },
-  RI: { x: 91, y: 31 },
-  SC: { x: 75, y: 59 },
-  SD: { x: 43, y: 30 },
-  TN: { x: 67, y: 54 },
-  TX: { x: 40, y: 68 },
-  UT: { x: 21, y: 44 },
-  VT: { x: 88, y: 22 },
-  VA: { x: 79, y: 48 },
-  WA: { x: 13, y: 16 },
-  WV: { x: 76, y: 46 },
-  WI: { x: 59, y: 30 },
-  WY: { x: 29, y: 34 },
-  DC: { x: 84, y: 46 }
-};
+// Fixed US state grid layout for tiles view
+const STATE_COLUMNS: string[][] = [
+  ["WA", "OR", "CA", "", "HI", "AK"],
+  ["ID", "NV", "AZ"],
+  ["MT", "WY", "UT", "CO", "NM"],
+  ["ND", "SD", "NE", "KS", "OK", "TX"],
+  ["MN", "IA", "MO", "AR", "LA"],
+  ["WI", "IL", "KY", "TN", "MS"],
+  ["MI", "IN", "AL", "GA", "FL"],
+  ["NY", "PA", "VA", "SC"],
+  ["VT", "NH", "WV", "NC"],
+  ["ME", "NJ", "MD", "DE"],
+  ["MA", "CT", "RI"],
+];
 
 // Territories with full names
 const TERRITORY_INFO: Record<string, string> = {
@@ -96,6 +59,10 @@ const TERRITORY_INFO: Record<string, string> = {
 };
 
 const TERRITORIES = Object.keys(TERRITORY_INFO);
+const MAX_ROWS = Math.max(...STATE_COLUMNS.map(col => col.length), TERRITORIES.length);
+const GRID_COLUMNS = STATE_COLUMNS.length + 2;
+
+type ViewMode = "geographic" | "tiles";
 
 interface USMapSVGProps {
   onStateClick?: (stateAbbr: string) => void;
@@ -105,6 +72,7 @@ interface USMapSVGProps {
 export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
   const navigate = useNavigate();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("geographic");
   
   const { data: stateScores, isLoading } = useStateScores();
 
@@ -119,6 +87,14 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
     }
   };
 
+  const handleTileClick = (abbr: string) => {
+    if (onStateClick) {
+      onStateClick(abbr);
+    } else {
+      navigate(`/state/${abbr}`);
+    }
+  };
+
   const handleStateHover = (event: React.MouseEvent<SVGPathElement>) => {
     const stateAbbr = event.currentTarget.dataset.name;
     setHoveredState(stateAbbr || null);
@@ -129,14 +105,6 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
   };
 
   const handleTerritoryClick = (abbr: string) => {
-    if (onStateClick) {
-      onStateClick(abbr);
-    } else {
-      navigate(`/state/${abbr}`);
-    }
-  };
-
-  const handleLabelClick = (abbr: string) => {
     if (onStateClick) {
       onStateClick(abbr);
     } else {
@@ -188,13 +156,38 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
       validStates.reduce((sum, s) => sum + (s.score || 0), 0) / validStates.length
     );
 
-    // Sort by score
     const sortedByScore = [...validStates].sort((a, b) => (b.score || 0) - (a.score || 0));
     const topStates = sortedByScore.slice(0, 3);
     const bottomStates = sortedByScore.slice(-3).reverse();
 
     return { avgScore, topStates, bottomStates, statesWithData: validStates.length };
   }, [stateScores]);
+
+  const renderStateTile = (stateAbbr: string, isTerritoryTile: boolean = false) => {
+    const stateData = stateScores?.find(s => s.abbr === stateAbbr);
+    const bgColor = getScoreColorHSL(stateData?.score ?? null);
+    const textColor = "hsl(var(--background))";
+    const hasData = !!stateData;
+
+    return (
+      <button
+        key={stateAbbr}
+        onClick={() => handleTileClick(stateAbbr)}
+        onMouseEnter={() => setHoveredState(stateAbbr)}
+        onMouseLeave={() => setHoveredState(null)}
+        className={cn(
+          "w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 hover:scale-110 hover:z-10",
+          hoveredState === stateAbbr && "ring-2 ring-primary ring-offset-2",
+          !hasData && "opacity-50",
+          isTerritoryTile ? "border-2 border-dashed border-white/50 opacity-75 shadow-none" : "shadow-civic-sm"
+        )}
+        style={{ backgroundColor: bgColor, color: textColor }}
+        title={isTerritoryTile ? "Territory (non-voting delegate)" : undefined}
+      >
+        {stateAbbr}
+      </button>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -206,9 +199,47 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
 
   return (
     <div className="relative w-full">
+      {/* View Toggle Dropdown */}
+      <div className="px-4 pt-4 flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              {viewMode === "geographic" ? (
+                <>
+                  <Map className="h-4 w-4" />
+                  Geographic Map
+                </>
+              ) : (
+                <>
+                  <Grid3X3 className="h-4 w-4" />
+                  Tile Grid
+                </>
+              )}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-card border border-border z-50">
+            <DropdownMenuItem 
+              onClick={() => setViewMode("geographic")}
+              className={cn(viewMode === "geographic" && "bg-accent")}
+            >
+              <Map className="h-4 w-4 mr-2" />
+              Geographic Map
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => setViewMode("tiles")}
+              className={cn(viewMode === "tiles" && "bg-accent")}
+            >
+              <Grid3X3 className="h-4 w-4 mr-2" />
+              Tile Grid
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Tooltip */}
       {hoveredStateData && (
-        <div className="absolute top-4 left-4 z-20 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[200px] animate-scale-in pointer-events-none">
+        <div className="absolute top-16 left-4 z-20 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[200px] animate-scale-in pointer-events-none">
           <h4 className="font-serif font-semibold text-foreground">{hoveredStateData.name}</h4>
           {TERRITORIES.includes(hoveredState!) && (
             <span className="text-xs text-muted-foreground italic">Non-voting delegate</span>
@@ -230,76 +261,86 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
         </div>
       )}
 
-      {/* SVG Map with Labels */}
-      <div 
-        className="relative p-4 [&_path]:cursor-pointer [&_path]:transition-opacity [&_path:hover]:opacity-70 [&_path]:stroke-background [&_path]:stroke-[0.5]"
-        onMouseLeave={handleStateLeave}
-      >
-        <USAMap
-          customize={statesCustomConfig}
-          onClick={handleStateClick}
-          onMouseOver={handleStateHover}
-          defaultFill="#d1d5db"
-          width="100%"
-          title="US State Performance Map"
-        />
-        
-        {/* State Abbreviation Labels Overlay */}
-        <div className="absolute inset-0 pointer-events-none p-4">
-          {Object.entries(STATE_LABEL_POSITIONS).map(([abbr, pos]) => (
-            <div
-              key={abbr}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer"
-              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-              onClick={() => handleLabelClick(abbr)}
-              onMouseEnter={() => setHoveredState(abbr)}
-              onMouseLeave={() => setHoveredState(null)}
-            >
-              <span 
-                className={`text-[8px] sm:text-[10px] font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-transform ${
-                  hoveredState === abbr ? "scale-125" : ""
-                }`}
-                style={{ color: "white", textShadow: "0 0 3px rgba(0,0,0,0.8), 0 0 5px rgba(0,0,0,0.5)" }}
-              >
-                {abbr}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Geographic SVG Map View */}
+      {viewMode === "geographic" && (
+        <>
+          <div 
+            className="relative p-4 [&_path]:cursor-pointer [&_path]:transition-opacity [&_path:hover]:opacity-70 [&_path]:stroke-background [&_path]:stroke-[0.5]"
+            onMouseLeave={handleStateLeave}
+          >
+            <USAMap
+              customize={statesCustomConfig}
+              onClick={handleStateClick}
+              onMouseOver={handleStateHover}
+              defaultFill="#d1d5db"
+              width="100%"
+              title="US State Performance Map"
+            />
+          </div>
 
-      {/* Territories Section */}
-      <div className="mx-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium text-muted-foreground">U.S. Territories (Non-voting Delegates)</h3>
+          {/* Territories Section */}
+          <div className="mx-4 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium text-muted-foreground">U.S. Territories (Non-voting Delegates)</h3>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {territoryScores.map((territory) => (
+                <button
+                  key={territory.abbr}
+                  onClick={() => handleTerritoryClick(territory.abbr)}
+                  onMouseEnter={() => setHoveredState(territory.abbr)}
+                  onMouseLeave={() => setHoveredState(null)}
+                  className="group relative p-3 rounded-lg border border-dashed border-border hover:border-primary/50 transition-all cursor-pointer"
+                  style={{ 
+                    backgroundColor: getScoreColor(territory.score),
+                    opacity: 0.85
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white drop-shadow-md">{territory.abbr}</div>
+                    <div className="text-xs text-white/80 drop-shadow-sm">
+                      {territory.score ?? "N/A"}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg z-10">
+                    <div className="font-medium text-foreground">{territory.name}</div>
+                    <div className="text-muted-foreground">Score: {territory.score ?? "No data"}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Tile Grid View */}
+      {viewMode === "tiles" && (
+        <div className="p-4">
+          <div 
+            className="grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
+          >
+            {Array.from({ length: MAX_ROWS }).map((_, rowIndex) => (
+              <React.Fragment key={`row-${rowIndex}`}>
+                {STATE_COLUMNS.map((column, colIndex) => {
+                  const stateAbbr = column[rowIndex];
+                  if (!stateAbbr) {
+                    return <div key={`empty-${rowIndex}-${colIndex}`} className="w-full aspect-square" />;
+                  }
+                  return renderStateTile(stateAbbr, false);
+                })}
+                <div key={`spacer-${rowIndex}`} className="w-full aspect-square" />
+                {TERRITORIES[rowIndex] ? (
+                  renderStateTile(TERRITORIES[rowIndex], true)
+                ) : (
+                  <div key={`empty-territory-${rowIndex}`} className="w-full aspect-square" />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {territoryScores.map((territory) => (
-            <button
-              key={territory.abbr}
-              onClick={() => handleTerritoryClick(territory.abbr)}
-              className="group relative p-3 rounded-lg border border-dashed border-border hover:border-primary/50 transition-all cursor-pointer"
-              style={{ 
-                backgroundColor: getScoreColor(territory.score),
-                opacity: 0.85
-              }}
-            >
-              <div className="text-center">
-                <div className="text-lg font-bold text-white drop-shadow-md">{territory.abbr}</div>
-                <div className="text-xs text-white/80 drop-shadow-sm">
-                  {territory.score ?? "N/A"}
-                </div>
-              </div>
-              {/* Hover tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg z-10">
-                <div className="font-medium text-foreground">{territory.name}</div>
-                <div className="text-muted-foreground">Score: {territory.score ?? "No data"}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Statistics */}
       {showStats && stats && (
@@ -372,6 +413,12 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
                   </span>
                 </div>
               ))}
+              {viewMode === "tiles" && (
+                <div className="flex items-center gap-2 pt-1 border-t border-border mt-2">
+                  <div className="w-3 h-3 rounded-sm shrink-0 border-2 border-dashed border-muted-foreground opacity-75" />
+                  <span className="text-xs text-muted-foreground">Territory (non-voting)</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
