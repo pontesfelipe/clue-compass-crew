@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,10 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
     const { messages } = await req.json();
@@ -51,6 +56,15 @@ Be concise, helpful, and accurate. When discussing specific data, note that you 
     if (!response.ok) {
       const status = response.status;
       
+      // Log failed AI usage
+      await supabase.from('ai_usage_log').insert({
+        operation_type: 'admin_chat',
+        model: 'google/gemini-2.5-flash',
+        success: false,
+        error_message: `HTTP ${status}`,
+        metadata: { messages_count: messages.length }
+      });
+      
       if (status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
@@ -74,11 +88,27 @@ Be concise, helpful, and accurate. When discussing specific data, note that you 
       );
     }
 
+    // Log successful AI usage (for streaming, we don't have token count)
+    await supabase.from('ai_usage_log').insert({
+      operation_type: 'admin_chat',
+      model: 'google/gemini-2.5-flash',
+      success: true,
+      metadata: { messages_count: messages.length }
+    });
+
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
     console.error("Admin AI chat error:", error);
+    
+    // Log failed AI usage
+    await supabase.from('ai_usage_log').insert({
+      operation_type: 'admin_chat',
+      model: 'google/gemini-2.5-flash',
+      success: false,
+      error_message: error instanceof Error ? error.message : "Unknown error"
+    });
     
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),

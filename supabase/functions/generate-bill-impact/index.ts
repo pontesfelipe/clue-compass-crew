@@ -98,6 +98,7 @@ Output format (use this exact structure):
 
         const data = await response.json()
         const impactText = data.choices?.[0]?.message?.content
+        const tokensUsed = data.usage?.total_tokens
 
         if (impactText) {
           await supabase
@@ -108,6 +109,15 @@ Output format (use this exact structure):
             })
             .eq('id', bill.id)
 
+          // Log AI usage
+          await supabase.from('ai_usage_log').insert({
+            operation_type: 'bill_impact',
+            tokens_used: tokensUsed,
+            model: 'google/gemini-2.5-flash',
+            success: true,
+            metadata: { bill_id: bill.id, bill_number: `${bill.bill_type.toUpperCase()}${bill.bill_number}` }
+          })
+
           processed++
           console.log(`Generated impact for ${bill.bill_type.toUpperCase()}${bill.bill_number}`)
         }
@@ -117,6 +127,14 @@ Output format (use this exact structure):
 
       } catch (e) {
         console.error(`Error processing bill ${bill.id}: ${e}`)
+        // Log failed AI usage
+        await supabase.from('ai_usage_log').insert({
+          operation_type: 'bill_impact',
+          model: 'google/gemini-2.5-flash',
+          success: false,
+          error_message: String(e),
+          metadata: { bill_id: bill.id }
+        })
         errors++
       }
     }
