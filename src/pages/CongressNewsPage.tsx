@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Vote, Clock, FileText, ExternalLink, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Calendar, Vote, Clock, FileText, ExternalLink, AlertCircle, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, formatDistanceToNow } from "date-fns";
@@ -40,16 +43,64 @@ const UPCOMING_ELECTIONS: UpcomingElection[] = [
   },
 ];
 
-// Primary dates for 2026 (approximate - vary by state)
+// All 50 states primary dates for 2026 (estimated based on historical patterns)
 const PRIMARY_DATES_2026 = [
-  { state: "Texas", date: "2026-03-03" },
-  { state: "California", date: "2026-03-03" },
-  { state: "Ohio", date: "2026-05-05" },
-  { state: "Pennsylvania", date: "2026-05-19" },
-  { state: "Georgia", date: "2026-05-19" },
-];
+  { state: "Alabama", abbr: "AL", date: "2026-05-26", type: "Open" },
+  { state: "Alaska", abbr: "AK", date: "2026-08-18", type: "Open" },
+  { state: "Arizona", abbr: "AZ", date: "2026-08-04", type: "Closed" },
+  { state: "Arkansas", abbr: "AR", date: "2026-05-19", type: "Open" },
+  { state: "California", abbr: "CA", date: "2026-03-03", type: "Top-Two" },
+  { state: "Colorado", abbr: "CO", date: "2026-06-30", type: "Semi-Closed" },
+  { state: "Connecticut", abbr: "CT", date: "2026-08-11", type: "Closed" },
+  { state: "Delaware", abbr: "DE", date: "2026-09-08", type: "Closed" },
+  { state: "Florida", abbr: "FL", date: "2026-08-25", type: "Closed" },
+  { state: "Georgia", abbr: "GA", date: "2026-05-19", type: "Open" },
+  { state: "Hawaii", abbr: "HI", date: "2026-08-08", type: "Open" },
+  { state: "Idaho", abbr: "ID", date: "2026-05-19", type: "Closed" },
+  { state: "Illinois", abbr: "IL", date: "2026-03-17", type: "Open" },
+  { state: "Indiana", abbr: "IN", date: "2026-05-05", type: "Open" },
+  { state: "Iowa", abbr: "IA", date: "2026-06-02", type: "Semi-Closed" },
+  { state: "Kansas", abbr: "KS", date: "2026-08-04", type: "Semi-Closed" },
+  { state: "Kentucky", abbr: "KY", date: "2026-05-19", type: "Closed" },
+  { state: "Louisiana", abbr: "LA", date: "2026-11-03", type: "Jungle" },
+  { state: "Maine", abbr: "ME", date: "2026-06-09", type: "Semi-Closed" },
+  { state: "Maryland", abbr: "MD", date: "2026-06-23", type: "Closed" },
+  { state: "Massachusetts", abbr: "MA", date: "2026-09-01", type: "Semi-Closed" },
+  { state: "Michigan", abbr: "MI", date: "2026-08-04", type: "Open" },
+  { state: "Minnesota", abbr: "MN", date: "2026-08-11", type: "Open" },
+  { state: "Mississippi", abbr: "MS", date: "2026-06-02", type: "Open" },
+  { state: "Missouri", abbr: "MO", date: "2026-08-04", type: "Open" },
+  { state: "Montana", abbr: "MT", date: "2026-06-02", type: "Open" },
+  { state: "Nebraska", abbr: "NE", date: "2026-05-12", type: "Semi-Closed" },
+  { state: "Nevada", abbr: "NV", date: "2026-06-09", type: "Closed" },
+  { state: "New Hampshire", abbr: "NH", date: "2026-09-08", type: "Semi-Closed" },
+  { state: "New Jersey", abbr: "NJ", date: "2026-06-02", type: "Semi-Closed" },
+  { state: "New Mexico", abbr: "NM", date: "2026-06-02", type: "Closed" },
+  { state: "New York", abbr: "NY", date: "2026-06-23", type: "Closed" },
+  { state: "North Carolina", abbr: "NC", date: "2026-03-03", type: "Semi-Closed" },
+  { state: "North Dakota", abbr: "ND", date: "2026-06-09", type: "Open" },
+  { state: "Ohio", abbr: "OH", date: "2026-05-05", type: "Semi-Closed" },
+  { state: "Oklahoma", abbr: "OK", date: "2026-06-30", type: "Closed" },
+  { state: "Oregon", abbr: "OR", date: "2026-05-19", type: "Closed" },
+  { state: "Pennsylvania", abbr: "PA", date: "2026-05-19", type: "Closed" },
+  { state: "Rhode Island", abbr: "RI", date: "2026-09-08", type: "Semi-Closed" },
+  { state: "South Carolina", abbr: "SC", date: "2026-06-09", type: "Open" },
+  { state: "South Dakota", abbr: "SD", date: "2026-06-02", type: "Semi-Closed" },
+  { state: "Tennessee", abbr: "TN", date: "2026-08-06", type: "Open" },
+  { state: "Texas", abbr: "TX", date: "2026-03-03", type: "Open" },
+  { state: "Utah", abbr: "UT", date: "2026-06-30", type: "Closed" },
+  { state: "Vermont", abbr: "VT", date: "2026-08-11", type: "Open" },
+  { state: "Virginia", abbr: "VA", date: "2026-06-09", type: "Open" },
+  { state: "Washington", abbr: "WA", date: "2026-08-04", type: "Top-Two" },
+  { state: "West Virginia", abbr: "WV", date: "2026-05-12", type: "Semi-Closed" },
+  { state: "Wisconsin", abbr: "WI", date: "2026-08-11", type: "Open" },
+  { state: "Wyoming", abbr: "WY", date: "2026-08-18", type: "Closed" },
+].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 export default function CongressNewsPage() {
+  const [primarySearch, setPrimarySearch] = useState("");
+  const [showAllPrimaries, setShowAllPrimaries] = useState(false);
+
   // Fetch recent bills as "news"
   const { data: recentBills, isLoading: billsLoading } = useQuery({
     queryKey: ["recent-bills-news"],
@@ -108,6 +159,35 @@ export default function CongressNewsPage() {
         return "bg-muted text-muted-foreground";
     }
   };
+
+  const getPrimaryTypeColor = (type: string) => {
+    switch (type) {
+      case "Open":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case "Closed":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      case "Semi-Closed":
+        return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200";
+      case "Top-Two":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      case "Jungle":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  };
+
+  // Filter primaries based on search
+  const filteredPrimaries = PRIMARY_DATES_2026.filter(
+    (primary) =>
+      primary.state.toLowerCase().includes(primarySearch.toLowerCase()) ||
+      primary.abbr.toLowerCase().includes(primarySearch.toLowerCase())
+  );
+
+  // Show limited or all primaries
+  const displayedPrimaries = showAllPrimaries || primarySearch 
+    ? filteredPrimaries 
+    : filteredPrimaries.slice(0, 10);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -381,22 +461,82 @@ export default function CongressNewsPage() {
                 <CardHeader>
                   <CardTitle className="text-lg">2026 Primary Dates</CardTitle>
                   <CardDescription>
-                    Key state primary elections
+                    All 50 states primary elections
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {PRIMARY_DATES_2026.map((primary, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-sm">
-                        <span className="font-medium">{primary.state}</span>
-                        <span className="text-muted-foreground">
-                          {format(new Date(primary.date), "MMM d, yyyy")}
-                        </span>
-                      </div>
-                    ))}
+                <CardContent className="space-y-4">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search states..."
+                      value={primarySearch}
+                      onChange={(e) => setPrimarySearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-4">
-                    * Dates are approximate and subject to change. Check your state's election website for official dates.
+
+                  {/* Primary type legend */}
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    <Badge className={getPrimaryTypeColor("Open")}>Open</Badge>
+                    <Badge className={getPrimaryTypeColor("Closed")}>Closed</Badge>
+                    <Badge className={getPrimaryTypeColor("Semi-Closed")}>Semi</Badge>
+                    <Badge className={getPrimaryTypeColor("Top-Two")}>Top-Two</Badge>
+                  </div>
+
+                  {/* Primary list */}
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {displayedPrimaries.length > 0 ? (
+                      displayedPrimaries.map((primary, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between text-sm py-2 border-b border-border/50 last:border-0"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium w-8 text-muted-foreground">{primary.abbr}</span>
+                            <span className="font-medium">{primary.state}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={`${getPrimaryTypeColor(primary.type)} text-xs px-1.5 py-0`}>
+                              {primary.type}
+                            </Badge>
+                            <span className="text-muted-foreground text-xs w-20 text-right">
+                              {format(new Date(primary.date), "MMM d")}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground text-center py-4 text-sm">
+                        No states match your search.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Show more/less button */}
+                  {!primarySearch && filteredPrimaries.length > 10 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllPrimaries(!showAllPrimaries)}
+                      className="w-full text-xs"
+                    >
+                      {showAllPrimaries ? (
+                        <>
+                          <ChevronUp className="h-4 w-4 mr-1" />
+                          Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-4 w-4 mr-1" />
+                          Show All 50 States
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    * Dates are estimates based on historical patterns. Check your state's election website for official dates.
                   </p>
                 </CardContent>
               </Card>
