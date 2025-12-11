@@ -18,6 +18,7 @@ interface FloorItem {
   description: string;
   billNumber?: string;
   actionType?: string;
+  state?: string;
 }
 
 interface UpcomingElection {
@@ -258,10 +259,15 @@ export default function CongressNewsPage() {
                           <div className="space-y-3">
                             {floorSchedule.house.slice(0, 5).map((item, idx) => (
                               <div key={idx} className="border-l-2 border-primary/30 pl-4 py-2">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <Badge variant="outline" className="text-xs">House</Badge>
                                   {item.billNumber && (
                                     <Badge variant="secondary" className="text-xs">{item.billNumber}</Badge>
+                                  )}
+                                  {item.state && (
+                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-xs">
+                                      {item.state}
+                                    </Badge>
                                   )}
                                 </div>
                                 <p className="text-sm">{item.description}</p>
@@ -281,10 +287,15 @@ export default function CongressNewsPage() {
                           <div className="space-y-3">
                             {floorSchedule.senate.slice(0, 5).map((item, idx) => (
                               <div key={idx} className="border-l-2 border-accent/30 pl-4 py-2">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <Badge variant="outline" className="text-xs">Senate</Badge>
                                   {item.billNumber && (
                                     <Badge variant="secondary" className="text-xs">{item.billNumber}</Badge>
+                                  )}
+                                  {item.state && (
+                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-xs">
+                                      {item.state}
+                                    </Badge>
                                   )}
                                 </div>
                                 <p className="text-sm">{item.description}</p>
