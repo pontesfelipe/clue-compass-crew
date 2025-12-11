@@ -432,14 +432,23 @@ serve(async (req) => {
     const nextOffset = offset + members.length;
     const hasMore = nextOffset < totalMembers;
 
+    // Get total contributions for accurate cumulative progress
+    const { count: totalContributions } = await supabase
+      .from('member_contributions')
+      .select('*', { count: 'exact', head: true });
+
     await supabase
       .from('sync_progress')
       .update({ 
         current_offset: hasMore ? nextOffset : 0,
         last_matched_count: matchedCount,
-        total_processed: offset + processedCount,
+        total_processed: totalContributions || (offset + processedCount),
         status: hasMore ? 'idle' : 'complete',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        metadata: {
+          members_processed: nextOffset,
+          total_members: totalMembers,
+        }
       })
       .eq('id', 'fec-finance');
 

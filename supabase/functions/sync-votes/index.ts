@@ -104,12 +104,21 @@ Deno.serve(async (req) => {
       totalMemberVotesCreated += senateResult.memberVotesCreated
     }
 
+    // Get total votes for accurate cumulative progress
+    const { count: totalVotesInDb } = await supabase
+      .from('votes')
+      .select('*', { count: 'exact', head: true });
+
     await supabase.from('sync_progress').upsert({
       id: 'votes',
       last_run_at: new Date().toISOString(),
       status: 'complete',
-      total_processed: totalVotesProcessed,
+      total_processed: totalVotesInDb || totalVotesProcessed,
       current_offset: 0,
+      metadata: {
+        last_batch_votes: totalVotesProcessed,
+        last_batch_member_votes: totalMemberVotesCreated,
+      }
     }, { onConflict: 'id' })
 
     const result = {

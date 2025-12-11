@@ -192,15 +192,23 @@ serve(async (req) => {
 
     console.log(`Completed processing ${results.length} politicians`);
 
-    // Update sync progress
+    // Get total positions for accurate progress
+    const { count: totalPositions } = await supabase
+      .from('politician_issue_positions')
+      .select('*', { count: 'exact', head: true });
+
+    // Update sync progress with cumulative total
     await supabase
       .from('sync_progress')
       .upsert({
         id: 'politician-positions',
         last_run_at: new Date().toISOString(),
         status: 'complete',
-        total_processed: results.length,
+        total_processed: totalPositions || 0,
         current_offset: 0,
+        metadata: {
+          last_batch_politicians: results.length,
+        }
       }, { onConflict: 'id' });
 
     return new Response(
