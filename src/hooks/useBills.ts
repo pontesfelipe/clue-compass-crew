@@ -13,6 +13,8 @@ export interface BillListItem {
   latest_action_text: string | null;
   enacted: boolean;
   policy_area: string | null;
+  summary: string | null;
+  bill_impact: string | null;
 }
 
 interface UseBillsOptions {
@@ -32,7 +34,7 @@ export function useBills(options: UseBillsOptions = {}) {
     queryFn: async () => {
       let query = supabase
         .from("bills")
-        .select("id, congress, bill_type, bill_number, title, short_title, introduced_date, latest_action_date, latest_action_text, enacted, policy_area", { count: "exact" });
+        .select("id, congress, bill_type, bill_number, title, short_title, introduced_date, latest_action_date, latest_action_text, enacted, policy_area, summary, bill_impact", { count: "exact" });
 
       if (search) {
         query = query.or(`title.ilike.%${search}%,short_title.ilike.%${search}%`);

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Calendar, Users, FileText, ExternalLink, Gavel, CheckCircle2 } from "lucide-react";
+import { Calendar, Users, FileText, ExternalLink, Gavel, CheckCircle2, Lightbulb } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 
@@ -139,11 +139,32 @@ export function BillDetailDialog({ billId, onClose }: BillDetailDialogProps) {
               )}
             </div>
 
+            {/* AI Impact Assessment */}
+            {bill.bill_impact && (
+              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-primary" />
+                  Impact Assessment
+                </h4>
+                <div className="text-sm text-muted-foreground leading-relaxed prose prose-sm max-w-none">
+                  {bill.bill_impact.split('\n').map((line: string, i: number) => {
+                    if (line.startsWith('**') && line.endsWith('**')) {
+                      return <h5 key={i} className="font-semibold text-foreground mt-3 mb-1">{line.replace(/\*\*/g, '')}</h5>;
+                    }
+                    if (line.startsWith('- ')) {
+                      return <p key={i} className="ml-2 my-0.5">• {line.slice(2)}</p>;
+                    }
+                    return line.trim() ? <p key={i} className="my-1">{line}</p> : null;
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Summary or Description */}
             <div className="p-4 rounded-lg bg-muted/50">
               <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                About this Bill
+                {bill.bill_impact ? 'Official Summary' : 'About this Bill'}
               </h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {bill.summary || (

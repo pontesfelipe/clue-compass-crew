@@ -132,6 +132,7 @@ export type Database = {
       }
       bills: {
         Row: {
+          bill_impact: string | null
           bill_number: number
           bill_type: Database["public"]["Enums"]["bill_type"]
           congress: number
@@ -139,6 +140,7 @@ export type Database = {
           enacted: boolean | null
           enacted_date: string | null
           id: string
+          impact_generated_at: string | null
           introduced_date: string | null
           latest_action_date: string | null
           latest_action_text: string | null
@@ -152,6 +154,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          bill_impact?: string | null
           bill_number: number
           bill_type: Database["public"]["Enums"]["bill_type"]
           congress: number
@@ -159,6 +162,7 @@ export type Database = {
           enacted?: boolean | null
           enacted_date?: string | null
           id?: string
+          impact_generated_at?: string | null
           introduced_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
@@ -172,6 +176,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          bill_impact?: string | null
           bill_number?: number
           bill_type?: Database["public"]["Enums"]["bill_type"]
           congress?: number
@@ -179,6 +184,7 @@ export type Database = {
           enacted?: boolean | null
           enacted_date?: string | null
           id?: string
+          impact_generated_at?: string | null
           introduced_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
@@ -919,6 +925,38 @@ export type Database = {
           weekly_digest?: boolean
         }
         Relationships: []
+      }
+      policy_area_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          issue_id: string | null
+          policy_area: string
+          relevance_weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issue_id?: string | null
+          policy_area: string
+          relevance_weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issue_id?: string | null
+          policy_area?: string
+          relevance_weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_area_mappings_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       politician_issue_positions: {
         Row: {
