@@ -30,59 +30,59 @@ const STATE_NAMES: Record<string, string> = {
   DC: "District of Columbia"
 };
 
-// Approximate state label positions (percentage based for responsive sizing)
-const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number; offset?: boolean }> = {
-  AL: { x: 65.5, y: 67 },
+// Approximate state label positions (percentage based, centered in each state)
+const STATE_LABEL_POSITIONS: Record<string, { x: number; y: number }> = {
+  AL: { x: 66, y: 66 },
   AK: { x: 17, y: 83 },
-  AZ: { x: 23, y: 60 },
+  AZ: { x: 22, y: 58 },
   AR: { x: 55, y: 58 },
-  CA: { x: 10, y: 50 },
-  CO: { x: 32, y: 47 },
-  CT: { x: 96, y: 35, offset: true },
-  DE: { x: 96, y: 44, offset: true },
-  FL: { x: 77, y: 78 },
-  GA: { x: 72, y: 64 },
+  CA: { x: 9, y: 48 },
+  CO: { x: 31, y: 46 },
+  CT: { x: 89.5, y: 33 },
+  DE: { x: 85, y: 43 },
+  FL: { x: 76, y: 76 },
+  GA: { x: 71, y: 63 },
   HI: { x: 27, y: 88 },
-  ID: { x: 20, y: 28 },
-  IL: { x: 60, y: 44 },
-  IN: { x: 65, y: 44 },
-  IA: { x: 52, y: 38 },
-  KS: { x: 42, y: 50 },
-  KY: { x: 68, y: 50 },
-  LA: { x: 56, y: 72 },
-  ME: { x: 93, y: 18 },
-  MD: { x: 96, y: 48, offset: true },
-  MA: { x: 96, y: 31, offset: true },
-  MI: { x: 67, y: 30 },
-  MN: { x: 52, y: 24 },
-  MS: { x: 60, y: 65 },
-  MO: { x: 54, y: 50 },
-  MT: { x: 27, y: 20 },
-  NE: { x: 41, y: 40 },
-  NV: { x: 15, y: 42 },
-  NH: { x: 96, y: 24, offset: true },
-  NJ: { x: 96, y: 40, offset: true },
-  NM: { x: 29, y: 58 },
-  NY: { x: 83, y: 28 },
-  NC: { x: 78, y: 54 },
-  ND: { x: 42, y: 22 },
+  ID: { x: 19, y: 28 },
+  IL: { x: 61, y: 44 },
+  IN: { x: 66, y: 44 },
+  IA: { x: 53, y: 38 },
+  KS: { x: 43, y: 50 },
+  KY: { x: 69, y: 50 },
+  LA: { x: 56, y: 71 },
+  ME: { x: 92, y: 17 },
+  MD: { x: 82, y: 44 },
+  MA: { x: 90, y: 29 },
+  MI: { x: 68, y: 32 },
+  MN: { x: 53, y: 26 },
+  MS: { x: 61, y: 65 },
+  MO: { x: 55, y: 50 },
+  MT: { x: 27, y: 21 },
+  NE: { x: 42, y: 40 },
+  NV: { x: 14, y: 42 },
+  NH: { x: 90, y: 24 },
+  NJ: { x: 86, y: 39 },
+  NM: { x: 28, y: 58 },
+  NY: { x: 84, y: 30 },
+  NC: { x: 77, y: 55 },
+  ND: { x: 43, y: 23 },
   OH: { x: 71, y: 42 },
-  OK: { x: 44, y: 57 },
-  OR: { x: 13, y: 26 },
-  PA: { x: 79, y: 36 },
-  RI: { x: 96, y: 33, offset: true },
-  SC: { x: 76, y: 60 },
-  SD: { x: 42, y: 30 },
-  TN: { x: 66, y: 55 },
-  TX: { x: 40, y: 70 },
-  UT: { x: 22, y: 44 },
-  VT: { x: 96, y: 21, offset: true },
-  VA: { x: 78, y: 47 },
-  WA: { x: 14, y: 14 },
-  WV: { x: 75, y: 45 },
-  WI: { x: 58, y: 28 },
-  WY: { x: 30, y: 34 },
-  DC: { x: 96, y: 51, offset: true }
+  OK: { x: 45, y: 56 },
+  OR: { x: 12, y: 26 },
+  PA: { x: 80, y: 37 },
+  RI: { x: 91, y: 31 },
+  SC: { x: 75, y: 59 },
+  SD: { x: 43, y: 30 },
+  TN: { x: 67, y: 54 },
+  TX: { x: 40, y: 68 },
+  UT: { x: 21, y: 44 },
+  VT: { x: 88, y: 22 },
+  VA: { x: 79, y: 48 },
+  WA: { x: 13, y: 16 },
+  WV: { x: 76, y: 46 },
+  WI: { x: 59, y: 30 },
+  WY: { x: 29, y: 34 },
+  DC: { x: 84, y: 46 }
 };
 
 // Territories with full names
@@ -246,9 +246,7 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
         
         {/* State Abbreviation Labels Overlay */}
         <div className="absolute inset-0 pointer-events-none p-4">
-          {Object.entries(STATE_LABEL_POSITIONS)
-            .filter(([, pos]) => !pos.offset)
-            .map(([abbr, pos]) => (
+          {Object.entries(STATE_LABEL_POSITIONS).map(([abbr, pos]) => (
             <div
               key={abbr}
               className="absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer"
@@ -258,38 +256,15 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
               onMouseLeave={() => setHoveredState(null)}
             >
               <span 
-                className={`text-[10px] sm:text-xs font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] transition-transform ${
+                className={`text-[8px] sm:text-[10px] font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-transform ${
                   hoveredState === abbr ? "scale-125" : ""
                 }`}
-                style={{ color: "white" }}
+                style={{ color: "white", textShadow: "0 0 3px rgba(0,0,0,0.8), 0 0 5px rgba(0,0,0,0.5)" }}
               >
                 {abbr}
               </span>
             </div>
           ))}
-        </div>
-        
-        {/* Northeast Corridor Labels - Stacked on right side */}
-        <div className="absolute right-2 top-[18%] flex flex-col gap-0.5 pointer-events-auto">
-          {["VT", "NH", "MA", "RI", "CT", "NJ", "DE", "MD", "DC"]
-            .map((abbr) => {
-              const stateData = stateScores?.find(s => s.abbr === abbr);
-              const bgColor = getScoreColor(stateData?.score ?? null);
-              return (
-                <button
-                  key={abbr}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-bold transition-all hover:scale-105 ${
-                    hoveredState === abbr ? "ring-2 ring-primary" : ""
-                  }`}
-                  style={{ backgroundColor: bgColor, color: "white" }}
-                  onClick={() => handleLabelClick(abbr)}
-                  onMouseEnter={() => setHoveredState(abbr)}
-                  onMouseLeave={() => setHoveredState(null)}
-                >
-                  <span className="drop-shadow-sm">{abbr}</span>
-                </button>
-              );
-            })}
         </div>
       </div>
 
