@@ -24,7 +24,7 @@ serve(async (req) => {
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { batch_size = 50, force_reclassify = false, prioritize_chamber } = await req.json().catch(() => ({}));
+    const { batch_size = 50, force_reclassify = false, prioritize_chamber, use_policy_area_mapping = true } = await req.json().catch(() => ({}));
 
     console.log(`Starting AI issue classification (batch_size: ${batch_size}, prioritize: ${prioritize_chamber || 'none'})...`);
 
@@ -43,6 +43,22 @@ serve(async (req) => {
 
     const issueMap = new Map(issues.map(i => [i.slug, i.id]));
     const issueDescriptions = issues.map(i => `- ${i.slug}: ${i.label} - ${i.description || ""}`).join("\n");
+
+    // Get policy area mappings for quick classification
+    const { data: policyMappings } = await supabase
+      .from("policy_area_mappings")
+      .select("policy_area, issue_id, relevance_weight");
+    
+    const policyAreaToIssue = new Map<string, { issue_id: string; weight: number }>();
+    for (const mapping of policyMappings || []) {
+      if (mapping.issue_id) {
+        policyAreaToIssue.set(mapping.policy_area, { 
+          issue_id: mapping.issue_id, 
+          weight: mapping.relevance_weight 
+        });
+      }
+    }
+    console.log(`Loaded ${policyAreaToIssue.size} policy area mappings`);
 
     // Get already classified bill IDs to exclude
     const { data: existingSignals } = await supabase
@@ -74,7 +90,6 @@ serve(async (req) => {
       .slice(0, batch_size);
 
     console.log(`Found ${allBills?.length || 0} bills, ${bills.length} unclassified`);
-    if (billsError) throw billsError;
 
     console.log(`Processing ${bills?.length || 0} unclassified bills`);
 
@@ -85,11 +100,52 @@ serve(async (req) => {
       );
     }
 
-    const results: { bill_id: string; classifications: IssueClassification[] }[] = [];
+    const results: { bill_id: string; classifications: IssueClassification[]; method: string }[] = [];
     let signalsCreated = 0;
+    let policyMappingUsed = 0;
+    let aiClassificationUsed = 0;
 
     for (const bill of bills) {
       try {
+        // First try to use policy area mapping for quick classification
+        if (use_policy_area_mapping && bill.policy_area && policyAreaToIssue.has(bill.policy_area)) {
+          const mapping = policyAreaToIssue.get(bill.policy_area)!;
+          
+          // Create signal from policy area mapping
+          // Direction is neutral (0) for policy mappings - AI will refine later
+          // For now, we'll infer direction from bill type/action if possible
+          const { error: insertError } = await supabase
+            .from("issue_signals")
+            .upsert({
+              issue_id: mapping.issue_id,
+              signal_type: "bill_sponsorship",
+              external_ref: bill.id,
+              direction: 1, // Default to progressive direction, AI can refine
+              weight: mapping.weight * 0.7, // Lower weight since it's auto-mapped
+              description: `Policy area mapping: ${bill.policy_area}`,
+            }, { 
+              onConflict: "issue_id,signal_type,external_ref",
+              ignoreDuplicates: false 
+            });
+
+          if (!insertError) {
+            signalsCreated++;
+            policyMappingUsed++;
+            results.push({ 
+              bill_id: bill.id, 
+              classifications: [{ 
+                issue_slug: bill.policy_area, 
+                direction: 1, 
+                confidence: mapping.weight * 0.7, 
+                reasoning: `Auto-mapped from policy area` 
+              }],
+              method: 'policy_mapping'
+            });
+            continue; // Skip AI classification for this bill
+          }
+        }
+
+        // Fall back to AI classification
         // Build bill context for AI
         const billContext = [
           `Title: ${bill.title}`,
@@ -159,7 +215,8 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
         }
 
         const classifications: IssueClassification[] = JSON.parse(jsonMatch[0]);
-        results.push({ bill_id: bill.id, classifications });
+        results.push({ bill_id: bill.id, classifications, method: 'ai' });
+        aiClassificationUsed++;
 
         // Store classifications as issue signals
         for (const classification of classifications) {
@@ -203,13 +260,15 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
       }
     }
 
-    console.log(`Completed: processed ${results.length} bills, created ${signalsCreated} signals`);
+    console.log(`Completed: processed ${results.length} bills, created ${signalsCreated} signals (${policyMappingUsed} from policy mapping, ${aiClassificationUsed} from AI)`);
 
     return new Response(
       JSON.stringify({
         success: true,
         bills_processed: results.length,
         signals_created: signalsCreated,
+        policy_mapping_used: policyMappingUsed,
+        ai_classification_used: aiClassificationUsed,
         results: results.slice(0, 5), // Return sample of results
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

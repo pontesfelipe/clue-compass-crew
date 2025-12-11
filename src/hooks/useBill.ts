@@ -17,6 +17,8 @@ export interface Bill {
   policy_area: string | null;
   subjects: string[] | null;
   url: string | null;
+  bill_impact: string | null;
+  impact_generated_at: string | null;
 }
 
 export interface BillSponsor {

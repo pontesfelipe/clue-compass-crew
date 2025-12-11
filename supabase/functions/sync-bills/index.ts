@@ -230,6 +230,30 @@ async function processBill(
   const detailData = await detailResponse.json()
   const billDetail = detailData.bill
 
+  // Fetch bill summary if available
+  let summaryText: string | null = null
+  if (billDetail.summaries?.url) {
+    try {
+      const summaryUrl = `${billDetail.summaries.url}&format=json&api_key=${congressApiKey}`
+      const summaryResponse = await fetch(summaryUrl)
+      if (summaryResponse.ok) {
+        const summaryData = await summaryResponse.json()
+        // Get the most recent summary (last in array, usually the most comprehensive)
+        const summaries = summaryData.summaries || []
+        if (summaries.length > 0) {
+          const latestSummary = summaries[summaries.length - 1]
+          summaryText = latestSummary.text || null
+          // Clean HTML tags from summary
+          if (summaryText) {
+            summaryText = summaryText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Error fetching summary for ${billType}${bill.number}: ${e}`)
+    }
+  }
+
   const billTypeMap: Record<string, string> = {
     'hr': 'hr', 's': 's', 'hjres': 'hjres', 'sjres': 'sjres',
     'hconres': 'hconres', 'sconres': 'sconres', 'hres': 'hres', 'sres': 'sres'
@@ -249,7 +273,7 @@ async function processBill(
     url: bill.url || null,
     enacted: billDetail.laws?.length > 0,
     enacted_date: billDetail.laws?.[0]?.date || null,
-    summary: null,
+    summary: summaryText,
     updated_at: new Date().toISOString(),
   }
 

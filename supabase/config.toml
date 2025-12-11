@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.send-weekly-digest]
 verify_jwt = false
+
+[functions.generate-bill-impact]
+verify_jwt = false
