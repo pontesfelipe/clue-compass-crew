@@ -16,7 +16,9 @@ import {
   Users,
   ArrowRight,
   CheckCircle,
-  Shield
+  Shield,
+  Database,
+  Target
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTopMembers } from "@/hooks/useMembers";
@@ -45,31 +47,30 @@ export default function Index() {
             <div className="space-y-8">
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
                 <Shield className="h-4 w-4" />
-                Non-partisan · Data-driven
+                Neutral · Data-driven · Non-partisan
               </div>
               
               <h1 className="font-serif text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Know Your
+                Understand Your
                 <span className="block mt-2">
-                  <span className="civic-gradient-text">Representatives</span>
+                  <span className="civic-gradient-text">Political Landscape</span>
                 </span>
               </h1>
               
               <p className="text-lg text-muted-foreground max-w-lg leading-relaxed">
-                CivicScore uses official Congress.gov data to calculate transparent, 
-                customizable scores for every member of Congress. Make informed decisions 
-                based on facts, not opinions.
+                We turn public data on votes, money, and behavior into clear, neutral insights 
+                — so you can decide for yourself. No opinions. No party labels. Just actions and patterns.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button variant="hero" size="xl" asChild>
                   <Link to="/map">
-                    Explore the Map
+                    See How Your State Performs
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
                 <Button variant="civic-outline" size="xl" asChild>
-                  <Link to="/methodology">
+                  <Link to="/how-it-works">
                     How It Works
                   </Link>
                 </Button>
@@ -78,8 +79,8 @@ export default function Index() {
               <div className="flex items-center gap-6 pt-4">
                 {[
                   "535 Members Tracked",
-                  "Near Real-time Data",
-                  "Custom Scoring"
+                  "Official Public Data",
+                  "No Ideology Labels"
                 ].map((item, index) => (
                   <div key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-score-excellent" />
@@ -103,54 +104,71 @@ export default function Index() {
         </div>
       </section>
 
+      {/* What This Is Section */}
+      <section className="py-16 lg:py-20 border-t border-border">
+        <div className="civic-container">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="font-serif text-2xl font-bold text-foreground sm:text-3xl mb-6">
+              What This Is
+            </h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              Politics generates enormous amounts of public data, but it is scattered, technical, 
+              and difficult to trust. CivicScore brings verified public records together and presents 
+              them clearly. We measure how actions align with the priorities <em>you</em> choose — 
+              without telling you what to think or how to vote.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="bg-muted/30 py-20 lg:py-28">
         <div className="civic-container">
           <div className="text-center mb-16">
             <h2 className="font-serif text-3xl font-bold text-foreground sm:text-4xl mb-4">
-              Transparent Scoring Methodology
+              From Data to Clarity
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Our scoring system is built on official congressional data, 
-              giving you a clear picture of your representatives' performance.
+              We transform raw congressional data into structured signals you can understand — 
+              without adding opinions or ideological labels.
             </p>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <FeatureCard
-              icon={BarChart3}
-              title="Productivity Score"
-              description="Track bills sponsored, co-sponsored, and enacted into law. See who's actually getting things done."
+              icon={Database}
+              title="Public Data Collection"
+              description="Votes, bills, and campaign finance from official government sources like Congress.gov and the FEC."
               delay={100}
             />
             <FeatureCard
-              icon={Users}
-              title="Attendance Rate"
-              description="Monitor vote participation rates. Know if your representative shows up when it matters."
+              icon={BarChart3}
+              title="Behavioral Signals"
+              description="We turn raw data into structured indicators of behavior over time — not raw spreadsheets."
               delay={200}
             />
             <FeatureCard
-              icon={Scale}
-              title="Bipartisanship Index"
-              description="Measure cross-party collaboration on legislation. Find representatives who work across the aisle."
+              icon={Target}
+              title="Priority-Based Alignment"
+              description="You define what matters to you. We compare actions to your priorities and show alignment."
               delay={300}
             />
             <FeatureCard
-              icon={TrendingUp}
-              title="Issue Alignment"
-              description="Set your priority issues and see how representatives align with what matters to you."
+              icon={Users}
+              title="Attendance Tracking"
+              description="Monitor vote participation rates. Know if your representative shows up when it matters."
               delay={400}
             />
             <FeatureCard
-              icon={Sliders}
-              title="Custom Weights"
-              description="Adjust scoring weights to prioritize the factors that matter most to you personally."
+              icon={Scale}
+              title="Collaboration Patterns"
+              description="See cross-party collaboration on legislation. Understand working relationships."
               delay={500}
             />
             <FeatureCard
               icon={Map}
               title="Geographic Insights"
-              description="Explore performance by state, district, or chamber. Compare regions at a glance."
+              description="Explore performance by state or chamber. Compare regions at a glance."
               delay={600}
             />
           </div>
@@ -163,10 +181,10 @@ export default function Index() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-12">
             <div>
               <h2 className="font-serif text-3xl font-bold text-foreground sm:text-4xl mb-2">
-                Top Performers
+                High Activity Members
               </h2>
               <p className="text-muted-foreground">
-                Members with the highest bipartisan collaboration scores
+                Members with the highest cross-party collaboration based on available data
               </p>
             </div>
             <Button variant="civic-outline" asChild>
@@ -227,11 +245,11 @@ export default function Index() {
           <div className="civic-container relative">
             <div className="text-center max-w-3xl mx-auto">
               <h2 className="font-serif text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl mb-6">
-                Get Personalized Insights
+                Compare Politicians to What Matters to You
               </h2>
               <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
-                Create a free account to save your scoring preferences, 
-                track your representatives, and see how they align with your values.
+                Create a free account to define your priorities and see how actions 
+                align with what matters to you — based on public data, not opinions.
               </p>
               <Button variant="hero" size="xl" asChild>
                 <Link to="/auth">
