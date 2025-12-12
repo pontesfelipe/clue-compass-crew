@@ -46,6 +46,7 @@ const App = () => (
             <Route path="/votes" element={<VotesPage />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/news" element={<CongressNewsPage />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
             <Route path="/methodology" element={<MethodologyPage />} />
             <Route path="/data-sources" element={<DataSourcesPage />} />
             <Route path="/faq" element={<FAQPage />} />
