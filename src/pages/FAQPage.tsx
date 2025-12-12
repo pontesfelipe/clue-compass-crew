@@ -11,60 +11,60 @@ import { Helmet } from "react-helmet";
 export default function FAQPage() {
   const faqs = [
     {
-      question: "What is CivicScore?",
-      answer: "CivicScore is a non-partisan platform that provides data-driven performance scores for every member of Congress. We use official government data to help citizens make informed decisions about their representatives."
+      question: "Is this partisan?",
+      answer: "No. The system does not use party affiliation or ideology in scoring. We present official public data on actions — not opinions, labels, or endorsements."
+    },
+    {
+      question: "Does this tell me how to vote?",
+      answer: "No. CivicScore shows how actions align with priorities you choose. We don't make recommendations or express opinions on candidates."
     },
     {
       question: "Where does the data come from?",
-      answer: "All our data comes from official government sources: Congress.gov for legislative activity and voting records, the Federal Election Commission (FEC) for campaign finance data, and the House Clerk and Senate.gov for detailed roll call votes."
+      answer: "All data comes from official public sources: Congress.gov for legislative activity and voting records, the Federal Election Commission (FEC) for campaign finance data, and the House Clerk and Senate.gov for detailed roll call votes."
+    },
+    {
+      question: "What if data is missing?",
+      answer: "Missing data is shown explicitly and does not penalize scores. When data is incomplete, we display this transparently so you know exactly what information is available."
+    },
+    {
+      question: "What is CivicScore?",
+      answer: "CivicScore is a neutral civic analytics tool that turns public data on votes, money, and behavior into clear insights. We help you understand what is happening in politics without telling you what to think."
+    },
+    {
+      question: "How are alignment scores calculated?",
+      answer: "Alignment scores measure the distance between your selected priorities and a politician's actions (votes, sponsorships, etc.). The system uses normalized, symmetric distance metrics applied equally to all members regardless of party."
+    },
+    {
+      question: "What inputs are used for scoring?",
+      answer: "We use: voting records (Yea/Nay/Present/Missed), bill sponsorships and co-sponsorships, committee memberships, campaign finance data from the FEC, and timing of actions. We do NOT use party affiliation, caucus membership, ideological labels, statements, or media classifications."
     },
     {
       question: "How often is the data updated?",
-      answer: "We update our data automatically: voting records every 2 hours, bills every 6 hours, member information daily, and campaign finance data nightly. This 'near real-time' approach ensures you have access to recent congressional activity."
-    },
-    {
-      question: "How are the scores calculated?",
-      answer: "Scores are calculated using a weighted average of four components: Productivity (bills sponsored and enacted), Attendance (vote participation), Bipartisanship (cross-party collaboration), and Issue Alignment (matching with your priorities). Authenticated users can customize these weights."
-    },
-    {
-      question: "Is CivicScore partisan?",
-      answer: "No. CivicScore is strictly non-partisan. We present objective data without editorial commentary or political bias. Our methodology is transparent and applied equally to all members regardless of party affiliation."
+      answer: "We update our data automatically on a scheduled basis: voting records every 2 hours, bills every 6 hours, member information daily, and campaign finance data nightly. Update timestamps are displayed throughout the platform."
     },
     {
       question: "Can I customize my scoring preferences?",
-      answer: "Yes! Authenticated users can adjust the weights for each scoring component to prioritize what matters most to them. You can also select priority issues to see how representatives align with your values."
+      answer: "Yes. Authenticated users can select priority issues and set importance weights. The system then compares politician actions to your priorities — showing alignment based on what matters to you."
     },
     {
-      question: "What is the alignment score?",
-      answer: "The alignment score shows how closely a representative's voting record and legislative activity match your personal positions on key issues. Complete your profile questionnaire to see personalized alignment scores for all representatives."
-    },
-    {
-      question: "Why is a representative's score different from what I expected?",
-      answer: "Our scores are based on objective data metrics, which may differ from public perception or media narratives. We encourage you to explore the detailed breakdown for each representative to understand how their score was calculated."
-    },
-    {
-      question: "How can I find my representatives?",
-      answer: "Use the interactive map on our homepage to explore representatives by state. You can also browse all members on the Members page or use the search feature to find specific members by name, state, or district."
+      question: "How do I find my representatives?",
+      answer: "Use the interactive map on our homepage to explore representatives by state. You can also browse all members on the Members page or use search to find specific members by name, state, or district."
     },
     {
       question: "Is CivicScore free to use?",
-      answer: "Yes! CivicScore is free to use. Creating an account unlocks additional features like customizable scoring weights, personalized alignment scores, and the ability to track your representatives over time."
+      answer: "Yes. CivicScore is free to use. Creating an account unlocks additional features like priority-based alignment scores and the ability to track representatives over time."
     },
     {
       question: "How do you handle campaign finance data?",
-      answer: "We display campaign finance data from the FEC, including individual contributions, PAC donations, corporate sponsors, and funding sources. This transparency helps you understand potential influences on your representatives' decision-making."
+      answer: "We display campaign finance data from the FEC, including individual contributions, PAC donations, and funding sources. This data is presented factually without interpretation or judgment about its meaning."
     },
     {
-      question: "Can I compare multiple representatives?",
-      answer: "Yes! Use our Compare feature to see side-by-side comparisons of multiple representatives, including their scores, voting records, and policy area focus."
+      question: "Why is a representative's score different from what I expected?",
+      answer: "Our scores are based on objective data metrics applied consistently to all members. Scores may differ from public perception or media narratives. We encourage you to explore the detailed breakdown to understand how any score was calculated."
     },
     {
-      question: "What is the AI-generated summary on member pages?",
-      answer: "Authenticated users can generate an AI-powered summary that explains a representative's recent activity, voting patterns, and legislative priorities in plain language. Summaries are refreshed monthly and help make complex congressional data more accessible."
-    },
-    {
-      question: "How do I track representatives I'm interested in?",
-      answer: "Once logged in, click the 'Track' button on any member's page. You can view all your tracked representatives from your profile, where you'll see their recent activity including votes and bill sponsorships."
+      question: "What language does CivicScore use?",
+      answer: "We always use neutral language: 'higher or lower alignment', 'based on selected priorities', 'according to available public data'. We never say 'good/bad politician', 'supports/opposes you', or use ideological labels like 'liberal/conservative'."
     }
   ];
 
@@ -72,7 +72,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>FAQ - CivicScore</title>
-        <meta name="description" content="Frequently asked questions about CivicScore, our methodology, data sources, and how to use the platform." />
+        <meta name="description" content="Frequently asked questions about CivicScore, our neutral methodology, data sources, and how to use the platform." />
       </Helmet>
       
       <Header />
