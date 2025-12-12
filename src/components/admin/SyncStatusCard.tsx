@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer, RotateCcw } from "lucide-react";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer, RotateCcw, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
 import { CronExpressionParser } from "cron-parser";
@@ -288,6 +288,8 @@ export function SyncStatusCard() {
   }, [syncProgress]);
 
   const [isResetting, setIsResetting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<string | null>(null);
 
   const logSyncTrigger = async (config: SyncConfig, success: boolean, errorMessage?: string) => {
     try {
@@ -355,6 +357,130 @@ export function SyncStatusCard() {
       });
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  // Database tables to export
+  const EXPORT_TABLES = [
+    { name: "members", label: "Congress Members" },
+    { name: "bills", label: "Bills" },
+    { name: "bill_sponsorships", label: "Bill Sponsorships" },
+    { name: "votes", label: "Votes" },
+    { name: "member_votes", label: "Member Votes" },
+    { name: "member_scores", label: "Member Scores" },
+    { name: "member_committees", label: "Member Committees" },
+    { name: "member_contributions", label: "Member Contributions" },
+    { name: "member_sponsors", label: "Member Sponsors" },
+    { name: "member_lobbying", label: "Member Lobbying" },
+    { name: "funding_metrics", label: "Funding Metrics" },
+    { name: "state_scores", label: "State Scores" },
+    { name: "issues", label: "Issues" },
+    { name: "issue_questions", label: "Issue Questions" },
+    { name: "issue_signals", label: "Issue Signals" },
+    { name: "politician_issue_positions", label: "Politician Issue Positions" },
+    { name: "profiles", label: "User Profiles" },
+    { name: "user_roles", label: "User Roles" },
+    { name: "sync_progress", label: "Sync Progress" },
+    { name: "api_sync_runs", label: "API Sync Runs" },
+  ];
+
+  const downloadAsJson = (data: any, filename: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAllData = async () => {
+    setIsExporting(true);
+    const timestamp = new Date().toISOString().split("T")[0];
+    const exportResults: { table: string; count: number; success: boolean }[] = [];
+
+    try {
+      for (const table of EXPORT_TABLES) {
+        setExportProgress(`Exporting ${table.label}...`);
+        
+        try {
+          // Fetch all data from the table (in batches if needed)
+          let allData: any[] = [];
+          let offset = 0;
+          const batchSize = 1000;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data, error } = await supabase
+              .from(table.name as any)
+              .select("*")
+              .range(offset, offset + batchSize - 1);
+
+            if (error) {
+              console.error(`Error fetching ${table.name}:`, error);
+              exportResults.push({ table: table.name, count: 0, success: false });
+              break;
+            }
+
+            if (data && data.length > 0) {
+              allData = [...allData, ...data];
+              offset += batchSize;
+              hasMore = data.length === batchSize;
+            } else {
+              hasMore = false;
+            }
+          }
+
+          if (allData.length > 0) {
+            downloadAsJson(allData, `civicscore-${table.name}-${timestamp}.json`);
+            exportResults.push({ table: table.name, count: allData.length, success: true });
+          } else {
+            exportResults.push({ table: table.name, count: 0, success: true });
+          }
+
+          // Small delay between downloads to prevent browser issues
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (tableError) {
+          console.error(`Failed to export ${table.name}:`, tableError);
+          exportResults.push({ table: table.name, count: 0, success: false });
+        }
+      }
+
+      // Generate a summary file
+      const summary = {
+        exportedAt: new Date().toISOString(),
+        version: "1.0.0",
+        tables: exportResults,
+        totalRecords: exportResults.reduce((sum, r) => sum + r.count, 0),
+        successfulTables: exportResults.filter(r => r.success).length,
+        failedTables: exportResults.filter(r => !r.success).length,
+      };
+      
+      downloadAsJson(summary, `civicscore-export-summary-${timestamp}.json`);
+
+      // Log the export action
+      await supabase.from("ai_usage_log").insert({
+        operation_type: "database_export",
+        success: true,
+        metadata: summary,
+      });
+
+      toast({
+        title: "Export Complete",
+        description: `Exported ${summary.totalRecords.toLocaleString()} records from ${summary.successfulTables} tables.`,
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export database",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -503,7 +629,25 @@ export function SyncStatusCard() {
                 </Badge>
               )}
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={exportAllData}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {exportProgress || "Exporting..."}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export All Data
+                  </>
+                )}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
