@@ -875,17 +875,174 @@ export function DocumentationContent() {
     );
   }, [searchQuery]);
 
-  const handleDownload = () => {
-    const markdown = generateMarkdownDocument();
-    const blob = new Blob([markdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `civicscore-documentation-v${DOCUMENTATION_VERSION}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF();
+    
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const maxWidth = pageWidth - margin * 2;
+    let y = margin;
+    
+    const addText = (text: string, size: number, isBold: boolean = false, color: [number, number, number] = [0, 0, 0]) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setTextColor(color[0], color[1], color[2]);
+      
+      const lines = doc.splitTextToSize(text, maxWidth);
+      const lineHeight = size * 0.5;
+      
+      for (const line of lines) {
+        if (y + lineHeight > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(line, margin, y);
+        y += lineHeight;
+      }
+    };
+    
+    const addSpace = (space: number) => {
+      y += space;
+      if (y > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+    
+    // Title
+    addText("CivicScore Platform Documentation", 24, true, [59, 130, 246]);
+    addSpace(5);
+    addText(`Version: ${DOCUMENTATION_VERSION} | Last Updated: ${LAST_UPDATED}`, 10, false, [100, 100, 100]);
+    addSpace(15);
+    
+    // Overview
+    addText("1. Overview", 18, true);
+    addSpace(5);
+    addText("CivicScore is a civic engagement platform that tracks and scores U.S. Congress members based on their legislative activity, voting records, and campaign finance data.", 11);
+    addSpace(10);
+    
+    // Key Features
+    addText("Key Features:", 14, true);
+    addSpace(5);
+    addText("• Explore all 539 Congress Members with detailed profiles", 11);
+    addText("• Track comprehensive voting records with party breakdowns", 11);
+    addText("• Analyze campaign finance including PAC dependencies", 11);
+    addText("• Calculate personalized politician-user alignment scores", 11);
+    addText("• Monitor legislative activity and bill impact", 11);
+    addText("• Interactive maps showing state-level performance", 11);
+    addSpace(10);
+    
+    // Technology Stack
+    addText("2. Technology Stack", 18, true);
+    addSpace(5);
+    addText("• Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui", 11);
+    addText("• Backend: Supabase (PostgreSQL, Edge Functions, Auth)", 11);
+    addText("• Data Sources: Congress.gov API, FEC API, Senate.gov, House Clerk XML", 11);
+    addText("• AI Integration: Lovable AI (Google Gemini 2.5 Flash)", 11);
+    addSpace(10);
+    
+    // Data Sources
+    addText("3. External Data Sources", 18, true);
+    addSpace(5);
+    
+    addText("Congress.gov API", 14, true);
+    addText("Official source for congressional data including members, bills, votes, and committees. Synced daily for members, every 6 hours for bills, and every 2 hours for votes.", 11);
+    addSpace(8);
+    
+    addText("FEC (Federal Election Commission) API", 14, true);
+    addText("Campaign finance data including individual contributions, PAC donations, and funding metrics. The FEC regulates campaign finance for federal elections and provides public access to contribution records.", 11);
+    addSpace(8);
+    
+    addText("House Clerk XML", 14, true);
+    addText("Official House of Representatives vote records with individual member positions parsed from XML format.", 11);
+    addSpace(8);
+    
+    addText("Senate.gov XML", 14, true);
+    addText("Official Senate vote records. Senators matched by name+state lookup since XML lacks bioguide_id.", 11);
+    addSpace(10);
+    
+    // Database Tables
+    addText("4. Core Database Tables", 18, true);
+    addSpace(5);
+    addText("• members - All 539 Congress members with biographical data", 11);
+    addText("• bills - Legislative bills from House and Senate", 11);
+    addText("• votes - Roll call votes from both chambers", 11);
+    addText("• member_votes - Individual member vote positions", 11);
+    addText("• bill_sponsorships - Bill sponsorship records", 11);
+    addText("• member_scores - Calculated performance scores", 11);
+    addText("• state_scores - Pre-computed state aggregates", 11);
+    addText("• member_contributions - FEC campaign contributions", 11);
+    addText("• funding_metrics - Aggregated funding analysis", 11);
+    addText("• profiles - User profile information", 11);
+    addText("• user_politician_alignment - Computed alignment scores", 11);
+    addSpace(10);
+    
+    // Edge Functions
+    addText("5. Edge Functions & Sync Schedule", 18, true);
+    addSpace(5);
+    addText("• sync-congress-members - Daily at midnight UTC", 11);
+    addText("• sync-bills - Every 6 hours", 11);
+    addText("• sync-votes - Every 2 hours", 11);
+    addText("• sync-member-details - Daily at 1 AM UTC", 11);
+    addText("• sync-fec-funding - Nightly at 2 AM UTC", 11);
+    addText("• calculate-member-scores - Every 2 hours (30 min after votes)", 11);
+    addText("• classify-issue-signals - Every 6 hours", 11);
+    addText("• compute-politician-positions - Every 6 hours", 11);
+    addSpace(10);
+    
+    // Score Calculations
+    addText("6. Score Calculations", 18, true);
+    addSpace(5);
+    addText("Productivity Score = (bills_sponsored × 3 + bills_cosponsored + bills_enacted × 10) / max_value × 100", 10);
+    addSpace(3);
+    addText("Attendance Score = (votes_cast / total_votes) × 100", 10);
+    addSpace(3);
+    addText("Bipartisanship Score = (bipartisan_bills / total_bills_sponsored) × 100", 10);
+    addSpace(3);
+    addText("Overall Score = weighted average of component scores", 10);
+    addSpace(10);
+    
+    // Funding Metrics
+    addText("7. Funding Metrics", 18, true);
+    addSpace(5);
+    addText("Grassroots Support = (small_donor_amount / total_individual) × 100", 10);
+    addSpace(3);
+    addText("PAC Dependence = (pac_amount / total_receipts) × 100", 10);
+    addSpace(3);
+    addText("Local Money Score = (in_state_amount / total_receipts) × 100", 10);
+    addSpace(10);
+    
+    // Admin Features
+    addText("8. Admin Features", 18, true);
+    addSpace(5);
+    addText("• Sync Dashboard - Monitor and control all data sync operations", 11);
+    addText("• Pause/Resume Syncs - Global control to pause all sync jobs", 11);
+    addText("• User Management - View, edit, and delete user accounts", 11);
+    addText("• Feature Toggles - Enable/disable platform features", 11);
+    addText("• Data Inspector - Debug data flow from API to UI", 11);
+    addText("• AI Chat - Administrative AI assistant", 11);
+    addSpace(10);
+    
+    // Changelog
+    addText("9. Changelog", 18, true);
+    addSpace(5);
+    CHANGELOG.slice(0, 5).forEach(entry => {
+      addText(`v${entry.version} (${entry.date})`, 12, true);
+      entry.changes.forEach(change => {
+        addText(`• ${change}`, 10);
+      });
+      addSpace(5);
+    });
+    
+    // Footer
+    addSpace(10);
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated: ${new Date().toISOString().split("T")[0]} | CivicScore Documentation v${DOCUMENTATION_VERSION}`, margin, pageHeight - 10);
+    
+    doc.save(`civicscore-documentation-v${DOCUMENTATION_VERSION}.pdf`);
   };
 
   const handleSearchResultClick = (item: SearchableItem) => {
@@ -932,7 +1089,7 @@ export function DocumentationContent() {
               <Badge variant="secondary">Updated: {LAST_UPDATED}</Badge>
               <Button onClick={handleDownload}>
                 <Download className="h-4 w-4 mr-2" />
-                Download Markdown
+                Download PDF
               </Button>
             </div>
           </div>
