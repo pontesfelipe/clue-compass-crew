@@ -9,8 +9,29 @@ import { Input } from "@/components/ui/input";
 import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X } from "lucide-react";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "1.0.1";
+const DOCUMENTATION_VERSION = "1.1.0";
 const LAST_UPDATED = "2024-12-12";
+
+// Changelog
+const CHANGELOG = [
+  { version: "1.1.0", date: "2024-12-12", changes: [
+    "Added database export functionality to Data Sync dashboard",
+    "Added search functionality within documentation",
+    "Added searchable index for tables, functions, endpoints, and screens",
+    "Export supports 22 database tables with progress indicator"
+  ]},
+  { version: "1.0.1", date: "2024-12-12", changes: [
+    "Added documentation search functionality",
+    "Added searchable items index"
+  ]},
+  { version: "1.0.0", date: "2024-12-12", changes: [
+    "Initial documentation release",
+    "Complete data model documentation",
+    "Edge functions and cron schedule",
+    "Screen-by-screen breakdown",
+    "Integration details"
+  ]}
+];
 
 // Searchable index for documentation
 interface SearchableItem {
@@ -79,6 +100,10 @@ const SEARCHABLE_ITEMS: SearchableItem[] = [
   { id: "route-matches", category: "screen", title: "My Matches (/my-profile/matches)", description: "Top aligned politicians", keywords: ["match", "alignment", "politician", "recommendation"], tab: "screens" },
   { id: "route-tracked", category: "screen", title: "Tracked Members (/tracked)", description: "Tracked member activity", keywords: ["track", "follow", "member", "activity"], tab: "screens" },
   { id: "route-admin", category: "screen", title: "Admin Dashboard (/admin)", description: "Admin controls and analytics", keywords: ["admin", "dashboard", "analytics", "management"], tab: "screens" },
+  
+  // Admin Features
+  { id: "feature-db-export", category: "function", title: "Database Export", description: "Export all database tables as JSON files", keywords: ["export", "download", "database", "json", "backup"], tab: "edge-functions" },
+  { id: "feature-doc-search", category: "function", title: "Documentation Search", description: "Search across all documentation items", keywords: ["search", "documentation", "find", "filter"], tab: "overview" },
 ];
 
 const generateMarkdownDocument = () => {
@@ -99,6 +124,8 @@ Last Updated: ${LAST_UPDATED}
 8. [Member Page Data Flow](#member-page-data-flow)
 9. [User Alignment System](#user-alignment-system)
 10. [Authentication & Authorization](#authentication)
+11. [Admin Features](#admin-features)
+12. [Changelog](#changelog)
 
 ---
 
@@ -722,11 +749,46 @@ overall_alignment = sum(issue_alignment_i * p_i) / sum(p_i)
 
 ---
 
-## Version History
+## 11. Admin Features
+
+### Database Export
+**Location**: Data Sync tab in Admin Dashboard
+**Purpose**: Export all database tables for backup or analysis
+
+**Exported Tables (22)**:
+- Core: members, bills, votes, member_votes, bill_sponsorships
+- Scores: member_scores, state_scores, funding_metrics
+- Finance: member_contributions, member_sponsors, member_lobbying
+- User Data: profiles, user_answers, user_issue_priorities, user_politician_alignment
+- Reference: issues, issue_questions, issue_signals, politician_issue_positions
+- System: api_sync_runs, feature_toggles, ai_usage_log
+
+**Export Format**: JSON files (one per table) + summary.json
+**Features**:
+- Progress indicator during export
+- Handles large tables in batches of 1000 rows
+- Logs export action to ai_usage_log
+
+### Documentation Search
+**Location**: Documentation tab in Admin Dashboard
+**Purpose**: Quickly find tables, functions, endpoints, or screens
+
+**Searchable Items**: ${SEARCHABLE_ITEMS.length} items indexed
+**Categories**: Tables, Edge Functions, Integrations, Screens
+**Features**:
+- Real-time search as you type
+- Category badges with icons
+- Click result to navigate to relevant tab
+
+---
+
+## 12. Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2024-12-12 | Initial documentation |
+| 1.1.0 | 2024-12-12 | Added database export functionality, documentation search, searchable index |
+| 1.0.1 | 2024-12-12 | Added documentation search functionality |
+| 1.0.0 | 2024-12-12 | Initial documentation release |
 
 ---
 
