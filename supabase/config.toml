@@ -42,6 +42,11 @@ verify_jwt = false
 [functions.recalculate-state-scores]
 verify_jwt = false
 
+# === SYNC ORCHESTRATION ===
+
+[functions.sync-orchestrator]
+verify_jwt = false
+
 # === UTILITIES ===
 
 [functions.data-status]
@@ -60,4 +65,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-floor-schedule]
+verify_jwt = false
+
+[functions.send-member-notifications]
+verify_jwt = false
+
+[functions.send-weekly-digest]
 verify_jwt = false

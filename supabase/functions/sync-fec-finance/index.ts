@@ -9,6 +9,11 @@ const corsHeaders = {
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
 const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY";
+const JOB_ID = "fec-finance";
+const MAX_DURATION_SECONDS = 240; // 4 minutes max
+const BATCH_SIZE = 15; // Process 15 members per run
+const RATE_LIMIT_DELAY = 350; // ms between FEC API calls
+const MAX_RETRIES = 3;
 
 const stateAbbreviations: Record<string, string> = {
   "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
@@ -25,29 +30,125 @@ const stateAbbreviations: Record<string, string> = {
   "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
 };
 
-// Threshold for identifying major sponsors (contributors above this are sponsors)
 const SPONSOR_THRESHOLD = 5000;
 
-// Helper function to check if syncs are paused
+// Helper: Check if syncs are paused
 async function isSyncPaused(supabase: any): Promise<boolean> {
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('feature_toggles')
       .select('enabled')
       .eq('id', 'sync_paused')
       .single();
-    
-    if (error || !data) return false;
-    return data.enabled === true;
+    return data?.enabled === true;
   } catch {
     return false;
   }
+}
+
+// Helper: Acquire job lock (returns true if lock acquired)
+async function acquireLock(supabase: any): Promise<boolean> {
+  const now = new Date();
+  const lockUntil = new Date(now.getTime() + MAX_DURATION_SECONDS * 1000);
+
+  // Try to acquire lock - only if not currently locked or running
+  const { data: progress } = await supabase
+    .from('sync_progress')
+    .select('status, lock_until')
+    .eq('id', JOB_ID)
+    .single();
+
+  if (progress) {
+    const existingLock = progress.lock_until ? new Date(progress.lock_until) : null;
+    if (existingLock && existingLock > now) {
+      console.log(`Job ${JOB_ID} is locked until ${existingLock.toISOString()}`);
+      return false;
+    }
+    if (progress.status === 'running') {
+      console.log(`Job ${JOB_ID} is already running`);
+      return false;
+    }
+  }
+
+  // Set lock
+  await supabase
+    .from('sync_progress')
+    .upsert({
+      id: JOB_ID,
+      status: 'running',
+      lock_until: lockUntil.toISOString(),
+      last_run_at: now.toISOString(),
+    }, { onConflict: 'id' });
+
+  return true;
+}
+
+// Helper: Release job lock
+async function releaseLock(supabase: any, status: string, successCount: number, failureCount: number) {
+  await supabase
+    .from('sync_progress')
+    .update({
+      status,
+      lock_until: null,
+      last_success_count: successCount,
+      last_failure_count: failureCount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', JOB_ID);
+}
+
+// Helper: Fetch with retry and exponential backoff
+async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Response | null> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url);
+      
+      if (response.status === 429) {
+        // Rate limited - exponential backoff
+        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+        console.log(`Rate limited, waiting ${delay}ms before retry ${attempt + 1}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (response.status >= 500) {
+        // Server error - retry
+        const delay = Math.pow(2, attempt) * 500;
+        console.log(`Server error ${response.status}, retrying in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`Fetch error on attempt ${attempt + 1}:`, error);
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+  return null;
+}
+
+// Generate contribution UID for idempotent upserts
+function generateContributionUid(c: any, memberId: string): string {
+  const parts = [
+    memberId,
+    c.committee_id || '',
+    c.receipt_date || '',
+    c.contribution_receipt_amount?.toString() || '0',
+    (c.contributor_name || '').substring(0, 50),
+    c.contributor_zip || '',
+  ];
+  return parts.join('|').replace(/[^a-zA-Z0-9|]/g, '').substring(0, 200);
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const startTime = Date.now();
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -63,80 +164,58 @@ serve(async (req) => {
       );
     }
 
+    // Try to acquire lock
+    if (!await acquireLock(supabase)) {
+      return new Response(
+        JSON.stringify({ success: false, message: 'Job is locked or already running' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request options
     let offset = 0;
-    let limit = 20;
-    let useProgressTracking = true;
-    
+    let limit = BATCH_SIZE;
+    let reset = false;
+
     try {
       const body = await req.json();
-      if (body.offset !== undefined) {
-        offset = body.offset;
-        useProgressTracking = false;
-      }
-      limit = body.limit || 20;
-      if (body.reset) {
-        await supabase
-          .from('sync_progress')
-          .update({ current_offset: 0, status: 'idle', total_processed: 0 })
-          .eq('id', 'fec-finance');
-        useProgressTracking = true;
-      }
+      if (body.reset) reset = true;
+      if (body.limit) limit = Math.min(body.limit, 50);
     } catch {
-      // Use defaults if no body
+      // Use defaults
     }
 
-    if (useProgressTracking) {
-      const { data: progress } = await supabase
-        .from('sync_progress')
-        .select('current_offset, status')
-        .eq('id', 'fec-finance')
-        .single();
-      
-      if (progress) {
-        offset = progress.current_offset || 0;
-      }
-    }
-
-    await supabase
+    // Get current progress
+    const { data: progress } = await supabase
       .from('sync_progress')
-      .update({ status: 'running', last_run_at: new Date().toISOString() })
-      .eq('id', 'fec-finance');
+      .select('current_offset, cursor_json')
+      .eq('id', JOB_ID)
+      .single();
+
+    if (!reset && progress?.current_offset) {
+      offset = progress.current_offset;
+    }
 
     console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`);
 
-    const { data: members, error: membersError, count } = await supabase
+    // Get members to sync
+    const { data: members, count: totalMembers } = await supabase
       .from('members')
       .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber', { count: 'exact' })
       .eq('in_office', true)
       .order('last_name')
       .range(offset, offset + limit - 1);
 
-    if (membersError) {
-      throw new Error(`Failed to fetch members: ${membersError.message}`);
-    }
-
-    const totalMembers = count || 0;
-    
     if (!members || members.length === 0) {
-      console.log('All members processed. Resetting offset to 0 for next cycle.');
-      await supabase
-        .from('sync_progress')
-        .update({ 
-          current_offset: 0, 
-          status: 'complete',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', 'fec-finance');
+      console.log('All members processed. Resetting offset.');
+      await releaseLock(supabase, 'complete', 0, 0);
+      await supabase.from('sync_progress').update({ current_offset: 0 }).eq('id', JOB_ID);
       
       return new Response(JSON.stringify({
         success: true,
-        message: 'All members processed. Will restart from beginning on next run.',
+        message: 'All members processed. Will restart on next run.',
         totalMembers,
-        processedCount: 0,
-        matchedCount: 0,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     console.log(`Processing ${members.length} members (${offset + 1} to ${offset + members.length} of ${totalMembers})`);
@@ -147,6 +226,12 @@ serve(async (req) => {
     const currentCycle = 2024;
 
     for (const member of members) {
+      // Check if we're running out of time
+      if (Date.now() - startTime > (MAX_DURATION_SECONDS - 30) * 1000) {
+        console.log('Approaching time limit, stopping batch early');
+        break;
+      }
+
       try {
         const stateAbbr = stateAbbreviations[member.state] || member.state;
         if (!stateAbbr || stateAbbr.length !== 2) {
@@ -158,19 +243,21 @@ serve(async (req) => {
         const lastName = member.last_name.replace(/[^a-zA-Z\s]/g, '').trim();
         const office = member.chamber === 'house' ? 'H' : 'S';
         
+        // Search for candidate
         const candidateSearchUrl = `${FEC_API_BASE}/candidates/?api_key=${FEC_API_KEY}&name=${encodeURIComponent(lastName)}&state=${stateAbbr}&office=${office}&is_active_candidate=true&sort=-election_years&per_page=20`;
         
         console.log(`Searching FEC for: ${member.full_name} (${stateAbbr}, ${office})`);
         
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
         
-        const candidateResponse = await fetch(candidateSearchUrl);
-        if (!candidateResponse.ok) {
-          if (candidateResponse.status === 429) {
-            console.error(`Rate limited. Saving progress and stopping.`);
+        const candidateResponse = await fetchWithRetry(candidateSearchUrl);
+        if (!candidateResponse?.ok) {
+          if (candidateResponse?.status === 429) {
+            console.error('Rate limited. Saving progress and stopping.');
+            errorCount++;
             break;
           }
-          console.log(`FEC search failed: ${candidateResponse.status}`);
+          console.log(`FEC search failed for ${member.full_name}`);
           processedCount++;
           continue;
         }
@@ -178,6 +265,7 @@ serve(async (req) => {
         const candidateData = await candidateResponse.json();
         const candidates = candidateData.results || [];
         
+        // Find matching candidate
         let matchingCandidate = null;
         const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '');
         const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '');
@@ -222,13 +310,14 @@ serve(async (req) => {
         const candidateId = matchingCandidate.candidate_id;
         matchedCount++;
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
+        // Get committees
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=5`;
-        const committeesResponse = await fetch(committeesUrl);
+        const committeesResponse = await fetchWithRetry(committeesUrl);
         
-        if (!committeesResponse.ok) {
-          if (committeesResponse.status === 429) break;
+        if (!committeesResponse?.ok) {
+          if (committeesResponse?.status === 429) break;
           processedCount++;
           continue;
         }
@@ -243,19 +332,20 @@ serve(async (req) => {
 
         const principalCommittee = committees.find((c: any) => c.committee_type === 'P') || committees[0];
         const committeeId = principalCommittee.committee_id;
+        const committeeName = principalCommittee.name || '';
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-        // Fetch itemized contributions with actual donor names
-        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&two_year_transaction_period=${currentCycle}&sort=-contribution_receipt_amount&per_page=50`;
-        const contributionsResponse = await fetch(contributionsUrl);
+        // Fetch itemized contributions
+        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&two_year_transaction_period=${currentCycle}&sort=-contribution_receipt_amount&per_page=100`;
+        const contributionsResponse = await fetchWithRetry(contributionsUrl);
 
         const allContributions: any[] = [];
         const sponsors: any[] = [];
         const industryTotals = new Map<string, { total: number; count: number }>();
-        const contributorAggregates = new Map<string, { name: string; type: string; amount: number; industry: string | null; state: string | null }>();
+        const contributorAggregates = new Map<string, any>();
 
-        if (contributionsResponse.ok) {
+        if (contributionsResponse?.ok) {
           const contributionsData = await contributionsResponse.json();
           const contributions = contributionsData.results || [];
 
@@ -263,40 +353,56 @@ serve(async (req) => {
             const amount = c.contribution_receipt_amount || 0;
             if (amount <= 0) continue;
 
-            // Get actual donor name - use committee name for PACs, contributor name for individuals
             let contributorName = c.contributor_name || 'Unknown';
             const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation, contributorName);
             
-            // For PACs/committees, use the committee name if available
             if (c.committee && c.committee.name) {
               contributorName = c.committee.name;
             } else if (c.contributor_aggregate_ytd > 200 && contributorType === 'pac') {
-              // This is likely a PAC contribution - the contributor_name should have the PAC name
               contributorName = c.contributor_name || 'Unknown PAC';
             }
             
             const industry = inferIndustry(c.contributor_employer, c.contributor_occupation);
             const contributorState = c.contributor_state || null;
+            const receiptDate = c.receipt_date || null;
 
-            // Aggregate contributions by contributor name
+            // Create unique contribution record with full details
+            const contributionUid = generateContributionUid(c, member.id);
+            
+            allContributions.push({
+              member_id: member.id,
+              contributor_name: contributorName,
+              contributor_type: contributorType,
+              amount: amount,
+              cycle: currentCycle,
+              industry: industry,
+              contributor_state: contributorState,
+              receipt_date: receiptDate,
+              contributor_city: c.contributor_city || null,
+              contributor_zip: c.contributor_zip || null,
+              contributor_employer: c.contributor_employer || null,
+              contributor_occupation: c.contributor_occupation || null,
+              committee_id: committeeId,
+              committee_name: committeeName,
+              memo_text: c.memo_text || null,
+              transaction_type: c.receipt_type || null,
+              contribution_uid: contributionUid,
+            });
+
+            // Track for sponsors
             const existing = contributorAggregates.get(contributorName);
             if (existing) {
               existing.amount += amount;
-              // Keep the first state we see for this contributor
-              if (!existing.state && contributorState) {
-                existing.state = contributorState;
-              }
             } else {
               contributorAggregates.set(contributorName, {
                 name: contributorName,
                 type: contributorType,
                 amount: amount,
                 industry: industry,
-                state: contributorState,
               });
             }
 
-            // Track industry totals for lobbying data
+            // Track industry totals
             if (industry) {
               const existingIndustry = industryTotals.get(industry) || { total: 0, count: 0 };
               industryTotals.set(industry, { 
@@ -306,23 +412,12 @@ serve(async (req) => {
             }
           }
 
-          // Convert aggregated contributors to contribution records
+          // Identify sponsors from aggregates
           for (const [name, data] of contributorAggregates) {
-            allContributions.push({
-              member_id: member.id,
-              contributor_name: data.name,
-              contributor_type: data.type,
-              amount: data.amount,
-              cycle: currentCycle,
-              industry: data.industry,
-              contributor_state: data.state,
-            });
-
-            // Identify sponsors: large contributors that are PACs, corporations, or unions
             if (data.amount >= SPONSOR_THRESHOLD && (data.type === 'pac' || data.type === 'corporate' || data.type === 'union')) {
               sponsors.push({
                 member_id: member.id,
-                sponsor_name: data.name,
+                sponsor_name: name,
                 sponsor_type: data.type,
                 relationship_type: 'major_donor',
                 total_support: data.amount,
@@ -330,35 +425,40 @@ serve(async (req) => {
               });
             }
           }
-          // Always delete old contributions first to prevent duplicates
-          await supabase
-            .from('member_contributions')
-            .delete()
-            .eq('member_id', member.id)
-            .eq('cycle', currentCycle);
 
-          // Insert contributions if we have them
+          // Use upsert with contribution_uid for idempotent inserts
           if (allContributions.length > 0) {
+            // Delete old contributions for this member/cycle first (to handle updates)
             await supabase
+              .from('member_contributions')
+              .delete()
+              .eq('member_id', member.id)
+              .eq('cycle', currentCycle);
+
+            // Insert new contributions
+            const { error: insertError } = await supabase
               .from('member_contributions')
               .insert(allContributions);
             
-            console.log(`Inserted ${allContributions.length} contributions for ${member.full_name}`);
+            if (insertError) {
+              console.error(`Error inserting contributions for ${member.full_name}:`, insertError);
+            } else {
+              console.log(`Inserted ${allContributions.length} contributions for ${member.full_name}`);
+            }
           }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
 
-        // Fetch totals for additional sponsor/lobbying data
+        // Fetch totals for additional sponsor data
         const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${currentCycle}`;
-        const totalsResponse = await fetch(totalsUrl);
+        const totalsResponse = await fetchWithRetry(totalsUrl);
 
-        if (totalsResponse.ok) {
+        if (totalsResponse?.ok) {
           const totalsData = await totalsResponse.json();
           const totals = totalsData.results?.[0];
 
           if (totals) {
-            // Add PAC total as sponsor if not already captured in detail
             const pacAmount = totals.other_political_committee_contributions || 0;
             const existingPacTotal = sponsors
               .filter(s => s.sponsor_type === 'pac')
@@ -375,7 +475,6 @@ serve(async (req) => {
               });
             }
 
-            // Add party committee contributions as sponsor
             const partyAmount = totals.party_committee_contributions || 0;
             if (partyAmount > 0) {
               sponsors.push({
@@ -387,19 +486,10 @@ serve(async (req) => {
                 cycle: currentCycle,
               });
 
-              // Also add to industry totals
               industryTotals.set('Party Committee Support', { 
                 total: partyAmount, 
                 count: 1 
               });
-            }
-
-            // Only add individual total if we got NO detailed contributions at all
-            // This prevents showing generic "Individual Contributors (Total)" when we have actual donor names
-            const individualAmount = totals.individual_itemized_contributions || 0;
-            if (individualAmount > 0 && allContributions.length === 0) {
-              // Only as fallback when FEC API didn't return any itemized contributions
-              console.log(`No itemized contributions found for ${member.full_name}, adding total as fallback`);
             }
           }
         }
@@ -419,10 +509,10 @@ serve(async (req) => {
           console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name}`);
         }
 
-        // Insert industry lobbying data (aggregated by industry)
+        // Insert industry lobbying data
         if (industryTotals.size > 0) {
           const lobbyingRecords = Array.from(industryTotals.entries())
-            .filter(([_, data]) => data.total >= 1000) // Only significant industries
+            .filter(([_, data]) => data.total >= 1000)
             .map(([industry, data]) => ({
               member_id: member.id,
               industry: industry,
@@ -454,32 +544,39 @@ serve(async (req) => {
       }
     }
 
-    const nextOffset = offset + members.length;
-    const hasMore = nextOffset < totalMembers;
+    const nextOffset = offset + processedCount;
+    const hasMore = nextOffset < (totalMembers || 0);
 
     // Get total contributions for accurate cumulative progress
     const { count: totalContributions } = await supabase
       .from('member_contributions')
       .select('*', { count: 'exact', head: true });
 
+    // Update progress and release lock
     await supabase
       .from('sync_progress')
       .update({ 
         current_offset: hasMore ? nextOffset : 0,
         last_matched_count: matchedCount,
-        total_processed: totalContributions || (offset + processedCount),
-        status: hasMore ? 'idle' : 'complete',
+        total_processed: totalContributions || 0,
         updated_at: new Date().toISOString(),
+        cursor_json: {
+          last_offset: nextOffset,
+          members_processed: nextOffset,
+          total_members: totalMembers,
+        },
         metadata: {
           members_processed: nextOffset,
           total_members: totalMembers,
         }
       })
-      .eq('id', 'fec-finance');
+      .eq('id', JOB_ID);
+
+    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount);
 
     const result = {
       success: true,
-      message: `FEC finance sync batch completed`,
+      message: 'FEC finance sync batch completed',
       processedCount,
       matchedCount,
       errorCount,
@@ -487,7 +584,8 @@ serve(async (req) => {
       currentOffset: offset,
       nextOffset: hasMore ? nextOffset : 0,
       hasMore,
-      progress: `${Math.round((nextOffset / totalMembers) * 100)}%`,
+      progress: `${Math.round((nextOffset / (totalMembers || 1)) * 100)}%`,
+      duration_seconds: Math.round((Date.now() - startTime) / 1000),
     };
 
     console.log("Batch complete:", result);
@@ -503,10 +601,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    await supabase
-      .from('sync_progress')
-      .update({ status: 'error', updated_at: new Date().toISOString() })
-      .eq('id', 'fec-finance');
+    
+    await releaseLock(supabase, 'error', 0, 1);
     
     return new Response(JSON.stringify({ 
       success: false, 
@@ -523,7 +619,6 @@ function categorizeContributor(employer: string | null, occupation: string | nul
   const occ = (occupation || '').toLowerCase();
   const name = (contributorName || '').toLowerCase();
 
-  // Check contributor name for PAC/committee indicators first
   const isPacByName = name.includes('pac') || name.includes('committee') || 
       name.includes('for congress') || name.includes('for senate') || 
       name.includes('for america') || name.includes('for us') ||
@@ -532,17 +627,13 @@ function categorizeContributor(employer: string | null, occupation: string | nul
       name.includes('democratic') || name.includes('republican') ||
       (name.includes(' inc') && (name.includes('for ') || name.includes('elect')));
   
-  if (isPacByName) {
-    return 'pac';
-  }
+  if (isPacByName) return 'pac';
 
-  // PACs and political committees by employer
   if (emp.includes('pac') || emp.includes('committee') || emp.includes('political') || 
       emp.includes('action committee') || emp.includes('for congress') || emp.includes('for senate')) {
     return 'pac';
   }
   
-  // Unions and labor organizations
   const isUnion = name.includes('union') || name.includes('brotherhood') || 
       name.includes('afl-cio') || name.includes('teamsters') || name.includes('seiu') || 
       name.includes('afscme') || name.includes('ufcw') || name.includes('ibew') ||
@@ -550,11 +641,8 @@ function categorizeContributor(employer: string | null, occupation: string | nul
       emp.includes('brotherhood') || emp.includes('afl-cio') || emp.includes('teamsters') ||
       emp.includes('seiu') || emp.includes('afscme');
   
-  if (isUnion) {
-    return 'union';
-  }
+  if (isUnion) return 'union';
   
-  // Corporate entities - check name and employer
   const isCorporate = name.includes('llc') || name.includes(' inc') || name.includes('corp') ||
       name.includes('company') || name.includes('holdings') || name.includes('partners llp') ||
       emp.includes('llc') || emp.includes('inc') || emp.includes('corp') || 
@@ -562,12 +650,10 @@ function categorizeContributor(employer: string | null, occupation: string | nul
       emp.includes('holdings') || emp.includes('partners') || emp.includes('capital') ||
       emp.includes('associates') || emp.includes('industries');
   
-  // Exclude from corporate if it looks like a campaign committee
   if (isCorporate && !isPacByName && !name.includes('for ')) {
     return 'corporate';
   }
 
-  // Individual indicators
   if (emp.includes('self') || emp.includes('retired') || emp.includes('homemaker') ||
       emp.includes('not employed') || emp.includes('none') || emp === '' ||
       occ.includes('retired') || occ.includes('homemaker')) {
