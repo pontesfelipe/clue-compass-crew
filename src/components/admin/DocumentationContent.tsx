@@ -10,11 +10,18 @@ import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, Fi
 import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "2.1.0";
+const DOCUMENTATION_VERSION = "2.2.0";
 const LAST_UPDATED = "2024-12-12";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.2.0", date: "2024-12-12", changes: [
+    "Expanded FEC documentation with comprehensive explanation of campaign finance data",
+    "Added detailed lobbying data explanation and why it matters",
+    "Added funding metric formulas (Grassroots, PAC Dependence, Local Money)",
+    "Improved data source descriptions with sync schedules",
+    "Fixed Mermaid diagram rendering with fallback display"
+  ]},
   { version: "2.1.0", date: "2024-12-12", changes: [
     "Added visual Data Flow tab with interactive Mermaid diagrams",
     "Added High-Level Architecture diagram showing complete data pipeline",
@@ -1636,6 +1643,193 @@ export function DocumentationContent() {
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-6">
+              {/* FEC Detailed Explanation */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    Federal Election Commission (FEC) - Campaign Finance Data
+                  </CardTitle>
+                  <CardDescription>
+                    Comprehensive explanation of what the FEC is, what data we collect, and how we use it
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <h4 className="text-lg font-semibold mb-3">What is the FEC?</h4>
+                    <p className="text-muted-foreground mb-4">
+                      The <strong>Federal Election Commission (FEC)</strong> is an independent regulatory agency of the United States government, 
+                      created in 1975 to enforce campaign finance law in federal elections. The FEC maintains a public database of all 
+                      campaign contributions over $200 made to federal candidates, political action committees (PACs), and party committees.
+                    </p>
+                    <p className="text-muted-foreground mb-4">
+                      Every contribution to a Congressional campaign is legally required to be reported to the FEC, making it the most 
+                      authoritative source for understanding who funds our elected officials. This transparency is critical for voters 
+                      to understand potential conflicts of interest and the influences on their representatives.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="p-4 rounded-lg border bg-card">
+                      <h5 className="font-semibold mb-3 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-green-500" />
+                        Individual Contributions
+                      </h5>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Donations from private citizens to a candidate's campaign committee. These are real people writing checks or 
+                        donating online. The FEC records the donor's name, address, employer, occupation, and amount.
+                      </p>
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between"><span>Contribution limit per election:</span><span className="font-mono">$3,300</span></div>
+                        <div className="flex justify-between"><span>Itemization threshold:</span><span className="font-mono">$200</span></div>
+                        <div className="flex justify-between"><span>Small donor (under threshold):</span><span className="font-mono">Not itemized</span></div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-lg border bg-card">
+                      <h5 className="font-semibold mb-3 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-blue-500" />
+                        PAC Contributions
+                      </h5>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>Political Action Committees (PACs)</strong> are organizations that pool campaign contributions from members 
+                        and donate to candidates. They represent corporations, labor unions, trade associations, or ideological groups.
+                      </p>
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between"><span>PAC limit per election:</span><span className="font-mono">$5,000</span></div>
+                        <div className="flex justify-between"><span>Super PAC:</span><span className="font-mono">Unlimited (independent)</span></div>
+                        <div className="flex justify-between"><span>Corporate/Union PACs:</span><span className="font-mono">Employee-funded</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg border bg-muted/30">
+                    <h5 className="font-semibold mb-3">Data We Display for Each Member</h5>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <h6 className="font-medium text-sm mb-2">Contributors List</h6>
+                        <ul className="text-xs text-muted-foreground space-y-1">
+                          <li>• Individual donor names</li>
+                          <li>• Donor home state</li>
+                          <li>• Contribution amounts</li>
+                          <li>• Industry/employer</li>
+                          <li>• Election cycle (2024, 2022, etc.)</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h6 className="font-medium text-sm mb-2">Sponsors (PACs)</h6>
+                        <ul className="text-xs text-muted-foreground space-y-1">
+                          <li>• PAC/Committee names</li>
+                          <li>• Organization type</li>
+                          <li>• Total support amount</li>
+                          <li>• Relationship type</li>
+                          <li>• Industry sector</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h6 className="font-medium text-sm mb-2">Funding Metrics</h6>
+                        <ul className="text-xs text-muted-foreground space-y-1">
+                          <li>• Total receipts</li>
+                          <li>• % from individuals vs PACs</li>
+                          <li>• % from in-state donors</li>
+                          <li>• Small donor percentage</li>
+                          <li>• Grassroots support score</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="p-4 rounded-lg border">
+                      <h5 className="font-semibold text-sm mb-2 text-green-600">Grassroots Support Score</h5>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Measures how much of a candidate's funding comes from small individual donors (under $200). 
+                        Higher scores indicate broad public support rather than reliance on wealthy donors or special interests.
+                      </p>
+                      <div className="text-xs font-mono bg-muted p-2 rounded">
+                        Score = (small_donor_total / total_receipts) × 100
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg border">
+                      <h5 className="font-semibold text-sm mb-2 text-blue-600">PAC Dependence Score</h5>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Measures what percentage of funding comes from PACs and committees rather than individuals. 
+                        High PAC dependence may indicate stronger ties to special interest groups.
+                      </p>
+                      <div className="text-xs font-mono bg-muted p-2 rounded">
+                        Score = (pac_total / total_receipts) × 100
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg border">
+                      <h5 className="font-semibold text-sm mb-2 text-purple-600">Local Money Score</h5>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Measures how much funding comes from donors within the member's home state vs. out-of-state donors. 
+                        Higher scores suggest the member is supported by their actual constituents.
+                      </p>
+                      <div className="text-xs font-mono bg-muted p-2 rounded">
+                        Score = (in_state_total / total_individual) × 100
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Lobbying Data Explanation */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Lobbying Data - Industry Influence
+                  </CardTitle>
+                  <CardDescription>
+                    Understanding lobbying activities and how industries attempt to influence legislation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <h4 className="text-lg font-semibold mb-3">What is Lobbying?</h4>
+                    <p className="text-muted-foreground mb-4">
+                      <strong>Lobbying</strong> is the act of attempting to influence decisions made by government officials, most often 
+                      legislators. In the United States, lobbying is a legal and regulated activity. Professional lobbyists are paid 
+                      to advocate for specific interests before Congress and federal agencies.
+                    </p>
+                    <p className="text-muted-foreground mb-4">
+                      While lobbying itself is not campaign contributions, there is often correlation between industries that lobby 
+                      heavily on certain issues and those that contribute to members who sit on relevant committees. CivicScore 
+                      tracks which industries are lobbying most heavily on issues relevant to each member's committee assignments.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="p-4 rounded-lg border bg-card">
+                      <h5 className="font-semibold mb-3">member_lobbying Table</h5>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Tracks lobbying activity by industry sector that may be relevant to each member based on their 
+                        committee assignments and voting record.
+                      </p>
+                      <ul className="text-xs space-y-1 text-muted-foreground">
+                        <li><strong>industry:</strong> The lobbying sector (e.g., "Pharmaceuticals", "Oil & Gas")</li>
+                        <li><strong>total_spent:</strong> Amount spent on lobbying in that sector</li>
+                        <li><strong>client_count:</strong> Number of organizations lobbying in this sector</li>
+                        <li><strong>cycle:</strong> Election/lobbying cycle year</li>
+                      </ul>
+                    </div>
+                    <div className="p-4 rounded-lg border bg-card">
+                      <h5 className="font-semibold mb-3">Why This Matters</h5>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Understanding lobbying helps voters see the full picture of influence. A member who receives large 
+                        contributions from pharmaceutical PACs and also sits on the Health Committee while that industry 
+                        is spending millions lobbying on drug pricing legislation presents a potential conflict of interest.
+                      </p>
+                      <div className="p-2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+                        Note: Lobbying is legal and often provides valuable expertise to legislators. The goal is transparency, not judgment.
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Data Sources Grid */}
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader>
@@ -1646,20 +1840,29 @@ export function DocumentationContent() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Primary source for member data, bills, and votes.
+                      The official legislative information system of the U.S. Congress, maintained by the Library of Congress. 
+                      This is the authoritative source for all Congressional activity including member data, bills, votes, and amendments.
                     </p>
                     <div className="space-y-2">
-                      <h5 className="font-semibold text-sm">Endpoints Used</h5>
-                      <ul className="text-sm space-y-1 text-muted-foreground">
-                        <li><code>/member</code> - Member biographical data</li>
-                        <li><code>/member/{'{bioguideId}'}</code> - Member details</li>
-                        <li><code>/bill/{'{congress}'}/{'{type}'}</code> - Bills by type</li>
-                        <li><code>/bill/.../cosponsors</code> - Bill cosponsors</li>
+                      <h5 className="font-semibold text-sm">What We Fetch</h5>
+                      <ul className="text-sm space-y-2 text-muted-foreground">
+                        <li className="flex gap-2">
+                          <code className="bg-muted px-1 rounded text-xs">/member</code>
+                          <span>All 539 current members with biographical data, party, state, district</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <code className="bg-muted px-1 rounded text-xs">/bill</code>
+                          <span>Legislative bills with title, summary, status, policy area, subjects</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <code className="bg-muted px-1 rounded text-xs">/vote</code>
+                          <span>Roll call votes with results, questions, and member positions</span>
+                        </li>
                       </ul>
                     </div>
                     <div className="p-2 rounded bg-muted text-xs">
-                      <strong>Auth:</strong> CONGRESS_GOV_API_KEY<br/>
-                      <strong>Rate Limit:</strong> 1000 requests/hour
+                      <strong>Auth:</strong> CONGRESS_GOV_API_KEY (free, rate-limited)<br/>
+                      <strong>Sync:</strong> Daily for members, every 6h for bills, every 2h for votes
                     </div>
                   </CardContent>
                 </Card>
@@ -1673,18 +1876,25 @@ export function DocumentationContent() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Campaign finance data source.
+                      The Federal Election Commission's public API providing access to campaign finance data. 
+                      All contributions over $200 to federal candidates are legally required to be reported here.
                     </p>
                     <div className="space-y-2">
-                      <h5 className="font-semibold text-sm">Endpoints Used</h5>
-                      <ul className="text-sm space-y-1 text-muted-foreground">
-                        <li><code>/candidates/search</code> - Find candidate by name/state</li>
-                        <li><code>/schedules/schedule_a</code> - Itemized contributions</li>
+                      <h5 className="font-semibold text-sm">What We Fetch</h5>
+                      <ul className="text-sm space-y-2 text-muted-foreground">
+                        <li className="flex gap-2">
+                          <code className="bg-muted px-1 rounded text-xs">/candidates/search</code>
+                          <span>Match Congress members to their FEC candidate IDs</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <code className="bg-muted px-1 rounded text-xs">/schedules/schedule_a</code>
+                          <span>Itemized contributions with donor name, amount, state, employer</span>
+                        </li>
                       </ul>
                     </div>
                     <div className="p-2 rounded bg-muted text-xs">
-                      <strong>Auth:</strong> FEC_API_KEY<br/>
-                      <strong>Data:</strong> Contributions, PACs, Industries
+                      <strong>Auth:</strong> FEC_API_KEY (free, generous limits)<br/>
+                      <strong>Sync:</strong> Daily at 2 AM UTC in incremental mode
                     </div>
                   </CardContent>
                 </Card>
@@ -1698,13 +1908,14 @@ export function DocumentationContent() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Detailed House vote records with member positions.
+                      Official House of Representatives roll call vote data in XML format. Provides individual member positions 
+                      (yea/nay/present/not voting) for every recorded vote.
                     </p>
                     <div className="p-2 rounded bg-muted text-xs font-mono">
-                      clerk.house.gov/evs/{'{year}'}/roll{'{number}'}.xml
+                      https://clerk.house.gov/evs/{"{year}"}/roll{"{number}"}.xml
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Members matched by bioguide_id.
+                    <p className="text-xs text-muted-foreground">
+                      Members are matched by <code>bioguide_id</code> which is consistent across Congress.gov and House Clerk data.
                     </p>
                   </CardContent>
                 </Card>
@@ -1718,13 +1929,14 @@ export function DocumentationContent() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Senate vote records.
+                      Official Senate roll call vote data. Unlike House data, Senate XML does not include bioguide_id, 
+                      so senators are matched using last name + state combination.
                     </p>
                     <div className="p-2 rounded bg-muted text-xs font-mono break-all">
-                      senate.gov/legislative/LIS/roll_call_votes/...
+                      https://www.senate.gov/legislative/LIS/roll_call_votes/vote{"{congress}"}{"{session}"}/vote_{"{congress}"}_{"{session}"}_{"{number}"}.xml
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Senators matched by last_name + state.
+                    <p className="text-xs text-muted-foreground">
+                      Senators matched by <code>last_name + state</code> lookup in our database.
                     </p>
                   </CardContent>
                 </Card>
@@ -1735,26 +1947,44 @@ export function DocumentationContent() {
                       <Brain className="h-5 w-5" />
                       Lovable AI (Google Gemini 2.5 Flash)
                     </CardTitle>
+                    <CardDescription>
+                      AI-powered analysis for generating human-readable insights from legislative data
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="p-4 rounded-lg border">
-                        <h5 className="font-semibold mb-2">Member Summaries</h5>
-                        <p className="text-sm text-muted-foreground">
-                          AI-generated activity summaries. Rate-limited to 1/month per member.
+                        <h5 className="font-semibold mb-2">Member Activity Summaries</h5>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          AI-generated plain-language summaries of each member's recent legislative activity, 
+                          voting patterns, and policy focus areas.
                         </p>
+                        <div className="text-xs text-muted-foreground">
+                          <strong>Rate limit:</strong> 1 generation per member per month<br/>
+                          <strong>Trigger:</strong> User-initiated button click
+                        </div>
                       </div>
                       <div className="p-4 rounded-lg border">
                         <h5 className="font-semibold mb-2">Bill Impact Analysis</h5>
-                        <p className="text-sm text-muted-foreground">
-                          Structured analysis: What It Does, Who It Affects, Benefits, Concerns.
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Structured analysis of each bill explaining: What it does, Who it affects, 
+                          Potential benefits, Potential concerns, and Current status.
                         </p>
+                        <div className="text-xs text-muted-foreground">
+                          <strong>Format:</strong> JSON structured output<br/>
+                          <strong>Trigger:</strong> Automatic during bill sync
+                        </div>
                       </div>
                       <div className="p-4 rounded-lg border">
                         <h5 className="font-semibold mb-2">Issue Classification</h5>
-                        <p className="text-sm text-muted-foreground">
-                          Classify bills into policy issues with direction and confidence.
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Classifies bills into policy issues (healthcare, environment, etc.) with a direction 
+                          score (-1 to +1) and confidence level. Used for user-politician alignment.
                         </p>
+                        <div className="text-xs text-muted-foreground">
+                          <strong>Threshold:</strong> Only saves if confidence &gt; 0.6<br/>
+                          <strong>Fallback:</strong> Uses policy_area_mappings first
+                        </div>
                       </div>
                     </div>
                   </CardContent>
