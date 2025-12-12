@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { fetchJson, fetchWithRetry, HttpClientConfig } from '../_shared/httpClient.ts'
+import { fetchJson, fetchWithRetry, HttpClientConfig, TimeBudget } from '../_shared/httpClient.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,10 +8,12 @@ const corsHeaders = {
 
 const PROVIDER = 'congress'
 const DATASET = 'bills'
+const MAX_DURATION_SECONDS = 30 // Timebox: stop after 30 seconds
 const HTTP_CONFIG: HttpClientConfig = {
-  maxRetries: 5,
-  baseDelayMs: 2000,
+  maxRetries: 4,
+  baseDelayMs: 1500,
   maxConcurrency: 2,
+  minDelayBetweenRequestsMs: 400, // 400ms between Congress.gov calls
 }
 
 interface SyncCursor {
@@ -115,6 +117,7 @@ Deno.serve(async (req) => {
 
 async function syncBillsBackground(supabase: any, congressApiKey: string, mode: string) {
   const startTime = Date.now()
+  const budget = new TimeBudget(MAX_DURATION_SECONDS) // Timebox enforcement
   let totalBillsProcessed = 0
   let totalSponsorshipsCreated = 0
   let apiCalls = 0
@@ -134,7 +137,7 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
     const { lastSuccessAt, lastCursor } = await getWatermark(supabase)
     console.log(`Last success: ${lastSuccessAt}, Last cursor: ${JSON.stringify(lastCursor)}`)
 
-    // For delta mode, calculate date window (last 14 days or since last success)
+    // For delta mode, calculate date window using watermark
     let fromDate: string | null = null
     if (mode === 'delta' && lastSuccessAt) {
       const lastDate = new Date(lastSuccessAt)
@@ -156,8 +159,6 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
     const billTypes = ['hr', 's', 'hjres', 'sjres', 'hconres', 'sconres', 'hres', 'sres']
     const congresses = [118, 119]
     
-    let batchCount = 0
-    const maxBatchesPerRun = 20
     const limit = 50
 
     // Resume from cursor if available
@@ -183,7 +184,13 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
         let offset = (ci === startCongressIndex && ti === startTypeIndex && lastCursor) ? lastCursor.offset : 0
         let hasMore = true
         
-        while (hasMore && batchCount < maxBatchesPerRun) {
+        while (hasMore) {
+          // TIMEBOX CHECK: Stop if time budget is near expiry
+          if (!budget.shouldContinue()) {
+            console.log(`Time budget expired after ${budget.elapsed()}ms, stopping gracefully`)
+            break outerLoop
+          }
+          
           console.log(`Fetching ${billType} bills from Congress ${congress}, offset ${offset}...`)
           
           // Build URL with optional date filter for incremental sync
@@ -193,7 +200,7 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
           }
           
           try {
-            const { data, metrics } = await fetchJson<any>(url, {}, PROVIDER, HTTP_CONFIG)
+            const { data, metrics } = await fetchJson<any>(url, {}, PROVIDER, HTTP_CONFIG, budget)
             apiCalls++
             totalWaitMs += metrics.totalWaitMs
             
@@ -206,8 +213,14 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
 
             // Process each bill
             for (const bill of bills) {
+              // Check budget before processing each bill
+              if (budget.isNearExpiry()) {
+                console.log(`Time budget near expiry, stopping bill processing`)
+                break outerLoop
+              }
+              
               try {
-                const result = await processBill(supabase, bill, congress, billType, memberMap, congressApiKey)
+                const result = await processBill(supabase, bill, congress, billType, memberMap, congressApiKey, budget)
                 totalSponsorshipsCreated += result.sponsorships
                 apiCalls += result.apiCalls
                 totalWaitMs += result.waitMs
@@ -219,7 +232,6 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
 
             offset += limit
             hasMore = bills.length === limit
-            batchCount++
             
             // Update cursor
             currentCursor = { congress, billType, offset }
@@ -236,22 +248,17 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
                 updated_at: new Date().toISOString(),
               }, { onConflict: 'id' })
             
-            console.log(`Batch complete: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships, ${apiCalls} API calls`)
+            console.log(`Batch complete: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships, ${apiCalls} API calls, ${budget.remaining()}ms remaining`)
           } catch (fetchError) {
             console.error(`Error fetching bills: ${fetchError}`)
             hasMore = false
           }
         }
-
-        if (batchCount >= maxBatchesPerRun) {
-          console.log('Reached batch limit, will continue on next run')
-          break outerLoop
-        }
       }
     }
 
-    // Check if we've completed all types
-    const isComplete = batchCount < maxBatchesPerRun
+    // Check if we've completed all types (only true if we didn't hit time limit)
+    const isComplete = budget.shouldContinue()
 
     // Get total bills in DB for accurate progress
     const { count: totalBillsInDb } = await supabase
@@ -326,15 +333,16 @@ async function processBill(
   congress: number,
   billType: string,
   memberMap: Map<string, string>,
-  congressApiKey: string
+  congressApiKey: string,
+  budget: TimeBudget
 ): Promise<{ sponsorships: number, apiCalls: number, waitMs: number }> {
   let apiCalls = 0
   let waitMs = 0
 
-  // Fetch bill details using httpClient
+  // Fetch bill details using httpClient with budget
   const detailUrl = `https://api.congress.gov/v3/bill/${congress}/${billType}/${bill.number}?format=json&api_key=${congressApiKey}`
   
-  const { response: detailResponse, metrics: detailMetrics } = await fetchWithRetry(detailUrl, {}, PROVIDER, HTTP_CONFIG)
+  const { response: detailResponse, metrics: detailMetrics } = await fetchWithRetry(detailUrl, {}, PROVIDER, HTTP_CONFIG, budget)
   apiCalls++
   waitMs += detailMetrics.totalWaitMs
   
@@ -345,12 +353,12 @@ async function processBill(
   const detailData = await detailResponse.json()
   const billDetail = detailData.bill
 
-  // Fetch bill summary if available
+  // Fetch bill summary if available (skip if near time limit)
   let summaryText: string | null = null
-  if (billDetail.summaries?.url) {
+  if (billDetail.summaries?.url && budget.shouldContinue()) {
     try {
       const summaryUrl = `${billDetail.summaries.url}&format=json&api_key=${congressApiKey}`
-      const { response: summaryResponse, metrics: summaryMetrics } = await fetchWithRetry(summaryUrl, {}, PROVIDER, HTTP_CONFIG)
+      const { response: summaryResponse, metrics: summaryMetrics } = await fetchWithRetry(summaryUrl, {}, PROVIDER, HTTP_CONFIG, budget)
       apiCalls++
       waitMs += summaryMetrics.totalWaitMs
       
