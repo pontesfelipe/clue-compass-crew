@@ -881,9 +881,26 @@ export function DocumentationContent() {
     
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
+    const margin = 15;
     const maxWidth = pageWidth - margin * 2;
     let y = margin;
+    let pageNum = 1;
+    
+    const addPageNumber = () => {
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${pageNum}`, pageWidth - margin - 15, pageHeight - 8);
+      doc.text("CivicScore Documentation", margin, pageHeight - 8);
+    };
+    
+    const checkPageBreak = (neededSpace: number = 10) => {
+      if (y + neededSpace > pageHeight - margin - 10) {
+        addPageNumber();
+        doc.addPage();
+        pageNum++;
+        y = margin;
+      }
+    };
     
     const addText = (text: string, size: number, isBold: boolean = false, color: [number, number, number] = [0, 0, 0]) => {
       doc.setFontSize(size);
@@ -891,13 +908,10 @@ export function DocumentationContent() {
       doc.setTextColor(color[0], color[1], color[2]);
       
       const lines = doc.splitTextToSize(text, maxWidth);
-      const lineHeight = size * 0.5;
+      const lineHeight = size * 0.45;
       
       for (const line of lines) {
-        if (y + lineHeight > pageHeight - margin) {
-          doc.addPage();
-          y = margin;
-        }
+        checkPageBreak(lineHeight);
         doc.text(line, margin, y);
         y += lineHeight;
       }
@@ -905,143 +919,770 @@ export function DocumentationContent() {
     
     const addSpace = (space: number) => {
       y += space;
-      if (y > pageHeight - margin) {
-        doc.addPage();
-        y = margin;
-      }
+      checkPageBreak();
     };
     
-    // Title
-    addText("CivicScore Platform Documentation", 24, true, [59, 130, 246]);
-    addSpace(5);
-    addText(`Version: ${DOCUMENTATION_VERSION} | Last Updated: ${LAST_UPDATED}`, 10, false, [100, 100, 100]);
-    addSpace(15);
+    const addSection = (title: string, number: string) => {
+      addSpace(8);
+      checkPageBreak(15);
+      doc.setFillColor(59, 130, 246);
+      doc.rect(margin - 2, y - 5, maxWidth + 4, 8, "F");
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${number}. ${title}`, margin, y);
+      y += 10;
+    };
     
-    // Overview
-    addText("1. Overview", 18, true);
-    addSpace(5);
-    addText("CivicScore is a civic engagement platform that tracks and scores U.S. Congress members based on their legislative activity, voting records, and campaign finance data.", 11);
-    addSpace(10);
-    
-    // Key Features
-    addText("Key Features:", 14, true);
-    addSpace(5);
-    addText("• Explore all 539 Congress Members with detailed profiles", 11);
-    addText("• Track comprehensive voting records with party breakdowns", 11);
-    addText("• Analyze campaign finance including PAC dependencies", 11);
-    addText("• Calculate personalized politician-user alignment scores", 11);
-    addText("• Monitor legislative activity and bill impact", 11);
-    addText("• Interactive maps showing state-level performance", 11);
-    addSpace(10);
-    
-    // Technology Stack
-    addText("2. Technology Stack", 18, true);
-    addSpace(5);
-    addText("• Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui", 11);
-    addText("• Backend: Supabase (PostgreSQL, Edge Functions, Auth)", 11);
-    addText("• Data Sources: Congress.gov API, FEC API, Senate.gov, House Clerk XML", 11);
-    addText("• AI Integration: Lovable AI (Google Gemini 2.5 Flash)", 11);
-    addSpace(10);
-    
-    // Data Sources
-    addText("3. External Data Sources", 18, true);
-    addSpace(5);
-    
-    addText("Congress.gov API", 14, true);
-    addText("Official source for congressional data including members, bills, votes, and committees. Synced daily for members, every 6 hours for bills, and every 2 hours for votes.", 11);
-    addSpace(8);
-    
-    addText("FEC (Federal Election Commission) API", 14, true);
-    addText("Campaign finance data including individual contributions, PAC donations, and funding metrics. The FEC regulates campaign finance for federal elections and provides public access to contribution records.", 11);
-    addSpace(8);
-    
-    addText("House Clerk XML", 14, true);
-    addText("Official House of Representatives vote records with individual member positions parsed from XML format.", 11);
-    addSpace(8);
-    
-    addText("Senate.gov XML", 14, true);
-    addText("Official Senate vote records. Senators matched by name+state lookup since XML lacks bioguide_id.", 11);
-    addSpace(10);
-    
-    // Database Tables
-    addText("4. Core Database Tables", 18, true);
-    addSpace(5);
-    addText("• members - All 539 Congress members with biographical data", 11);
-    addText("• bills - Legislative bills from House and Senate", 11);
-    addText("• votes - Roll call votes from both chambers", 11);
-    addText("• member_votes - Individual member vote positions", 11);
-    addText("• bill_sponsorships - Bill sponsorship records", 11);
-    addText("• member_scores - Calculated performance scores", 11);
-    addText("• state_scores - Pre-computed state aggregates", 11);
-    addText("• member_contributions - FEC campaign contributions", 11);
-    addText("• funding_metrics - Aggregated funding analysis", 11);
-    addText("• profiles - User profile information", 11);
-    addText("• user_politician_alignment - Computed alignment scores", 11);
-    addSpace(10);
-    
-    // Edge Functions
-    addText("5. Edge Functions & Sync Schedule", 18, true);
-    addSpace(5);
-    addText("• sync-congress-members - Daily at midnight UTC", 11);
-    addText("• sync-bills - Every 6 hours", 11);
-    addText("• sync-votes - Every 2 hours", 11);
-    addText("• sync-member-details - Daily at 1 AM UTC", 11);
-    addText("• sync-fec-funding - Nightly at 2 AM UTC", 11);
-    addText("• calculate-member-scores - Every 2 hours (30 min after votes)", 11);
-    addText("• classify-issue-signals - Every 6 hours", 11);
-    addText("• compute-politician-positions - Every 6 hours", 11);
-    addSpace(10);
-    
-    // Score Calculations
-    addText("6. Score Calculations", 18, true);
-    addSpace(5);
-    addText("Productivity Score = (bills_sponsored × 3 + bills_cosponsored + bills_enacted × 10) / max_value × 100", 10);
-    addSpace(3);
-    addText("Attendance Score = (votes_cast / total_votes) × 100", 10);
-    addSpace(3);
-    addText("Bipartisanship Score = (bipartisan_bills / total_bills_sponsored) × 100", 10);
-    addSpace(3);
-    addText("Overall Score = weighted average of component scores", 10);
-    addSpace(10);
-    
-    // Funding Metrics
-    addText("7. Funding Metrics", 18, true);
-    addSpace(5);
-    addText("Grassroots Support = (small_donor_amount / total_individual) × 100", 10);
-    addSpace(3);
-    addText("PAC Dependence = (pac_amount / total_receipts) × 100", 10);
-    addSpace(3);
-    addText("Local Money Score = (in_state_amount / total_receipts) × 100", 10);
-    addSpace(10);
-    
-    // Admin Features
-    addText("8. Admin Features", 18, true);
-    addSpace(5);
-    addText("• Sync Dashboard - Monitor and control all data sync operations", 11);
-    addText("• Pause/Resume Syncs - Global control to pause all sync jobs", 11);
-    addText("• User Management - View, edit, and delete user accounts", 11);
-    addText("• Feature Toggles - Enable/disable platform features", 11);
-    addText("• Data Inspector - Debug data flow from API to UI", 11);
-    addText("• AI Chat - Administrative AI assistant", 11);
-    addSpace(10);
-    
-    // Changelog
-    addText("9. Changelog", 18, true);
-    addSpace(5);
-    CHANGELOG.slice(0, 5).forEach(entry => {
-      addText(`v${entry.version} (${entry.date})`, 12, true);
-      entry.changes.forEach(change => {
-        addText(`• ${change}`, 10);
-      });
+    const addSubsection = (title: string) => {
       addSpace(5);
+      checkPageBreak(10);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(59, 130, 246);
+      doc.text(title, margin, y);
+      y += 7;
+    };
+    
+    const addTableRow = (cols: string[], isHeader: boolean = false) => {
+      checkPageBreak(6);
+      const colWidths = [45, 35, maxWidth - 80];
+      doc.setFontSize(8);
+      doc.setFont("helvetica", isHeader ? "bold" : "normal");
+      doc.setTextColor(isHeader ? 59 : 0, isHeader ? 130 : 0, isHeader ? 246 : 0);
+      
+      if (isHeader) {
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, y - 3, maxWidth, 5, "F");
+      }
+      
+      let x = margin;
+      cols.forEach((col, i) => {
+        const text = doc.splitTextToSize(col, colWidths[i] - 2)[0] || "";
+        doc.text(text, x, y);
+        x += colWidths[i];
+      });
+      y += 5;
+    };
+    
+    // ===== TITLE PAGE =====
+    doc.setFillColor(59, 130, 246);
+    doc.rect(0, 0, pageWidth, 60, "F");
+    doc.setFontSize(28);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("CivicScore", margin, 30);
+    doc.setFontSize(16);
+    doc.text("Platform Documentation", margin, 42);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(200, 220, 255);
+    doc.text(`Version ${DOCUMENTATION_VERSION} | Last Updated: ${LAST_UPDATED}`, margin, 54);
+    
+    y = 75;
+    doc.setTextColor(0, 0, 0);
+    
+    // Table of Contents
+    addText("Table of Contents", 14, true, [59, 130, 246]);
+    addSpace(5);
+    const tocItems = [
+      "1. Overview",
+      "2. Architecture",
+      "3. Data Model - Core Tables",
+      "4. Data Model - User & Alignment Tables",
+      "5. External Integrations",
+      "6. Edge Functions - Data Sync",
+      "7. Edge Functions - Score & AI",
+      "8. Cron Jobs Schedule",
+      "9. Application Screens",
+      "10. Member Page Data Flow",
+      "11. User Alignment System",
+      "12. Score Calculations",
+      "13. Funding Metrics & FEC Data",
+      "14. Authentication & Authorization",
+      "15. Admin Features",
+      "16. Congress News Page",
+      "17. Changelog"
+    ];
+    tocItems.forEach(item => addText(item, 10));
+    
+    // ===== 1. OVERVIEW =====
+    addSection("Overview", "1");
+    addText("CivicScore is a civic engagement platform that tracks and scores U.S. Congress members based on their legislative activity, voting records, and campaign finance data. The platform enables users to:", 10);
+    addSpace(4);
+    addText("• Explore Congress Members: View detailed profiles of all 539 members (100 Senators + 435 Representatives + 4 Delegates)", 9);
+    addText("• Track Voting Records: Access comprehensive voting history with party breakdowns", 9);
+    addText("• Analyze Campaign Finance: Understand funding sources, PAC dependencies, and grassroots support", 9);
+    addText("• Calculate Alignment Scores: Personalized politician-user alignment based on issue priorities", 9);
+    addText("• Monitor Legislative Activity: Track bills, sponsorships, and legislative impact", 9);
+    addText("• Visualize State Performance: Interactive maps showing state-level congressional performance", 9);
+    
+    addSubsection("Technology Stack");
+    addText("• Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui", 9);
+    addText("• Backend: Supabase (PostgreSQL, Edge Functions, Auth)", 9);
+    addText("• Data Sources: Congress.gov API, FEC API, Senate.gov XML, House Clerk XML", 9);
+    addText("• AI Integration: Lovable AI (Google Gemini 2.5 Flash)", 9);
+    
+    // ===== 2. ARCHITECTURE =====
+    addSection("Architecture", "2");
+    addSubsection("Feature-Based Structure");
+    addText("src/", 9, true);
+    addText("├── components/     # Shared UI components (ui/, admin/)", 8);
+    addText("├── features/       # Feature modules (alignment, finance, members, scores, states, votes)", 8);
+    addText("├── hooks/          # Custom React hooks", 8);
+    addText("├── pages/          # Route page components", 8);
+    addText("├── lib/            # Utility functions", 8);
+    addText("└── integrations/   # Supabase client & generated types", 8);
+    addSpace(3);
+    addText("supabase/", 9, true);
+    addText("└── functions/      # Edge Functions (serverless backend)", 8);
+    
+    addSubsection("Data Flow");
+    addText("External APIs → Edge Functions → Database Tables → React Hooks → UI Components", 9, true);
+    addText("Example: Congress.gov → sync-congress-members → members table → useMembers hook → MemberCard component", 9);
+    
+    // ===== 3. DATA MODEL - CORE TABLES =====
+    addSection("Data Model - Core Tables", "3");
+    
+    addSubsection("members (539 records)");
+    addText("Stores all Congress members with biographical and contact data.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["bioguide_id", "text", "Official Congress.gov identifier"]);
+    addTableRow(["full_name", "text", "Member's full name"]);
+    addTableRow(["first_name, last_name", "text", "Name components for matching"]);
+    addTableRow(["party", "enum", "D (Democrat), R (Republican), I (Independent), L (Libertarian)"]);
+    addTableRow(["chamber", "enum", "house or senate"]);
+    addTableRow(["state", "text", "State represented"]);
+    addTableRow(["district", "text", "District number (House only, null for Senate)"]);
+    addTableRow(["in_office", "boolean", "Currently serving"]);
+    addTableRow(["image_url", "text", "Official portrait URL from Congress.gov"]);
+    addTableRow(["fec_candidate_id", "text", "FEC candidate identifier for finance linking"]);
+    addTableRow(["fec_committee_ids", "text[]", "Associated FEC committee IDs"]);
+    addTableRow(["twitter_handle", "text", "Twitter/X handle"]);
+    addTableRow(["website_url", "text", "Official website"]);
+    addTableRow(["office_address, phone", "text", "Contact information"]);
+    addTableRow(["start_date, end_date", "date", "Term dates"]);
+    
+    addSubsection("bills");
+    addText("Legislative bills from House (HR) and Senate (S).", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["congress", "integer", "Congress number (119 = 2025-2026)"]);
+    addTableRow(["bill_type", "enum", "hr, s, hjres, sjres, hconres, sconres, hres, sres"]);
+    addTableRow(["bill_number", "integer", "Bill number within type"]);
+    addTableRow(["title", "text", "Full official title"]);
+    addTableRow(["short_title", "text", "Short/common title"]);
+    addTableRow(["summary", "text", "Official CRS summary"]);
+    addTableRow(["bill_impact", "text", "AI-generated impact analysis"]);
+    addTableRow(["policy_area", "text", "Primary policy area (e.g., Health, Defense)"]);
+    addTableRow(["subjects", "text[]", "Subject tags array"]);
+    addTableRow(["enacted", "boolean", "Whether signed into law"]);
+    addTableRow(["enacted_date", "date", "Date enacted (if applicable)"]);
+    addTableRow(["introduced_date", "date", "Date introduced"]);
+    addTableRow(["latest_action_date", "date", "Date of most recent action"]);
+    addTableRow(["latest_action_text", "text", "Description of latest action"]);
+    addTableRow(["url", "text", "Congress.gov URL"]);
+    addTableRow(["raw", "jsonb", "Original API response for debugging"]);
+    
+    addSubsection("votes");
+    addText("Roll call votes from both chambers.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["congress", "integer", "Congress number"]);
+    addTableRow(["session", "integer", "Session number (1 or 2)"]);
+    addTableRow(["chamber", "enum", "house or senate"]);
+    addTableRow(["roll_number", "integer", "Roll call number within session"]);
+    addTableRow(["vote_date", "date", "Date of vote"]);
+    addTableRow(["question", "text", "Vote question/motion"]);
+    addTableRow(["description", "text", "Vote description"]);
+    addTableRow(["result", "text", "Passed, Failed, Agreed to, etc."]);
+    addTableRow(["total_yea, total_nay", "integer", "Vote counts"]);
+    addTableRow(["total_present", "integer", "Present but not voting"]);
+    addTableRow(["total_not_voting", "integer", "Absent/not voting"]);
+    addTableRow(["bill_id", "uuid", "Related bill (if any)"]);
+    addTableRow(["raw", "jsonb", "Original API response"]);
+    
+    addSubsection("member_votes");
+    addText("Individual member vote records linking members to votes.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["member_id", "uuid", "FK to members table"]);
+    addTableRow(["vote_id", "uuid", "FK to votes table"]);
+    addTableRow(["position", "enum", "yea, nay, present, not_voting"]);
+    addTableRow(["position_normalized", "text", "Normalized for scoring"]);
+    addTableRow(["weight", "numeric", "Vote weight for scoring (default 1)"]);
+    
+    addSubsection("bill_sponsorships");
+    addText("Bill sponsorship and co-sponsorship records.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["bill_id", "uuid", "FK to bills table"]);
+    addTableRow(["member_id", "uuid", "FK to members table"]);
+    addTableRow(["is_sponsor", "boolean", "Primary sponsor (true) or cosponsor (false)"]);
+    addTableRow(["is_original_cosponsor", "boolean", "Original cosponsor at introduction"]);
+    addTableRow(["cosponsored_date", "date", "Date member cosponsored"]);
+    
+    addSubsection("member_scores");
+    addText("Calculated performance scores for each member.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["member_id", "uuid", "FK to members table"]);
+    addTableRow(["user_id", "uuid", "NULL for public scores, user_id for personalized"]);
+    addTableRow(["overall_score", "numeric", "Composite score (0-100)"]);
+    addTableRow(["productivity_score", "numeric", "Bills sponsored/enacted score"]);
+    addTableRow(["attendance_score", "numeric", "Voting participation score"]);
+    addTableRow(["bipartisanship_score", "numeric", "Cross-party collaboration score"]);
+    addTableRow(["issue_alignment_score", "numeric", "User-specific alignment"]);
+    addTableRow(["bills_sponsored", "integer", "Count of sponsored bills"]);
+    addTableRow(["bills_cosponsored", "integer", "Count of cosponsored bills"]);
+    addTableRow(["bills_enacted", "integer", "Count of enacted bills"]);
+    addTableRow(["votes_cast", "integer", "Total votes cast"]);
+    addTableRow(["votes_missed", "integer", "Missed votes"]);
+    addTableRow(["bipartisan_bills", "integer", "Cross-party sponsored bills"]);
+    addTableRow(["calculated_at", "timestamp", "Last calculation time"]);
+    
+    addSubsection("state_scores");
+    addText("Pre-computed state-level aggregates for map visualization.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["state", "text", "State name"]);
+    addTableRow(["member_count", "integer", "Total members from state"]);
+    addTableRow(["avg_member_score", "numeric", "Average overall score"]);
+    addTableRow(["democrat_count", "integer", "Democratic members"]);
+    addTableRow(["republican_count", "integer", "Republican members"]);
+    addTableRow(["independent_count", "integer", "Independent members"]);
+    addTableRow(["senate_count", "integer", "Senators (usually 2)"]);
+    addTableRow(["house_count", "integer", "Representatives"]);
+    addTableRow(["avg_productivity", "numeric", "Average productivity score"]);
+    addTableRow(["avg_attendance", "numeric", "Average attendance score"]);
+    addTableRow(["avg_bipartisanship", "numeric", "Average bipartisanship"]);
+    addTableRow(["avg_grassroots_support", "numeric", "Average grassroots funding"]);
+    addTableRow(["avg_pac_dependence", "numeric", "Average PAC dependence"]);
+    addTableRow(["avg_local_money", "numeric", "Average local funding"]);
+    
+    // ===== 4. DATA MODEL - USER & ALIGNMENT =====
+    addSection("Data Model - User & Alignment Tables", "4");
+    
+    addSubsection("profiles");
+    addText("User profile information linked to Supabase Auth.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["user_id", "uuid", "Supabase Auth user ID"]);
+    addTableRow(["email", "text", "User email"]);
+    addTableRow(["first_name, last_name", "text", "Required name fields"]);
+    addTableRow(["display_name", "text", "Display name"]);
+    addTableRow(["home_state", "text", "User's state for local matching"]);
+    addTableRow(["zip_code", "text", "Zip code"]);
+    addTableRow(["age_range", "text", "Age bracket (18-29, 30-44, etc.)"]);
+    addTableRow(["profile_complete", "boolean", "Wizard completed"]);
+    addTableRow(["profile_version", "integer", "For cache invalidation"]);
+    
+    addSubsection("issues");
+    addText("Policy issues for alignment scoring.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["slug", "text", "URL-safe identifier (e.g., healthcare)"]);
+    addTableRow(["label", "text", "Display name (e.g., Healthcare)"]);
+    addTableRow(["description", "text", "Issue description"]);
+    addTableRow(["icon_name", "text", "Lucide icon name"]);
+    addTableRow(["is_active", "boolean", "Shown to users"]);
+    addTableRow(["sort_order", "integer", "Display order"]);
+    
+    addSubsection("issue_questions");
+    addText("Questions for each issue (typically 4 per issue).", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["issue_id", "uuid", "FK to issues table"]);
+    addTableRow(["question_text", "text", "Question content"]);
+    addTableRow(["dimension", "text", "Scoring dimension"]);
+    addTableRow(["weight", "numeric", "Question weight (positive or negative)"]);
+    addTableRow(["sort_order", "integer", "Display order"]);
+    addTableRow(["is_active", "boolean", "Included in questionnaire"]);
+    
+    addSubsection("user_answers");
+    addText("User responses to issue questions.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["user_id", "uuid", "Auth user ID"]);
+    addTableRow(["question_id", "uuid", "FK to issue_questions"]);
+    addTableRow(["answer_value", "integer", "-2 to +2 scale (Strongly Disagree to Strongly Agree)"]);
+    
+    addSubsection("user_issue_priorities");
+    addText("User's priority issues with importance weighting.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["user_id", "uuid", "Auth user ID"]);
+    addTableRow(["issue_id", "uuid", "FK to issues"]);
+    addTableRow(["priority_level", "integer", "1-5 importance level"]);
+    
+    addSubsection("politician_issue_positions");
+    addText("AI-computed politician positions on each issue.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["politician_id", "uuid", "FK to members"]);
+    addTableRow(["issue_id", "uuid", "FK to issues"]);
+    addTableRow(["score_value", "numeric", "Position score (-1 to +1 scale)"]);
+    addTableRow(["data_points_count", "integer", "Number of signals used"]);
+    addTableRow(["source_version", "integer", "Version for updates"]);
+    
+    addSubsection("user_politician_alignment");
+    addText("Computed alignment scores between users and politicians.", 9);
+    addTableRow(["Column", "Type", "Description"], true);
+    addTableRow(["id", "uuid", "Primary key"]);
+    addTableRow(["user_id", "uuid", "Auth user ID"]);
+    addTableRow(["politician_id", "uuid", "FK to members"]);
+    addTableRow(["overall_alignment", "numeric", "Alignment score (0-100)"]);
+    addTableRow(["breakdown", "jsonb", "Per-issue alignment breakdown"]);
+    addTableRow(["profile_version", "integer", "Profile version at computation"]);
+    
+    // ===== 5. EXTERNAL INTEGRATIONS =====
+    addSection("External Integrations", "5");
+    
+    addSubsection("Congress.gov API");
+    addText("Primary source for congressional data. Authentication via API key in CONGRESS_GOV_API_KEY secret.", 9);
+    addText("Rate Limits: 1000 requests/hour", 9, true);
+    addSpace(3);
+    addText("Endpoints Used:", 9, true);
+    addText("• /member - List all current members", 9);
+    addText("• /member/{bioguideId} - Member details, committees, sponsored legislation", 9);
+    addText("• /bill/{congress}/{type} - Bills by type (hr, s, hjres, etc.)", 9);
+    addText("• /bill/{congress}/{type}/{number} - Bill details with summary", 9);
+    addText("• /bill/{congress}/{type}/{number}/cosponsors - Bill cosponsors list", 9);
+    
+    addSubsection("FEC (Federal Election Commission) API");
+    addText("Campaign finance data for federal elections. Authentication via API key in FEC_API_KEY secret.", 9);
+    addSpace(3);
+    addText("What is the FEC?", 9, true);
+    addText("The Federal Election Commission is an independent regulatory agency that administers and enforces federal campaign finance laws. It was created in 1975 and requires candidates, parties, and PACs to disclose their campaign finance activity.", 9);
+    addSpace(3);
+    addText("Data Retrieved:", 9, true);
+    addText("• Candidate search by name and state", 9);
+    addText("• Itemized individual contributions (Schedule A)", 9);
+    addText("• PAC and committee contributions", 9);
+    addText("• Contributor names, states, and amounts", 9);
+    addText("• Industry classifications", 9);
+    
+    addSubsection("House Clerk XML");
+    addText("Official House of Representatives vote records.", 9);
+    addText("URL Pattern: https://clerk.house.gov/evs/{year}/roll{number}.xml", 9);
+    addText("Data: Individual member votes by bioguide_id, party vote totals", 9);
+    
+    addSubsection("Senate.gov XML");
+    addText("Official Senate vote records.", 9);
+    addText("URL Pattern: https://www.senate.gov/legislative/LIS/roll_call_votes/vote{congress}{session}/vote_{congress}_{session}_{number}.xml", 9);
+    addText("Note: Senators matched by last_name + state lookup since XML lacks bioguide_id", 9, true);
+    
+    addSubsection("Lovable AI (Google Gemini 2.5 Flash)");
+    addText("AI-powered analysis without requiring external API keys.", 9);
+    addText("Used For:", 9, true);
+    addText("• Member activity summaries (rate-limited: 1/month per member)", 9);
+    addText("• Bill impact analysis (What It Does, Who It Affects, Benefits, Concerns, Status)", 9);
+    addText("• Issue classification of bills and votes", 9);
+    
+    // ===== 6. EDGE FUNCTIONS - DATA SYNC =====
+    addSection("Edge Functions - Data Sync", "6");
+    
+    addSubsection("sync-congress-members");
+    addText("Purpose: Sync all Congress members from Congress.gov", 9);
+    addText("Frequency: Daily at midnight UTC", 9);
+    addText("Tables Updated: members", 9);
+    addText("Logic:", 9, true);
+    addText("1. Fetch all members from Congress.gov API", 9);
+    addText("2. Determine chamber from district field (presence = House, absence = Senate)", 9);
+    addText("3. Upsert into members table by bioguide_id", 9);
+    addText("4. Update sync_progress table", 9);
+    
+    addSubsection("sync-bills");
+    addText("Purpose: Sync bills and sponsorships for both chambers", 9);
+    addText("Frequency: Every 6 hours", 9);
+    addText("Tables Updated: bills, bill_sponsorships", 9);
+    addText("Logic:", 9, true);
+    addText("1. Fetch HR (House) and S (Senate) type bills", 9);
+    addText("2. Store bill details with policy area and subjects", 9);
+    addText("3. Fetch cosponsors for each bill", 9);
+    addText("4. Create sponsorship records linking members to bills", 9);
+    addText("5. Process in batches of 20 (50 bills each) to avoid timeouts", 9);
+    
+    addSubsection("sync-votes");
+    addText("Purpose: Sync roll call votes and individual member positions", 9);
+    addText("Frequency: Every 2 hours", 9);
+    addText("Tables Updated: votes, member_votes", 9);
+    addText("Logic:", 9, true);
+    addText("1. Fetch vote list from Congress.gov API", 9);
+    addText("2. For House votes: Parse clerk.house.gov XML for positions by bioguide_id", 9);
+    addText("3. For Senate votes: Parse senate.gov XML, match by last_name + state", 9);
+    addText("4. Calculate position weights for scoring", 9);
+    
+    addSubsection("sync-member-details");
+    addText("Purpose: Fetch additional member details", 9);
+    addText("Frequency: Daily at 1 AM UTC", 9);
+    addText("Tables Updated: member_committees, member_statements", 9);
+    addText("Data: Committee memberships, ranks, chair/ranking status, official statements", 9);
+    
+    addSubsection("sync-fec-finance");
+    addText("Purpose: Sync FEC campaign contribution data", 9);
+    addText("Frequency: Daily at 2 AM UTC (incremental mode)", 9);
+    addText("Tables Updated: member_contributions, member_sponsors", 9);
+    addText("Logic:", 9, true);
+    addText("1. Match members to FEC candidate IDs by name and state", 9);
+    addText("2. Fetch itemized contributions (Schedule A receipts)", 9);
+    addText("3. Categorize contributors: individual, pac, committee, union, corporation", 9);
+    addText("4. Store granular contribution records with donor names and states", 9);
+    addText("5. Aggregate sponsor relationships for PACs and organizations", 9);
+    
+    addSubsection("sync-fec-funding");
+    addText("Purpose: Compute funding metrics from contribution data", 9);
+    addText("Frequency: Daily at 3 AM UTC", 9);
+    addText("Tables Updated: funding_metrics", 9);
+    addText("Metrics Calculated:", 9, true);
+    addText("• pct_from_individuals - Percentage from individual donors", 9);
+    addText("• pct_from_committees - Percentage from PACs/committees", 9);
+    addText("• pct_from_small_donors - Percentage from donations < $200", 9);
+    addText("• pct_from_in_state - Percentage from home state donors", 9);
+    addText("• grassroots_support_score - Small donor + individual funding score", 9);
+    addText("• pac_dependence_score - PAC/committee funding dependency", 9);
+    addText("• local_money_score - In-state funding score", 9);
+    
+    // ===== 7. EDGE FUNCTIONS - SCORE & AI =====
+    addSection("Edge Functions - Score & AI", "7");
+    
+    addSubsection("calculate-member-scores");
+    addText("Purpose: Calculate overall member performance scores", 9);
+    addText("Frequency: Every 2 hours (30 minutes after votes sync)", 9);
+    addText("Tables Updated: member_scores", 9);
+    addText("Components:", 9, true);
+    addText("• Productivity: Bills sponsored, cosponsored, enacted", 9);
+    addText("• Attendance: Votes cast vs. total available votes", 9);
+    addText("• Bipartisanship: Cross-party bill cosponsorship", 9);
+    
+    addSubsection("recalculate-state-scores");
+    addText("Purpose: Pre-compute state-level aggregates for map performance", 9);
+    addText("Frequency: Every 2 hours at :45", 9);
+    addText("Tables Updated: state_scores", 9);
+    addText("Aggregates: Average scores, member counts, party breakdown, funding metrics", 9);
+    
+    addSubsection("generate-member-summary");
+    addText("Purpose: Generate AI summary of member legislative activity", 9);
+    addText("Trigger: User request (rate-limited: 1/month per member)", 9);
+    addText("Tables Updated: member_summaries", 9);
+    addText("Model: google/gemini-2.5-flash via Lovable AI", 9);
+    
+    addSubsection("generate-bill-impact");
+    addText("Purpose: Generate AI analysis of bill impact", 9);
+    addText("Trigger: Automatic during bill sync for new bills", 9);
+    addText("Tables Updated: bills (bill_impact column)", 9);
+    addText("Output Sections:", 9, true);
+    addText("• What It Does - Plain language explanation", 9);
+    addText("• Who It Affects - Impacted groups", 9);
+    addText("• Potential Benefits - Positive outcomes", 9);
+    addText("• Potential Concerns - Negative implications", 9);
+    addText("• Current Status - Legislative progress", 9);
+    
+    addSubsection("classify-issue-signals");
+    addText("Purpose: Classify bills and votes into policy issues for alignment", 9);
+    addText("Frequency: Every 6 hours at :15", 9);
+    addText("Tables Updated: issue_signals", 9);
+    addText("Logic:", 9, true);
+    addText("1. Check policy_area_mappings table first for known mappings", 9);
+    addText("2. Fall back to AI classification for unmapped bills", 9);
+    addText("3. Store direction (-1, 0, +1) and confidence score", 9);
+    addText("4. Only store classifications with confidence > 0.6", 9);
+    
+    addSubsection("compute-politician-positions");
+    addText("Purpose: Aggregate issue signals into politician positions", 9);
+    addText("Frequency: Every 6 hours at :30", 9);
+    addText("Tables Updated: politician_issue_positions", 9);
+    addText("Logic:", 9, true);
+    addText("1. Sum weighted signals by politician and issue", 9);
+    addText("2. Normalize to -1 to +1 scale", 9);
+    addText("3. Store with data point count for confidence", 9);
+    
+    // ===== 8. CRON JOBS SCHEDULE =====
+    addSection("Cron Jobs Schedule", "8");
+    addText("All times in UTC. Syncs check sync_paused toggle before executing.", 9);
+    addSpace(3);
+    addTableRow(["Job", "Cron", "Time/Frequency"], true);
+    addTableRow(["sync-congress-members", "0 0 * * *", "Daily 00:00"]);
+    addTableRow(["sync-member-details", "0 1 * * *", "Daily 01:00"]);
+    addTableRow(["sync-fec-finance", "0 2 * * *", "Daily 02:00"]);
+    addTableRow(["sync-fec-funding", "0 3 * * *", "Daily 03:00"]);
+    addTableRow(["get-floor-schedule", "0 4 * * *", "Daily 04:00"]);
+    addTableRow(["sync-bills", "0 */6 * * *", "Every 6 hours"]);
+    addTableRow(["classify-issue-signals", "15 */6 * * *", "Every 6h at :15"]);
+    addTableRow(["compute-politician-positions", "30 */6 * * *", "Every 6h at :30"]);
+    addTableRow(["sync-votes", "0 */2 * * *", "Every 2 hours"]);
+    addTableRow(["calculate-member-scores", "30 */2 * * *", "Every 2h at :30"]);
+    addTableRow(["recalculate-state-scores", "45 */2 * * *", "Every 2h at :45"]);
+    
+    // ===== 9. APPLICATION SCREENS =====
+    addSection("Application Screens", "9");
+    
+    addSubsection("Public Pages");
+    addTableRow(["Route", "Component", "Description"], true);
+    addTableRow(["/", "Index.tsx", "Homepage with US map, stats, CTAs"]);
+    addTableRow(["/map", "MapPage.tsx", "Interactive state map with filters"]);
+    addTableRow(["/members", "MembersPage.tsx", "All 539 members alphabetically"]);
+    addTableRow(["/member/:id", "MemberPage.tsx", "Detailed member profile"]);
+    addTableRow(["/bills", "BillsPage.tsx", "Bill listing with filters"]);
+    addTableRow(["/bill/:id", "BillPage.tsx", "Bill details and impact"]);
+    addTableRow(["/votes", "VotesPage.tsx", "Vote listing with filters"]);
+    addTableRow(["/state/:state", "StatePage.tsx", "State-specific members"]);
+    addTableRow(["/compare", "ComparePage.tsx", "Member comparison tool"]);
+    addTableRow(["/news", "CongressNewsPage.tsx", "Floor schedule, elections"]);
+    
+    addSubsection("Authenticated Pages");
+    addTableRow(["Route", "Component", "Description"], true);
+    addTableRow(["/auth", "AuthPage.tsx", "Login/signup forms"]);
+    addTableRow(["/my-profile", "MyProfilePage.tsx", "User profile management"]);
+    addTableRow(["/my-profile/matches", "MyMatchesPage.tsx", "Top aligned politicians"]);
+    addTableRow(["/tracked", "TrackedMembersPage.tsx", "Tracked member activity"]);
+    
+    addSubsection("Admin Pages");
+    addTableRow(["Route", "Component", "Description"], true);
+    addTableRow(["/admin", "AdminPage.tsx", "Admin dashboard (tabs)"]);
+    
+    addSubsection("Informational Pages");
+    addTableRow(["Route", "Component", "Description"], true);
+    addTableRow(["/how-it-works", "HowItWorksPage.tsx", "Methodology explanation"]);
+    addTableRow(["/methodology", "MethodologyPage.tsx", "Scoring methodology"]);
+    addTableRow(["/data-sources", "DataSourcesPage.tsx", "Data source descriptions"]);
+    addTableRow(["/faq", "FAQPage.tsx", "Frequently asked questions"]);
+    addTableRow(["/terms", "TermsPage.tsx", "Terms & Conditions"]);
+    addTableRow(["/privacy", "PrivacyPage.tsx", "Privacy Policy"]);
+    
+    // ===== 10. MEMBER PAGE DATA FLOW =====
+    addSection("Member Page Data Flow", "10");
+    addText("The member detail page (/member/:id) aggregates data from multiple sources:", 9);
+    addSpace(3);
+    
+    addSubsection("Header Section");
+    addText("Data: members table → full_name, party, chamber, state, district, image_url", 9);
+    addText("Hook: useMembers", 9);
+    
+    addSubsection("Score Ring");
+    addText("Data: member_scores table → overall_score, productivity, attendance, bipartisanship", 9);
+    addText("Hook: useMembers (includes scores via join)", 9);
+    
+    addSubsection("AI Summary");
+    addText("Data: member_summaries table", 9);
+    addText("Trigger: User clicks 'Generate Summary' button", 9);
+    addText("Edge Function: generate-member-summary", 9);
+    addText("Rate Limit: Once per month per member", 9);
+    
+    addSubsection("Alignment Widget");
+    addText("Data: user_politician_alignment table", 9);
+    addText("Requires: Authenticated user with completed profile", 9);
+    addText("Hook: useAlignment", 9);
+    
+    addSubsection("Voting Record");
+    addText("Data: member_votes JOIN votes", 9);
+    addText("Display: Recent votes with position, result, date", 9);
+    addText("Drill-down: VoteDetailDialog with party breakdown", 9);
+    
+    addSubsection("Sponsored/Cosponsored Bills");
+    addText("Data: bill_sponsorships JOIN bills", 9);
+    addText("Display: Bills with is_sponsor=true (sponsored) or false (cosponsored)", 9);
+    addText("Drill-down: BillDetailDialog with AI impact analysis", 9);
+    
+    addSubsection("Policy Areas");
+    addText("Data: Aggregated from bills via sponsorships", 9);
+    addText("Display: Top 10 policy areas with comparison tabs", 9);
+    addText("Comparison: vs state peers, vs party peers", 9);
+    
+    addSubsection("Committees");
+    addText("Data: member_committees table", 9);
+    addText("Display: Committee memberships with chair/ranking status", 9);
+    
+    addSubsection("Financial Relationships");
+    addText("Data: member_contributions, member_sponsors, funding_metrics", 9);
+    addText("Display: Contributors, lobbying, funding profile", 9);
+    addText("Hook: useMemberFinance", 9);
+    
+    // ===== 11. USER ALIGNMENT SYSTEM =====
+    addSection("User Alignment System", "11");
+    
+    addSubsection("Profile Wizard Flow");
+    addText("Step 1 - Basic Info: First name, last name, zip code, age range", 9);
+    addText("Step 2 - Issue Selection: Choose priority issues with 1-5 importance slider", 9);
+    addText("Step 3 - Questions: Answer questions for each issue (-2 to +2 scale)", 9);
+    addText("Step 4 - Review: See computed stance on progressive-conservative spectrum", 9);
+    
+    addSubsection("Alignment Calculation Formula");
+    addText("For each issue i with priority p_i:", 9);
+    addText("  user_stance = weighted_average(user answers for issue i)", 9);
+    addText("  politician_stance = politician_issue_positions[politician][i]", 9);
+    addText("  issue_alignment = 1 - |user_stance - politician_stance| / 2", 9);
+    addSpace(3);
+    addText("overall_alignment = sum(issue_alignment_i × p_i) / sum(p_i)", 9, true);
+    
+    addSubsection("Score Display");
+    addText("• Shown on member pages for logged-in users with completed profiles", 9);
+    addText("• Top matches displayed on /my-profile/matches page", 9);
+    addText("• Segmented by in-state vs national politicians", 9);
+    
+    // ===== 12. SCORE CALCULATIONS =====
+    addSection("Score Calculations", "12");
+    
+    addSubsection("Productivity Score");
+    addText("Formula: (bills_sponsored × 3 + bills_cosponsored + bills_enacted × 10) / max_value × 100", 9, true);
+    addText("Weights prioritize enacted legislation (10x) over sponsorship (3x) over cosponsorship (1x)", 9);
+    
+    addSubsection("Attendance Score");
+    addText("Formula: (votes_cast / total_available_votes) × 100", 9, true);
+    addText("Measures voting participation rate", 9);
+    
+    addSubsection("Bipartisanship Score");
+    addText("Formula: (bipartisan_bills / total_bills_sponsored) × 100", 9, true);
+    addText("Bipartisan bills are those with cosponsors from opposing party", 9);
+    
+    addSubsection("Overall Score");
+    addText("Formula: weighted_average(productivity, attendance, bipartisanship, [alignment])", 9, true);
+    addText("Default weights: 25% each. Users can customize weights in scoring preferences.", 9);
+    
+    // ===== 13. FUNDING METRICS =====
+    addSection("Funding Metrics & FEC Data", "13");
+    
+    addSubsection("What is FEC Data?");
+    addText("The Federal Election Commission (FEC) requires all federal candidates to disclose their campaign finances. This includes:", 9);
+    addText("• Individual contributions (names, amounts, occupations, employers)", 9);
+    addText("• PAC contributions (Political Action Committees)", 9);
+    addText("• Committee transfers", 9);
+    addText("• Disbursements and expenditures", 9);
+    
+    addSubsection("Contribution Types");
+    addText("Individual: Direct donations from private citizens (max $3,300 per election)", 9);
+    addText("PAC: Political Action Committees that pool contributions", 9);
+    addText("Super PAC: Independent expenditure committees (unlimited, no coordination)", 9);
+    addText("Party Committee: National, state, or local party organizations", 9);
+    
+    addSubsection("Funding Metric Formulas");
+    addText("Grassroots Support Score:", 9, true);
+    addText("  = (small_donor_amount / total_individual_contributions) × 100", 9);
+    addText("  Small donors: contributions under $200", 9);
+    addSpace(3);
+    addText("PAC Dependence Score:", 9, true);
+    addText("  = (pac_contributions / total_receipts) × 100", 9);
+    addText("  Higher score = more dependent on PAC money", 9);
+    addSpace(3);
+    addText("Local Money Score:", 9, true);
+    addText("  = (in_state_contributions / total_receipts) × 100", 9);
+    addText("  Higher score = more support from constituents", 9);
+    
+    addSubsection("What is Lobbying Data?");
+    addText("Lobbying disclosure reports show which industries and organizations spend money trying to influence legislation. This includes:", 9);
+    addText("• Industry categories (Healthcare, Defense, Finance, etc.)", 9);
+    addText("• Total lobbying expenditures by industry", 9);
+    addText("• Number of lobbying clients per industry", 9);
+    addText("• Connection to member committee assignments", 9);
+    
+    // ===== 14. AUTHENTICATION =====
+    addSection("Authentication & Authorization", "14");
+    
+    addSubsection("Auth Flow");
+    addText("• Email/password signup with auto-confirm enabled (no email verification)", 9);
+    addText("• Google OAuth support with automatic name capture from Google profile", 9);
+    addText("• Session managed by Supabase Auth with JWT tokens", 9);
+    addText("• Terms acceptance tracked in terms_acceptances table", 9);
+    
+    addSubsection("Role-Based Access Control");
+    addTableRow(["Role", "Capabilities", ""], true);
+    addTableRow(["user", "View data, track members, customize scores, alignment", ""]);
+    addTableRow(["admin", "All user + admin dashboard, sync control, user mgmt", ""]);
+    
+    addSubsection("Row Level Security (RLS) Policies");
+    addText("Public Data (members, bills, votes): Readable by all users", 9);
+    addText("User Data (profiles, answers, alignment): Readable only by owner", 9);
+    addText("Admin Data (ai_usage_log, all profiles): Readable only by admins", 9);
+    addText("Tracking Data: Users can only manage their own tracked members", 9);
+    
+    // ===== 15. ADMIN FEATURES =====
+    addSection("Admin Features", "15");
+    
+    addSubsection("Pause/Resume All Syncs");
+    addText("Purpose: Temporarily halt all automated data synchronization operations", 9);
+    addText("Location: Data Sync tab header in Admin Dashboard", 9);
+    addText("How It Works:", 9, true);
+    addText("1. Click 'Pause All' button to set sync_paused toggle to true", 9);
+    addText("2. All edge functions check this toggle before executing", 9);
+    addText("3. Cron jobs fire on schedule but immediately return without processing", 9);
+    addText("4. Click 'Resume Syncs' to re-enable synchronization", 9);
+    addSpace(3);
+    addText("Use Cases:", 9, true);
+    addText("• Database maintenance without interference", 9);
+    addText("• Debugging sync issues without new data", 9);
+    addText("• High-traffic period management", 9);
+    addText("• Manual data corrections without race conditions", 9);
+    
+    addSubsection("Database Export");
+    addText("Purpose: Export all database tables for backup or analysis", 9);
+    addText("Format: JSON files (one per table) + summary.json", 9);
+    addText("Tables Exported (22): members, bills, votes, member_votes, bill_sponsorships, member_scores, state_scores, funding_metrics, member_contributions, member_sponsors, member_lobbying, profiles, user_answers, user_issue_priorities, user_politician_alignment, issues, issue_questions, issue_signals, politician_issue_positions, api_sync_runs, feature_toggles, ai_usage_log", 9);
+    
+    addSubsection("User Management");
+    addText("• View all registered users with profiles", 9);
+    addText("• Edit user first name and last name", 9);
+    addText("• Delete users (cascades to all user data)", 9);
+    addText("• View user activity logs (logins, profile changes)", 9);
+    
+    addSubsection("Feature Toggles");
+    addText("Enable/disable platform features without code deployment:", 9);
+    addText("• AI Summary feature", 9);
+    addText("• Alignment Widget", 9);
+    addText("• My Matches page", 9);
+    addText("• Member Tracking", 9);
+    addText("• Funding Layer visualization", 9);
+    addText("• Profile Wizard", 9);
+    addText("• Sync Paused state", 9);
+    
+    addSubsection("Data Inspector");
+    addText("Debug tool showing data sources and field mappings for each UI section:", 9);
+    addText("• Member Inspector: See where each field comes from", 9);
+    addText("• Data Sources: API endpoints and field mappings", 9);
+    addText("• Data Flow: Visual pipeline from APIs to UI", 9);
+    
+    // ===== 16. CONGRESS NEWS PAGE =====
+    addSection("Congress News Page", "16");
+    
+    addSubsection("Overview");
+    addText("The Congress News page (/news) provides comprehensive information about upcoming congressional activity and elections.", 9);
+    
+    addSubsection("Upcoming Floor Schedule");
+    addText("Data Source: Congress.gov API via get-floor-schedule edge function", 9);
+    addText("Refresh: Daily at 4 AM UTC", 9);
+    addText("Content: Chamber, date, and description of scheduled activities", 9);
+    
+    addSubsection("Election Information");
+    addText("2026 Midterms: All House seats, 33 Senate seats", 9);
+    addText("2028 Presidential: Full federal election cycle", 9);
+    
+    addSubsection("State Primary Information");
+    addText("Primary Types:", 9, true);
+    addText("• Open: Any registered voter can vote in either party primary", 9);
+    addText("• Closed: Only registered party members can vote", 9);
+    addText("• Semi-Closed: Unaffiliated voters can choose a primary", 9);
+    addText("• Top-Two: All candidates on same ballot, top 2 advance", 9);
+    addText("• Jungle: Similar to Top-Two with all parties together", 9);
+    addSpace(3);
+    addText("Registration Deadlines:", 9, true);
+    addText("• Specific days before election (e.g., 22 days before)", 9);
+    addText("• Same Day Registration (SDR)", 9);
+    addText("• None (no registration required)", 9);
+    
+    // ===== 17. CHANGELOG =====
+    addSection("Changelog", "17");
+    CHANGELOG.forEach(entry => {
+      addText(`v${entry.version} (${entry.date})`, 10, true);
+      entry.changes.forEach(change => {
+        addText(`• ${change}`, 9);
+      });
+      addSpace(4);
     });
     
-    // Footer
-    addSpace(10);
-    doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated: ${new Date().toISOString().split("T")[0]} | CivicScore Documentation v${DOCUMENTATION_VERSION}`, margin, pageHeight - 10);
+    // Add final page number
+    addPageNumber();
     
+    // Save PDF
     doc.save(`civicscore-documentation-v${DOCUMENTATION_VERSION}.pdf`);
   };
 
