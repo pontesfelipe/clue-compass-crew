@@ -7,13 +7,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X } from "lucide-react";
+import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "2.0.0";
+const DOCUMENTATION_VERSION = "2.1.0";
 const LAST_UPDATED = "2024-12-12";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.1.0", date: "2024-12-12", changes: [
+    "Added visual Data Flow tab with interactive Mermaid diagrams",
+    "Added High-Level Architecture diagram showing complete data pipeline",
+    "Added Congress Member, Vote, Score, Alignment, and Finance flow diagrams",
+    "Added State Map visualization flow diagram",
+    "Added Cron Schedule grid view"
+  ]},
   { version: "2.0.0", date: "2024-12-12", changes: [
     "Complete documentation overhaul with detailed explanations",
     "Added comprehensive score calculation formulas",
@@ -943,8 +951,9 @@ export function DocumentationContent() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-5 mb-6">
+            <TabsList className="grid grid-cols-6 mb-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="data-flow">Data Flow</TabsTrigger>
               <TabsTrigger value="data-model">Data Model</TabsTrigger>
               <TabsTrigger value="integrations">Integrations</TabsTrigger>
               <TabsTrigger value="edge-functions">Edge Functions</TabsTrigger>
@@ -995,15 +1004,448 @@ export function DocumentationContent() {
                     </div>
                   </div>
 
-                  <h4 className="mt-6">Architecture Diagram</h4>
-                  <div className="p-4 rounded-lg border bg-muted/50 font-mono text-sm">
-                    <pre>{`
-External APIs → Edge Functions → Database Tables → React Hooks → UI Components
-     ↓              ↓                ↓                ↓            ↓
-Congress.gov   sync-*        members, bills,    useMembers,   MemberCard,
-FEC API        functions     votes, etc.        useBills      VotesList
-Senate.gov                                      useVotes
-                    `}</pre>
+                  <h4 className="mt-6">Architecture Overview</h4>
+                  <p className="text-sm text-muted-foreground">
+                    See the <strong>Data Flow</strong> tab for comprehensive visual diagrams showing how data moves through the platform.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Data Flow Tab with Mermaid Diagrams */}
+            <TabsContent value="data-flow" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Workflow className="h-5 w-5" />
+                    System Data Flow
+                  </CardTitle>
+                  <CardDescription>
+                    Visual diagrams showing how data moves from external APIs through the database to the UI
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  {/* High-Level Architecture */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      High-Level Architecture
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart LR
+    subgraph External["External APIs"]
+        CG["Congress.gov API"]
+        FEC["FEC API"]
+        HC["House Clerk XML"]
+        SG["Senate.gov XML"]
+    end
+    
+    subgraph EdgeFunctions["Edge Functions"]
+        SM["sync-congress-members"]
+        SB["sync-bills"]
+        SV["sync-votes"]
+        SF["sync-fec-finance"]
+        CMS["calculate-member-scores"]
+    end
+    
+    subgraph Database["Supabase Database"]
+        M["members"]
+        B["bills"]
+        V["votes"]
+        MV["member_votes"]
+        MC["member_contributions"]
+        MS["member_scores"]
+    end
+    
+    subgraph Frontend["React Frontend"]
+        H["React Hooks"]
+        C["UI Components"]
+    end
+    
+    CG --> SM
+    CG --> SB
+    CG --> SV
+    HC --> SV
+    SG --> SV
+    FEC --> SF
+    
+    SM --> M
+    SB --> B
+    SV --> V
+    SV --> MV
+    SF --> MC
+    CMS --> MS
+    
+    M --> H
+    B --> H
+    V --> H
+    MS --> H
+    MC --> H
+    
+    H --> C`} />
+                    </div>
+                  </div>
+
+                  {/* Congress Data Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Congress Member Data Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart TD
+    subgraph Source["Data Source"]
+        API["Congress.gov API - /member endpoint"]
+    end
+    
+    subgraph Sync["Edge Function: sync-congress-members"]
+        F1["Fetch member list"]
+        F2["Parse bioguide_id, name, party"]
+        F3["Determine chamber from district"]
+        F4["Upsert to database"]
+    end
+    
+    subgraph Tables["Database Tables"]
+        MT["members table - 539 records"]
+    end
+    
+    subgraph Hooks["React Hooks"]
+        UM["useMembers()"]
+        USM["useMember(id)"]
+    end
+    
+    subgraph UI["UI Components"]
+        MemberCard["MemberCard"]
+        MP["MemberPage"]
+        MemberSearch["MemberSearch"]
+    end
+    
+    API --> F1 --> F2 --> F3 --> F4 --> MT
+    MT --> UM --> MemberCard
+    MT --> UM --> MemberSearch
+    MT --> USM --> MP`} />
+                    </div>
+                  </div>
+
+                  {/* Vote Data Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Vote className="h-4 w-4" />
+                      Vote Data Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart TD
+    subgraph Sources["Data Sources"]
+        CV["Congress.gov /vote"]
+        HX["House Clerk XML - clerk.house.gov"]
+        SX["Senate.gov XML"]
+    end
+    
+    subgraph Sync["Edge Function: sync-votes"]
+        S1["Fetch vote list from Congress.gov"]
+        S2["For each vote, fetch detailed XML"]
+        S3["Parse member positions from XML"]
+        S4["Match members by bioguide_id or last_name+state"]
+        S5["Store votes and member_votes"]
+    end
+    
+    subgraph Tables["Database Tables"]
+        VT["votes table - roll_number, result, totals"]
+        MVT["member_votes table - member_id, position, weight"]
+    end
+    
+    subgraph Hooks["React Hooks"]
+        UV["useVotes()"]
+        UMV["useMemberVotes(memberId)"]
+    end
+    
+    subgraph UI["UI Components"]
+        VL["VotesPage listing"]
+        VD["VoteDetailDialog"]
+        MVP["Member voting record"]
+    end
+    
+    CV --> S1
+    S1 --> S2
+    HX --> S3
+    SX --> S3
+    S3 --> S4 --> S5
+    S5 --> VT
+    S5 --> MVT
+    
+    VT --> UV --> VL
+    VT --> UV --> VD
+    MVT --> UMV --> MVP`} />
+                    </div>
+                  </div>
+
+                  {/* Score Calculation Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Calculator className="h-4 w-4" />
+                      Score Calculation Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart TD
+    subgraph Input["Input Data"]
+        BS["bill_sponsorships - bills sponsored/cosponsored"]
+        MV["member_votes - votes cast/missed"]
+        B["bills - bipartisan cosponsors"]
+    end
+    
+    subgraph Calculate["Edge Function: calculate-member-scores"]
+        C1["Query sponsorship counts"]
+        C2["Query vote attendance"]
+        C3["Query bipartisan bills"]
+        C4["Apply recency weighting"]
+        C5["Calculate component scores"]
+        C6["Compute weighted overall score"]
+    end
+    
+    subgraph Scores["Score Components"]
+        PS["Productivity Score"]
+        AS["Attendance Score"]
+        BP["Bipartisanship Score"]
+        IA["Issue Alignment Score"]
+    end
+    
+    subgraph Output["Output"]
+        MST["member_scores table"]
+        SST["state_scores table - aggregated"]
+    end
+    
+    BS --> C1
+    MV --> C2
+    B --> C3
+    C1 --> C4
+    C2 --> C4
+    C3 --> C4
+    C4 --> C5
+    C5 --> PS
+    C5 --> AS
+    C5 --> BP
+    C5 --> IA
+    PS --> C6
+    AS --> C6
+    BP --> C6
+    IA --> C6
+    C6 --> MST
+    MST --> SST`} />
+                    </div>
+                    <div className="mt-4 p-4 rounded-lg border bg-muted/50">
+                      <h5 className="font-semibold mb-2">Score Formulas:</h5>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li><strong>Productivity:</strong> bills_sponsored + bills_enacted×2 + cosponsored×0.25</li>
+                        <li><strong>Attendance:</strong> votes_cast / total_votes × 100</li>
+                        <li><strong>Bipartisanship:</strong> bipartisan_bills / total_bills × 100</li>
+                        <li><strong>Issue Alignment:</strong> from politician_issue_positions</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* User Alignment Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Brain className="h-4 w-4" />
+                      User-Politician Alignment Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart TD
+    subgraph User["User Profile Setup"]
+        PW["ProfileWizard Component"]
+        UI["Select priority issues"]
+        UA["Answer issue questions - scale -2 to +2"]
+    end
+    
+    subgraph Storage["User Data Storage"]
+        UIP["user_issue_priorities - issue_id, priority_level"]
+        UAT["user_answers - question_id, answer_value"]
+        PT["profiles - profile_version"]
+    end
+    
+    subgraph PoliticianData["Politician Position Data"]
+        IS["issue_signals - bill to issue classification"]
+        PIP["politician_issue_positions - aggregated stances"]
+    end
+    
+    subgraph Calculation["Alignment Calculation"]
+        CA1["For each priority issue"]
+        CA2["user_stance = weighted avg of answers"]
+        CA3["politician_stance = from positions table"]
+        CA4["issue_alignment = 100 - diff × 50"]
+        CA5["overall = priority-weighted average"]
+    end
+    
+    subgraph Output["Output"]
+        UPA["user_politician_alignment - overall, breakdown"]
+        AW["AlignmentWidget on member page"]
+        MM["MyMatchesPage rankings"]
+    end
+    
+    PW --> UI --> UIP
+    PW --> UA --> UAT
+    PW --> PT
+    
+    IS --> PIP
+    
+    UIP --> CA1
+    UAT --> CA2
+    PIP --> CA3
+    CA1 --> CA4
+    CA2 --> CA4
+    CA3 --> CA4
+    CA4 --> CA5
+    CA5 --> UPA
+    UPA --> AW
+    UPA --> MM`} />
+                    </div>
+                  </div>
+
+                  {/* FEC Finance Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Campaign Finance Data Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart TD
+    subgraph Source["FEC API"]
+        FC["Candidate Search - /candidates/search"]
+        FS["Schedule A - /schedules/schedule_a"]
+    end
+    
+    subgraph Sync["Edge Functions"]
+        SF["sync-fec-finance - Fetch itemized contributions"]
+        SFU["sync-fec-funding - Compute funding metrics"]
+    end
+    
+    subgraph Tables["Database Tables"]
+        MCT["member_contributions - donor, amount, state"]
+        MSP["member_sponsors - PAC relationships"]
+        FMT["funding_metrics - computed scores"]
+    end
+    
+    subgraph Metrics["Funding Metrics Calculated"]
+        GS["Grassroots Support Score - pct from small donors"]
+        PD["PAC Dependence Score - pct from committees"]
+        LM["Local Money Score - pct from in-state"]
+    end
+    
+    subgraph UI["UI Display"]
+        FP["FundingProfile component"]
+        CL["ContributorsList"]
+        SL["SponsorsList"]
+    end
+    
+    FC --> SF
+    FS --> SF
+    SF --> MCT
+    SF --> MSP
+    MCT --> SFU
+    SFU --> FMT
+    FMT --> GS
+    FMT --> PD
+    FMT --> LM
+    FMT --> FP
+    MCT --> CL
+    MSP --> SL`} />
+                    </div>
+                  </div>
+
+                  {/* Cron Schedule */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Automated Sync Schedule
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">Congress Data</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• sync-congress-members: Daily 00:00 UTC</li>
+                            <li>• sync-member-details: Daily 01:00 UTC</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">Bills</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• sync-bills: Every 6h (00:00, 06:00, 12:00, 18:00)</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">Votes</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• sync-votes: Every 2h</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">Scores</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• calculate-member-scores: Every 2h at :30</li>
+                            <li>• recalculate-state-scores: Every 2h at :45</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">Finance</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• sync-fec-funding: Daily 02:00 UTC</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <h5 className="font-semibold text-sm mb-2">AI Processing</h5>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• classify-issue-signals: Every 6h at :15</li>
+                            <li>• compute-politician-positions: Every 6h at :30</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* State Map Data Flow */}
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      State Map Visualization Flow
+                    </h4>
+                    <div className="p-4 rounded-lg border bg-card overflow-x-auto">
+                      <MermaidDiagram chart={`flowchart LR
+    subgraph Calculation["Score Aggregation"]
+        MS["member_scores - per-member scores"]
+        RSS["recalculate-state-scores - edge function"]
+        SS["state_scores - pre-computed averages"]
+    end
+    
+    subgraph Hook["React Hook"]
+        USD["useStateData()"]
+    end
+    
+    subgraph Map["Map Components"]
+        USM["USMap component"]
+        SVG["USMapSVG - geographic view"]
+        GRID["Fixed tile grid - US_GRID layout"]
+    end
+    
+    subgraph Color["Color Scale"]
+        C1["81+ = dark green"]
+        C2["71-80 = light green"]
+        C3["66-70 = amber"]
+        C4["61-65 = orange"]
+        C5["below 60 = red"]
+    end
+    
+    MS --> RSS --> SS
+    SS --> USD
+    USD --> USM
+    USM --> SVG
+    USM --> GRID
+    SS --> C1
+    SS --> C2
+    SS --> C3
+    SS --> C4
+    SS --> C5`} />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
