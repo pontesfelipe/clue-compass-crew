@@ -1,14 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { fetchJson, fetchWithRetry, HttpClientConfig } from '../_shared/httpClient.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface SyncProgress {
-  currentCongress: number
-  currentBillType: string
-  currentOffset: number
+const PROVIDER = 'congress'
+const DATASET = 'bills'
+const HTTP_CONFIG: HttpClientConfig = {
+  maxRetries: 5,
+  baseDelayMs: 2000,
+  maxConcurrency: 2,
+}
+
+interface SyncCursor {
+  congress: number
+  billType: string
+  offset: number
 }
 
 // Helper function to check if syncs are paused
@@ -25,6 +34,37 @@ async function isSyncPaused(supabase: any): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// Get watermark from sync_state
+async function getWatermark(supabase: any): Promise<{ lastSuccessAt: string | null, lastCursor: SyncCursor | null }> {
+  const { data } = await supabase
+    .from('sync_state')
+    .select('last_success_at, last_cursor')
+    .eq('provider', PROVIDER)
+    .eq('dataset', DATASET)
+    .eq('scope_key', 'global')
+    .single()
+  
+  return {
+    lastSuccessAt: data?.last_success_at || null,
+    lastCursor: data?.last_cursor as SyncCursor || null
+  }
+}
+
+// Update watermark in sync_state
+async function updateWatermark(supabase: any, cursor: SyncCursor | null, recordsTotal: number, success: boolean) {
+  await supabase
+    .from('sync_state')
+    .upsert({
+      provider: PROVIDER,
+      dataset: DATASET,
+      scope_key: 'global',
+      last_cursor: cursor,
+      last_success_at: success ? new Date().toISOString() : undefined,
+      records_total: recordsTotal,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'provider,dataset,scope_key' })
 }
 
 Deno.serve(async (req) => {
@@ -53,15 +93,18 @@ Deno.serve(async (req) => {
     )
   }
 
-  console.log('Starting bills sync with background processing...')
+  // Parse request params
+  const url = new URL(req.url)
+  const mode = url.searchParams.get('mode') || 'delta' // 'delta' or 'full'
 
-  // Start background task using globalThis for Deno edge runtime
+  console.log(`Starting bills sync (mode: ${mode}) with background processing...`)
+
+  // Start background task
   const runtime = (globalThis as any).EdgeRuntime
   if (runtime?.waitUntil) {
-    runtime.waitUntil(syncBillsBackground(supabase, congressApiKey))
+    runtime.waitUntil(syncBillsBackground(supabase, congressApiKey, mode))
   } else {
-    // Fallback: run sync inline (will timeout for large syncs)
-    await syncBillsBackground(supabase, congressApiKey)
+    await syncBillsBackground(supabase, congressApiKey, mode)
   }
 
   return new Response(
@@ -70,7 +113,13 @@ Deno.serve(async (req) => {
   )
 })
 
-async function syncBillsBackground(supabase: any, congressApiKey: string) {
+async function syncBillsBackground(supabase: any, congressApiKey: string, mode: string) {
+  const startTime = Date.now()
+  let totalBillsProcessed = 0
+  let totalSponsorshipsCreated = 0
+  let apiCalls = 0
+  let totalWaitMs = 0
+
   try {
     // Update status to running
     await supabase
@@ -80,6 +129,19 @@ async function syncBillsBackground(supabase: any, congressApiKey: string) {
         status: 'running',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id' })
+
+    // Get watermark for incremental sync
+    const { lastSuccessAt, lastCursor } = await getWatermark(supabase)
+    console.log(`Last success: ${lastSuccessAt}, Last cursor: ${JSON.stringify(lastCursor)}`)
+
+    // For delta mode, calculate date window (last 14 days or since last success)
+    let fromDate: string | null = null
+    if (mode === 'delta' && lastSuccessAt) {
+      const lastDate = new Date(lastSuccessAt)
+      const windowDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // 14 days ago
+      fromDate = (lastDate > windowDate ? lastDate : windowDate).toISOString().split('T')[0]
+      console.log(`Delta mode: fetching bills updated since ${fromDate}`)
+    }
 
     // Get all members from DB to map bioguide_id to member id
     const { data: members, error: membersError } = await supabase
@@ -91,43 +153,25 @@ async function syncBillsBackground(supabase: any, congressApiKey: string) {
     const memberMap = new Map<string, string>(members?.map((m: any) => [m.bioguide_id as string, m.id as string]) || [])
     console.log(`Loaded ${memberMap.size} members for mapping`)
 
-    // Get current sync progress
-    const { data: progress } = await supabase
-      .from('sync_progress')
-      .select('*')
-      .eq('id', 'bills')
-      .single()
-
-    // Parse metadata for progress tracking
-    let syncState: SyncProgress = {
-      currentCongress: 118,
-      currentBillType: 'hr',
-      currentOffset: 0
-    }
-
-    if (progress?.metadata) {
-      try {
-        syncState = progress.metadata as SyncProgress
-      } catch (e) {
-        console.log('Starting fresh sync')
-      }
-    }
-
     const billTypes = ['hr', 's', 'hjres', 'sjres', 'hconres', 'sconres', 'hres', 'sres']
     const congresses = [118, 119]
     
-    let totalBillsProcessed = progress?.total_processed || 0
-    let totalSponsorshipsCreated = 0
     let batchCount = 0
-    const maxBatchesPerRun = 20 // Process in smaller chunks to avoid timeout
+    const maxBatchesPerRun = 20
     const limit = 50
 
-    // Find starting point
-    let startCongressIndex = congresses.indexOf(syncState.currentCongress)
+    // Resume from cursor if available
+    let startCongressIndex = lastCursor ? congresses.indexOf(lastCursor.congress) : 0
     if (startCongressIndex === -1) startCongressIndex = 0
     
-    let startTypeIndex = billTypes.indexOf(syncState.currentBillType)
+    let startTypeIndex = lastCursor ? billTypes.indexOf(lastCursor.billType) : 0
     if (startTypeIndex === -1) startTypeIndex = 0
+
+    let currentCursor: SyncCursor = lastCursor || {
+      congress: congresses[0],
+      billType: billTypes[0],
+      offset: 0
+    }
 
     outerLoop:
     for (let ci = startCongressIndex; ci < congresses.length; ci++) {
@@ -136,92 +180,117 @@ async function syncBillsBackground(supabase: any, congressApiKey: string) {
       for (let ti = (ci === startCongressIndex ? startTypeIndex : 0); ti < billTypes.length; ti++) {
         const billType = billTypes[ti]
         
-        let offset = (ci === startCongressIndex && ti === startTypeIndex) ? syncState.currentOffset : 0
+        let offset = (ci === startCongressIndex && ti === startTypeIndex && lastCursor) ? lastCursor.offset : 0
         let hasMore = true
         
         while (hasMore && batchCount < maxBatchesPerRun) {
           console.log(`Fetching ${billType} bills from Congress ${congress}, offset ${offset}...`)
           
-          const url = `https://api.congress.gov/v3/bill/${congress}/${billType}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
-          
-          const response = await fetch(url)
-          
-          if (!response.ok) {
-            console.error(`Congress API error for ${billType}: ${response.status}`)
-            hasMore = false
-            break
+          // Build URL with optional date filter for incremental sync
+          let url = `https://api.congress.gov/v3/bill/${congress}/${billType}?format=json&limit=${limit}&offset=${offset}&api_key=${congressApiKey}`
+          if (fromDate) {
+            url += `&fromDateTime=${fromDate}T00:00:00Z`
           }
           
-          const data = await response.json()
-          const bills = data.bills || []
-          
-          if (bills.length === 0) {
-            hasMore = false
-            break
-          }
-
-          // Process each bill
-          for (const bill of bills) {
-            try {
-              const sponsorshipsCreated = await processBill(supabase, bill, congress, billType, memberMap, congressApiKey)
-              totalSponsorshipsCreated += sponsorshipsCreated
-              totalBillsProcessed++
-            } catch (billError) {
-              console.log(`Error processing bill ${billType}${bill.number}: ${billError}`)
+          try {
+            const { data, metrics } = await fetchJson<any>(url, {}, PROVIDER, HTTP_CONFIG)
+            apiCalls++
+            totalWaitMs += metrics.totalWaitMs
+            
+            const bills = data.bills || []
+            
+            if (bills.length === 0) {
+              hasMore = false
+              break
             }
-          }
 
-          offset += limit
-          hasMore = bills.length === limit
-          batchCount++
-          
-          // Save progress after each batch
-          await supabase
-            .from('sync_progress')
-            .upsert({
-              id: 'bills',
-              status: 'running',
-              total_processed: totalBillsProcessed,
-              current_offset: offset,
-              metadata: {
-                currentCongress: congress,
-                currentBillType: billType,
-                currentOffset: offset
-              },
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'id' })
-          
-          console.log(`Batch complete: ${totalBillsProcessed} bills processed, ${totalSponsorshipsCreated} sponsorships`)
-          
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 200))
+            // Process each bill
+            for (const bill of bills) {
+              try {
+                const result = await processBill(supabase, bill, congress, billType, memberMap, congressApiKey)
+                totalSponsorshipsCreated += result.sponsorships
+                apiCalls += result.apiCalls
+                totalWaitMs += result.waitMs
+                totalBillsProcessed++
+              } catch (billError) {
+                console.log(`Error processing bill ${billType}${bill.number}: ${billError}`)
+              }
+            }
+
+            offset += limit
+            hasMore = bills.length === limit
+            batchCount++
+            
+            // Update cursor
+            currentCursor = { congress, billType, offset }
+            
+            // Save progress after each batch
+            await supabase
+              .from('sync_progress')
+              .upsert({
+                id: 'bills',
+                status: 'running',
+                total_processed: totalBillsProcessed,
+                current_offset: offset,
+                cursor_json: currentCursor,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'id' })
+            
+            console.log(`Batch complete: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships, ${apiCalls} API calls`)
+          } catch (fetchError) {
+            console.error(`Error fetching bills: ${fetchError}`)
+            hasMore = false
+          }
         }
 
         if (batchCount >= maxBatchesPerRun) {
           console.log('Reached batch limit, will continue on next run')
           break outerLoop
         }
-        
-        // Reset offset for next bill type
-        syncState.currentOffset = 0
       }
     }
 
     // Check if we've completed all types
     const isComplete = batchCount < maxBatchesPerRun
 
+    // Get total bills in DB for accurate progress
+    const { count: totalBillsInDb } = await supabase
+      .from('bills')
+      .select('*', { count: 'exact', head: true })
+
+    // Update watermark
+    await updateWatermark(supabase, isComplete ? null : currentCursor, totalBillsInDb || totalBillsProcessed, isComplete)
+
+    // Update sync_progress
     await supabase
       .from('sync_progress')
       .upsert({
         id: 'bills',
         last_run_at: new Date().toISOString(),
+        last_synced_at: isComplete ? new Date().toISOString() : undefined,
         status: isComplete ? 'complete' : 'partial',
-        total_processed: totalBillsProcessed,
+        total_processed: totalBillsInDb || totalBillsProcessed,
+        last_success_count: totalBillsProcessed,
+        cursor_json: isComplete ? null : currentCursor,
         updated_at: new Date().toISOString(),
-        metadata: isComplete ? null : syncState,
       }, { onConflict: 'id' })
 
-    console.log(`Bills sync ${isComplete ? 'completed' : 'paused'}: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships`)
+    // Log job run
+    await supabase.from('sync_job_runs').insert({
+      job_id: `bills-${Date.now()}`,
+      provider: PROVIDER,
+      job_type: 'bills',
+      status: isComplete ? 'succeeded' : 'partial',
+      started_at: new Date(startTime).toISOString(),
+      finished_at: new Date().toISOString(),
+      records_fetched: totalBillsProcessed,
+      records_upserted: totalBillsProcessed,
+      api_calls: apiCalls,
+      wait_time_ms: totalWaitMs,
+      metadata: { sponsorships: totalSponsorshipsCreated, mode }
+    })
+
+    console.log(`Bills sync ${isComplete ? 'completed' : 'paused'}: ${totalBillsProcessed} bills, ${totalSponsorshipsCreated} sponsorships, ${apiCalls} API calls`)
 
   } catch (error) {
     console.error('Bills sync background error:', error)
@@ -231,8 +300,23 @@ async function syncBillsBackground(supabase: any, congressApiKey: string) {
       .upsert({
         id: 'bills',
         status: 'error',
+        error_message: String(error),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id' })
+
+    // Log failed job run
+    await supabase.from('sync_job_runs').insert({
+      job_id: `bills-${Date.now()}`,
+      provider: PROVIDER,
+      job_type: 'bills',
+      status: 'failed',
+      started_at: new Date(startTime).toISOString(),
+      finished_at: new Date().toISOString(),
+      records_fetched: totalBillsProcessed,
+      error: String(error),
+      api_calls: apiCalls,
+      wait_time_ms: totalWaitMs,
+    })
   }
 }
 
@@ -243,13 +327,19 @@ async function processBill(
   billType: string,
   memberMap: Map<string, string>,
   congressApiKey: string
-): Promise<number> {
-  // Fetch bill details
+): Promise<{ sponsorships: number, apiCalls: number, waitMs: number }> {
+  let apiCalls = 0
+  let waitMs = 0
+
+  // Fetch bill details using httpClient
   const detailUrl = `https://api.congress.gov/v3/bill/${congress}/${billType}/${bill.number}?format=json&api_key=${congressApiKey}`
-  const detailResponse = await fetch(detailUrl)
+  
+  const { response: detailResponse, metrics: detailMetrics } = await fetchWithRetry(detailUrl, {}, PROVIDER, HTTP_CONFIG)
+  apiCalls++
+  waitMs += detailMetrics.totalWaitMs
   
   if (!detailResponse.ok) {
-    return 0
+    return { sponsorships: 0, apiCalls, waitMs }
   }
   
   const detailData = await detailResponse.json()
@@ -260,15 +350,16 @@ async function processBill(
   if (billDetail.summaries?.url) {
     try {
       const summaryUrl = `${billDetail.summaries.url}&format=json&api_key=${congressApiKey}`
-      const summaryResponse = await fetch(summaryUrl)
+      const { response: summaryResponse, metrics: summaryMetrics } = await fetchWithRetry(summaryUrl, {}, PROVIDER, HTTP_CONFIG)
+      apiCalls++
+      waitMs += summaryMetrics.totalWaitMs
+      
       if (summaryResponse.ok) {
         const summaryData = await summaryResponse.json()
-        // Get the most recent summary (last in array, usually the most comprehensive)
         const summaries = summaryData.summaries || []
         if (summaries.length > 0) {
           const latestSummary = summaries[summaries.length - 1]
           summaryText = latestSummary.text || null
-          // Clean HTML tags from summary
           if (summaryText) {
             summaryText = summaryText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
           }
@@ -312,7 +403,6 @@ async function processBill(
   let billId: string | null = null
 
   if (billError) {
-    // Try to get existing bill
     const { data: existingBill } = await supabase
       .from('bills')
       .select('id')
@@ -328,10 +418,16 @@ async function processBill(
     billId = upsertedBill.id
   }
 
-  if (!billId) return 0
+  if (!billId) return { sponsorships: 0, apiCalls, waitMs }
 
   // Process sponsorships
-  return await processSponsorships(supabase, billDetail, billId, memberMap, congressApiKey)
+  const sponsorResult = await processSponsorships(supabase, billDetail, billId, memberMap, congressApiKey)
+  
+  return { 
+    sponsorships: sponsorResult.count, 
+    apiCalls: apiCalls + sponsorResult.apiCalls, 
+    waitMs: waitMs + sponsorResult.waitMs 
+  }
 }
 
 async function processSponsorships(
@@ -340,8 +436,10 @@ async function processSponsorships(
   billId: string,
   memberMap: Map<string, string>,
   congressApiKey: string
-): Promise<number> {
+): Promise<{ count: number, apiCalls: number, waitMs: number }> {
   let created = 0
+  let apiCalls = 0
+  let waitMs = 0
 
   // Process primary sponsor
   if (billDetail.sponsors?.[0]) {
@@ -363,11 +461,13 @@ async function processSponsorships(
     }
   }
 
-  // Fetch and process cosponsors
+  // Fetch and process cosponsors using httpClient
   if (billDetail.cosponsors?.count > 0 && billDetail.cosponsors?.url) {
     try {
       const cosponsorsUrl = `${billDetail.cosponsors.url}&format=json&api_key=${congressApiKey}&limit=100`
-      const response = await fetch(cosponsorsUrl)
+      const { response, metrics } = await fetchWithRetry(cosponsorsUrl, {}, PROVIDER, HTTP_CONFIG)
+      apiCalls++
+      waitMs += metrics.totalWaitMs
       
       if (response.ok) {
         const data = await response.json()
@@ -396,7 +496,7 @@ async function processSponsorships(
     }
   }
 
-  return created
+  return { count: created, apiCalls, waitMs }
 }
 
 addEventListener('beforeunload', (ev) => {
