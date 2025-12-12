@@ -29,6 +29,8 @@ const STATE_ABBREVS: Record<string, string> = {
 };
 
 function getStateAbbrev(stateName: string): string {
+  // If already an abbreviation, return as-is
+  if (stateName.length === 2) return stateName.toUpperCase();
   return STATE_ABBREVS[stateName] || stateName;
 }
 
@@ -42,8 +44,21 @@ interface FundingMetrics {
   smallDonorAmount: number;
 }
 
-// Generic FEC API helper with pagination
-async function fecGet(path: string, params: Record<string, string | number>, apiKey: string): Promise<any[]> {
+interface ProcessingStats {
+  membersProcessed: number;
+  membersWithData: number;
+  totalMetricsUpserted: number;
+  apiCallsMade: number;
+  errors: string[];
+}
+
+// Generic FEC API helper with pagination and better error handling
+async function fecGet(
+  path: string, 
+  params: Record<string, string | number>, 
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<any[]> {
   const results: any[] = [];
   let page = 1;
   const perPage = 100;
@@ -59,9 +74,18 @@ async function fecGet(path: string, params: Record<string, string | number>, api
     }
     
     try {
+      stats.apiCallsMade++;
       const response = await fetch(url.toString());
+      
+      if (response.status === 429) {
+        console.log(`Rate limited on ${path}, waiting 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue; // Retry same page
+      }
+      
       if (!response.ok) {
         console.error(`FEC API error: ${response.status} for ${path}`);
+        stats.errors.push(`API ${response.status} for ${path}`);
         break;
       }
       
@@ -72,11 +96,12 @@ async function fecGet(path: string, params: Record<string, string | number>, api
       
       // Check if we've fetched all pages
       if (data.pagination?.pages && page >= data.pagination.pages) break;
-      if (results.length >= 1000) break; // Safety limit
+      if (results.length >= 500) break; // Safety limit
       
       page++;
     } catch (error) {
       console.error(`FEC API fetch error for ${path}:`, error);
+      stats.errors.push(`Fetch error for ${path}: ${error}`);
       break;
     }
   }
@@ -84,51 +109,85 @@ async function fecGet(path: string, params: Record<string, string | number>, api
   return results;
 }
 
-// Get candidate by name and state
-async function findCandidateId(name: string, state: string, apiKey: string): Promise<string | null> {
-  try {
-    const results = await fecGet("/candidates/search/", {
-      name: name,
-      state: state,
-      is_active_candidate: "true",
-      sort: "-election_years",
-    }, apiKey);
-    
-    if (results.length > 0) {
-      return results[0].candidate_id;
-    }
-  } catch (error) {
-    console.error(`Error finding candidate ${name} in ${state}:`, error);
+// Get candidate by name and state - try multiple strategies
+async function findCandidateId(
+  name: string, 
+  state: string, 
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<string | null> {
+  const stateAbbrev = getStateAbbrev(state);
+  
+  // Strategy 1: Search by full name
+  let results = await fecGet("/candidates/search/", {
+    name: name,
+    state: stateAbbrev,
+    is_active_candidate: "true",
+    sort: "-election_years",
+  }, apiKey, stats);
+  
+  if (results.length > 0) {
+    console.log(`Found candidate ${name} via full name search: ${results[0].candidate_id}`);
+    return results[0].candidate_id;
   }
+  
+  // Strategy 2: Try last name only
+  const lastName = name.split(",")[0]?.trim() || name.split(" ").pop() || name;
+  results = await fecGet("/candidates/search/", {
+    name: lastName,
+    state: stateAbbrev,
+    is_active_candidate: "true",
+    sort: "-election_years",
+  }, apiKey, stats);
+  
+  if (results.length > 0) {
+    console.log(`Found candidate ${name} via last name search: ${results[0].candidate_id}`);
+    return results[0].candidate_id;
+  }
+  
+  // Strategy 3: Try without active filter for former candidates
+  results = await fecGet("/candidates/search/", {
+    name: lastName,
+    state: stateAbbrev,
+    sort: "-election_years",
+  }, apiKey, stats);
+  
+  if (results.length > 0) {
+    console.log(`Found candidate ${name} via inactive search: ${results[0].candidate_id}`);
+    return results[0].candidate_id;
+  }
+  
+  console.log(`No FEC candidate found for ${name} in ${stateAbbrev}`);
   return null;
 }
 
-// Get candidate's committees
-async function getCandidateCommittees(candidateId: string, apiKey: string): Promise<string[]> {
-  try {
-    const results = await fecGet(`/candidate/${candidateId}/committees/`, {
-      designation: "P,A", // Principal and authorized
-    }, apiKey);
-    
-    return results.map((c: any) => c.committee_id);
-  } catch (error) {
-    console.error(`Error getting committees for ${candidateId}:`, error);
-    return [];
-  }
+// Get candidate's committees - CRITICAL: This is where money flows
+async function getCandidateCommittees(
+  candidateId: string, 
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<string[]> {
+  // Get all committee designations, not just P,A
+  const results = await fecGet(`/candidate/${candidateId}/committees/`, {}, apiKey, stats);
+  
+  const committeeIds = results.map((c: any) => c.committee_id);
+  console.log(`Found ${committeeIds.length} committees for candidate ${candidateId}`);
+  
+  return committeeIds;
 }
 
-// Get committee financial totals
-async function getCommitteeTotals(committeeId: string, cycle: number, apiKey: string): Promise<any | null> {
-  try {
-    const results = await fecGet(`/committee/${committeeId}/totals/`, {
-      cycle: cycle,
-    }, apiKey);
-    
-    return results[0] || null;
-  } catch (error) {
-    console.error(`Error getting totals for ${committeeId}:`, error);
-    return null;
-  }
+// Get committee financial totals - try multiple cycles if needed
+async function getCommitteeTotals(
+  committeeId: string, 
+  cycle: number, 
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<any | null> {
+  const results = await fecGet(`/committee/${committeeId}/totals/`, {
+    cycle: cycle,
+  }, apiKey, stats);
+  
+  return results[0] || null;
 }
 
 // Get itemized individual contributions with state info
@@ -136,35 +195,30 @@ async function getCommitteeContributionsByState(
   committeeId: string, 
   cycle: number, 
   memberState: string,
-  apiKey: string
+  apiKey: string,
+  stats: ProcessingStats
 ): Promise<{ inState: number; outOfState: number; itemizedTotal: number }> {
-  try {
-    // Use aggregated endpoint for efficiency
-    const results = await fecGet("/schedules/schedule_a/by_state/", {
-      committee_id: committeeId,
-      cycle: cycle,
-    }, apiKey);
+  const results = await fecGet("/schedules/schedule_a/by_state/", {
+    committee_id: committeeId,
+    cycle: cycle,
+  }, apiKey, stats);
+  
+  let inState = 0;
+  let outOfState = 0;
+  let itemizedTotal = 0;
+  
+  for (const result of results) {
+    const amount = result.total || 0;
+    itemizedTotal += amount;
     
-    let inState = 0;
-    let outOfState = 0;
-    let itemizedTotal = 0;
-    
-    for (const result of results) {
-      const amount = result.total || 0;
-      itemizedTotal += amount;
-      
-      if (result.state === memberState) {
-        inState += amount;
-      } else {
-        outOfState += amount;
-      }
+    if (result.state === memberState) {
+      inState += amount;
+    } else {
+      outOfState += amount;
     }
-    
-    return { inState, outOfState, itemizedTotal };
-  } catch (error) {
-    console.error(`Error getting contributions by state for ${committeeId}:`, error);
-    return { inState: 0, outOfState: 0, itemizedTotal: 0 };
   }
+  
+  return { inState, outOfState, itemizedTotal };
 }
 
 // Calculate derived scores
@@ -206,48 +260,85 @@ function calculateScores(metrics: {
 async function processMember(
   supabase: any,
   member: any,
-  apiKey: string
-): Promise<{ success: boolean; cyclesProcessed: number }> {
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<{ success: boolean; cyclesProcessed: number; reason?: string }> {
   let fecCandidateId = member.fec_candidate_id;
   let fecCommitteeIds = member.fec_committee_ids || [];
+  const stateAbbrev = getStateAbbrev(member.state);
   
-  // Find FEC candidate ID if not stored
+  console.log(`Processing ${member.full_name} (${stateAbbrev}), FEC ID: ${fecCandidateId || 'none'}, Committees: ${fecCommitteeIds.length}`);
+  
+  // Step 1: Find FEC candidate ID if not stored
   if (!fecCandidateId) {
-    const stateAbbrev = getStateAbbrev(member.state);
-    fecCandidateId = await findCandidateId(member.full_name, stateAbbrev, apiKey);
+    fecCandidateId = await findCandidateId(member.full_name, stateAbbrev, apiKey, stats);
     
     if (!fecCandidateId) {
-      console.log(`No FEC candidate found for ${member.full_name} (${member.state} -> ${stateAbbrev})`);
-      return { success: false, cyclesProcessed: 0 };
+      return { 
+        success: false, 
+        cyclesProcessed: 0, 
+        reason: `No FEC candidate found for ${member.full_name}` 
+      };
     }
     
-    // Store the candidate ID
-    await supabase
+    // Store the candidate ID immediately
+    const { error: updateError } = await supabase
       .from("members")
       .update({ fec_candidate_id: fecCandidateId })
       .eq("id", member.id);
+    
+    if (updateError) {
+      console.error(`Failed to store FEC candidate ID for ${member.full_name}:`, updateError);
+    } else {
+      console.log(`Stored FEC candidate ID ${fecCandidateId} for ${member.full_name}`);
+    }
   }
   
-  // Get committees if not stored
+  // Step 2: Get committees (CRITICAL - this is where money flows)
   if (fecCommitteeIds.length === 0) {
-    fecCommitteeIds = await getCandidateCommittees(fecCandidateId, apiKey);
+    fecCommitteeIds = await getCandidateCommittees(fecCandidateId, apiKey, stats);
     
     if (fecCommitteeIds.length === 0) {
-      console.log(`No committees found for ${member.full_name}`);
-      return { success: false, cyclesProcessed: 0 };
+      // Don't fail completely - mark as unavailable, not zero
+      console.log(`No committees found for ${member.full_name} (${fecCandidateId})`);
+      
+      // Update the member to show we tried but found nothing
+      await supabase
+        .from("members")
+        .update({ 
+          fec_committee_ids: [], 
+          fec_last_synced_at: new Date().toISOString() 
+        })
+        .eq("id", member.id);
+      
+      return { 
+        success: false, 
+        cyclesProcessed: 0, 
+        reason: `No committees found for candidate ${fecCandidateId}` 
+      };
     }
     
-    // Store the committee IDs
-    await supabase
+    // Store the committee IDs immediately
+    const { error: updateError } = await supabase
       .from("members")
       .update({ fec_committee_ids: fecCommitteeIds })
       .eq("id", member.id);
+    
+    if (updateError) {
+      console.error(`Failed to store committee IDs for ${member.full_name}:`, updateError);
+    } else {
+      console.log(`Stored ${fecCommitteeIds.length} committee IDs for ${member.full_name}`);
+    }
   }
   
+  // Step 3: Process each cycle - try all cycles, use most recent with data
   let cyclesProcessed = 0;
+  let foundDataInAnyCycle = false;
   
-  // Process each cycle
-  for (const cycle of CYCLES) {
+  // Process cycles in reverse order (newest first) for efficiency
+  const sortedCycles = [...CYCLES].sort((a, b) => b - a);
+  
+  for (const cycle of sortedCycles) {
     let totalReceipts = 0;
     let fromIndividuals = 0;
     let fromCommittees = 0;
@@ -255,26 +346,37 @@ async function processMember(
     let outOfStateAmount = 0;
     let itemizedTotal = 0;
     
-    // Aggregate across all committees
+    // Aggregate across all committees (CRITICAL: committee -> candidate rollup)
     for (const committeeId of fecCommitteeIds) {
-      const totals = await getCommitteeTotals(committeeId, cycle, apiKey);
+      const totals = await getCommitteeTotals(committeeId, cycle, apiKey, stats);
       
       if (totals) {
         totalReceipts += totals.receipts || 0;
         fromIndividuals += totals.individual_contributions || 0;
         fromCommittees += totals.other_political_committee_contributions || 0;
+        
+        console.log(`  Committee ${committeeId} cycle ${cycle}: receipts=$${totals.receipts || 0}, individuals=$${totals.individual_contributions || 0}`);
       }
       
       const stateBreakdown = await getCommitteeContributionsByState(
-        committeeId, cycle, getStateAbbrev(member.state), apiKey
+        committeeId, cycle, stateAbbrev, apiKey, stats
       );
       
       inStateAmount += stateBreakdown.inState;
       outOfStateAmount += stateBreakdown.outOfState;
       itemizedTotal += stateBreakdown.itemizedTotal;
+      
+      // Rate limit between committees
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    if (totalReceipts === 0) continue;
+    // CRITICAL: Only skip if zero receipts - not if other fields are zero
+    if (totalReceipts === 0) {
+      console.log(`  No receipts for ${member.full_name} in cycle ${cycle}`);
+      continue;
+    }
+    
+    foundDataInAnyCycle = true;
     
     // Calculate percentages
     const pctFromIndividuals = totalReceipts > 0 
@@ -308,6 +410,8 @@ async function processMember(
       pctFromCommittees,
     });
     
+    console.log(`  Upserting metrics for ${member.full_name} cycle ${cycle}: receipts=$${totalReceipts}, grassroots=${scores.grassrootsSupportScore}`);
+    
     // Upsert funding metrics
     const { error } = await supabase
       .from("funding_metrics")
@@ -330,8 +434,10 @@ async function processMember(
     
     if (error) {
       console.error(`Error upserting funding metrics for ${member.full_name}, cycle ${cycle}:`, error);
+      stats.errors.push(`Upsert error for ${member.full_name} cycle ${cycle}: ${error.message}`);
     } else {
       cyclesProcessed++;
+      stats.totalMetricsUpserted++;
     }
   }
   
@@ -341,7 +447,15 @@ async function processMember(
     .update({ fec_last_synced_at: new Date().toISOString() })
     .eq("id", member.id);
   
-  return { success: true, cyclesProcessed };
+  if (foundDataInAnyCycle) {
+    stats.membersWithData++;
+  }
+  
+  return { 
+    success: cyclesProcessed > 0, 
+    cyclesProcessed,
+    reason: cyclesProcessed === 0 ? `No funding data across any cycle` : undefined
+  };
 }
 
 // Update state funding summaries
@@ -367,6 +481,11 @@ async function updateStateFundingSummaries(supabase: any) {
     return;
   }
   
+  if (!stateStats || stateStats.length === 0) {
+    console.log("No funding metrics to aggregate for state summaries");
+    return;
+  }
+  
   // Group by state and take latest cycle per member
   const stateAggregates: Record<string, {
     grassroots: number[];
@@ -377,7 +496,7 @@ async function updateStateFundingSummaries(supabase: any) {
   
   const processedMembers = new Set<string>();
   
-  for (const row of stateStats || []) {
+  for (const row of stateStats) {
     if (processedMembers.has(row.member_id)) continue;
     processedMembers.add(row.member_id);
     
@@ -427,92 +546,6 @@ async function updateStateFundingSummaries(supabase: any) {
   console.log(`Updated funding summaries for ${Object.keys(stateAggregates).length} states`);
 }
 
-// Background sync function
-async function syncFecBackground(
-  supabase: any, 
-  apiKey: string, 
-  mode: string,
-  maxMembers: number
-) {
-  console.log(`Starting FEC sync in ${mode} mode, max ${maxMembers} members`);
-  
-  // Update sync progress
-  await supabase
-    .from("sync_progress")
-    .upsert({
-      id: "fec-funding",
-      status: "running",
-      last_run_at: new Date().toISOString(),
-      current_offset: 0,
-      total_processed: 0,
-    }, { onConflict: "id" });
-  
-  // Get members to sync
-  let query = supabase
-    .from("members")
-    .select("*")
-    .eq("in_office", true);
-  
-  if (mode === "incremental") {
-    // Only sync members not synced in last 3 days
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    query = query.or(`fec_last_synced_at.is.null,fec_last_synced_at.lt.${threeDaysAgo.toISOString()}`);
-  }
-  
-  const { data: members, error } = await query.limit(maxMembers);
-  
-  if (error) {
-    console.error("Error fetching members:", error);
-    await supabase.from("sync_progress").update({ status: "error" }).eq("id", "fec-funding");
-    return;
-  }
-  
-  console.log(`Found ${members?.length || 0} members to sync`);
-  
-  let processed = 0;
-  let successful = 0;
-  
-  for (const member of members || []) {
-    try {
-      const result = await processMember(supabase, member, apiKey);
-      processed++;
-      if (result.success) successful++;
-      
-      // Update progress
-      await supabase
-        .from("sync_progress")
-        .update({
-          current_offset: processed,
-          total_processed: successful,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", "fec-funding");
-      
-      console.log(`Processed ${processed}/${members.length}: ${member.full_name} - ${result.cyclesProcessed} cycles`);
-      
-      // Rate limiting delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.error(`Error processing ${member.full_name}:`, error);
-    }
-  }
-  
-  // Update state summaries
-  await updateStateFundingSummaries(supabase);
-  
-  // Mark complete
-  await supabase
-    .from("sync_progress")
-    .update({
-      status: "complete",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", "fec-funding");
-  
-  console.log(`FEC sync complete: ${successful}/${processed} members synced`);
-}
-
 // Helper function to check if syncs are paused
 async function isSyncPaused(supabase: any): Promise<boolean> {
   try {
@@ -527,6 +560,159 @@ async function isSyncPaused(supabase: any): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Background sync function with comprehensive logging
+async function syncFecBackground(
+  supabase: any, 
+  apiKey: string, 
+  mode: string,
+  maxMembers: number
+) {
+  const stats: ProcessingStats = {
+    membersProcessed: 0,
+    membersWithData: 0,
+    totalMetricsUpserted: 0,
+    apiCallsMade: 0,
+    errors: [],
+  };
+  
+  console.log(`========================================`);
+  console.log(`Starting FEC funding sync`);
+  console.log(`Mode: ${mode}, Max members: ${maxMembers}`);
+  console.log(`Cycles to process: ${CYCLES.join(', ')}`);
+  console.log(`========================================`);
+  
+  // Update sync progress to running
+  await supabase
+    .from("sync_progress")
+    .upsert({
+      id: "fec-funding",
+      status: "running",
+      last_run_at: new Date().toISOString(),
+      current_offset: 0,
+      total_processed: 0,
+      error_message: null,
+    }, { onConflict: "id" });
+  
+  // Get members to sync
+  let query = supabase
+    .from("members")
+    .select("*")
+    .eq("in_office", true);
+  
+  if (mode === "incremental") {
+    // Only sync members not synced in last 3 days OR with no committee IDs
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    query = query.or(
+      `fec_last_synced_at.is.null,fec_last_synced_at.lt.${threeDaysAgo.toISOString()},fec_committee_ids.is.null`
+    );
+  }
+  
+  // Prioritize members without FEC data first
+  const { data: members, error } = await query
+    .order("fec_last_synced_at", { ascending: true, nullsFirst: true })
+    .limit(maxMembers);
+  
+  if (error) {
+    console.error("Error fetching members:", error);
+    await supabase.from("sync_progress").update({ 
+      status: "error",
+      error_message: `Failed to fetch members: ${error.message}`
+    }).eq("id", "fec-funding");
+    return;
+  }
+  
+  // CRITICAL GUARD: Abort if no members to process
+  if (!members || members.length === 0) {
+    console.log("No members to sync - all members already synced recently");
+    await supabase.from("sync_progress").update({ 
+      status: "complete",
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", "fec-funding");
+    return;
+  }
+  
+  console.log(`Found ${members.length} members to sync`);
+  console.log(`Members: ${members.slice(0, 5).map((m: any) => m.full_name).join(', ')}${members.length > 5 ? '...' : ''}`);
+  
+  // Process each member
+  for (const member of members) {
+    try {
+      stats.membersProcessed++;
+      
+      const result = await processMember(supabase, member, apiKey, stats);
+      
+      // Update progress after each member
+      await supabase
+        .from("sync_progress")
+        .update({
+          current_offset: stats.membersProcessed,
+          total_processed: stats.membersWithData,
+          updated_at: new Date().toISOString(),
+          metadata: {
+            api_calls: stats.apiCallsMade,
+            metrics_upserted: stats.totalMetricsUpserted,
+            errors_count: stats.errors.length,
+          }
+        })
+        .eq("id", "fec-funding");
+      
+      const status = result.success ? `✓ ${result.cyclesProcessed} cycles` : `✗ ${result.reason || 'failed'}`;
+      console.log(`[${stats.membersProcessed}/${members.length}] ${member.full_name}: ${status}`);
+      
+      // Rate limiting between members
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error) {
+      console.error(`Error processing ${member.full_name}:`, error);
+      stats.errors.push(`Exception for ${member.full_name}: ${error}`);
+    }
+  }
+  
+  // Update state summaries only if we have data
+  if (stats.membersWithData > 0) {
+    await updateStateFundingSummaries(supabase);
+  }
+  
+  // Get total funding metrics count for final stats
+  const { count: totalMetrics } = await supabase
+    .from("funding_metrics")
+    .select("*", { count: "exact", head: true });
+  
+  // Mark complete with summary
+  await supabase
+    .from("sync_progress")
+    .update({
+      status: stats.errors.length > 0 && stats.membersWithData === 0 ? "error" : "complete",
+      total_processed: totalMetrics || stats.totalMetricsUpserted,
+      error_message: stats.errors.length > 0 ? stats.errors.slice(0, 5).join("; ") : null,
+      updated_at: new Date().toISOString(),
+      last_synced_at: new Date().toISOString(),
+      last_success_count: stats.membersWithData,
+      last_failure_count: stats.membersProcessed - stats.membersWithData,
+      metadata: {
+        api_calls: stats.apiCallsMade,
+        metrics_upserted: stats.totalMetricsUpserted,
+        members_processed: stats.membersProcessed,
+        members_with_data: stats.membersWithData,
+        errors: stats.errors.slice(0, 10),
+      }
+    })
+    .eq("id", "fec-funding");
+  
+  console.log(`========================================`);
+  console.log(`FEC sync complete`);
+  console.log(`Members processed: ${stats.membersProcessed}`);
+  console.log(`Members with data: ${stats.membersWithData}`);
+  console.log(`Metrics upserted: ${stats.totalMetricsUpserted}`);
+  console.log(`API calls: ${stats.apiCallsMade}`);
+  console.log(`Errors: ${stats.errors.length}`);
+  if (stats.errors.length > 0) {
+    console.log(`Sample errors: ${stats.errors.slice(0, 3).join('; ')}`);
+  }
+  console.log(`========================================`);
 }
 
 Deno.serve(async (req) => {
@@ -554,9 +740,35 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Check if already running (prevent overlapping syncs)
+    const { data: progress } = await supabase
+      .from("sync_progress")
+      .select("status, lock_until")
+      .eq("id", "fec-funding")
+      .single();
+    
+    if (progress?.status === "running" && progress?.lock_until && new Date(progress.lock_until) > new Date()) {
+      console.log('FEC funding sync already running');
+      return new Response(
+        JSON.stringify({ success: false, message: 'Sync already in progress' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const url = new URL(req.url);
     const mode = url.searchParams.get("mode") || "incremental";
     const maxMembers = parseInt(url.searchParams.get("limit") || "20");
+
+    // Set a lock to prevent overlapping runs
+    const lockUntil = new Date();
+    lockUntil.setMinutes(lockUntil.getMinutes() + 30);
+    
+    await supabase
+      .from("sync_progress")
+      .upsert({
+        id: "fec-funding",
+        lock_until: lockUntil.toISOString(),
+      }, { onConflict: "id" });
 
     // Run in background using waitUntil
     (globalThis as any).EdgeRuntime?.waitUntil?.(
