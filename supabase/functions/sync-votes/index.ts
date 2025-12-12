@@ -1,8 +1,18 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { fetchWithRetry, HttpClientConfig } from '../_shared/httpClient.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const PROVIDER = 'congress'
+const DATASET_HOUSE = 'votes_house'
+const DATASET_SENATE = 'votes_senate'
+const HTTP_CONFIG: HttpClientConfig = {
+  maxRetries: 5,
+  baseDelayMs: 1000,
+  maxConcurrency: 2,
 }
 
 // State abbreviation to full name mapping
@@ -85,10 +95,43 @@ async function isSyncPaused(supabase: any): Promise<boolean> {
   }
 }
 
+// Get watermark for a dataset
+async function getWatermark(supabase: any, dataset: string): Promise<{ lastSuccessAt: string | null, lastCursor: any }> {
+  const { data } = await supabase
+    .from('sync_state')
+    .select('last_success_at, last_cursor')
+    .eq('provider', PROVIDER)
+    .eq('dataset', dataset)
+    .eq('scope_key', 'global')
+    .single()
+  
+  return {
+    lastSuccessAt: data?.last_success_at || null,
+    lastCursor: data?.last_cursor || null
+  }
+}
+
+// Update watermark
+async function updateWatermark(supabase: any, dataset: string, cursor: any, recordsTotal: number, success: boolean) {
+  await supabase
+    .from('sync_state')
+    .upsert({
+      provider: PROVIDER,
+      dataset,
+      scope_key: 'global',
+      last_cursor: cursor,
+      last_success_at: success ? new Date().toISOString() : undefined,
+      records_total: recordsTotal,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'provider,dataset,scope_key' })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
+
+  const startTime = Date.now()
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -105,7 +148,7 @@ Deno.serve(async (req) => {
     }
 
     const url = new URL(req.url)
-    const mode = url.searchParams.get('mode') || 'delta'
+    const mode = url.searchParams.get('mode') || 'delta' // 'delta' or 'full'
     const chamber = url.searchParams.get('chamber') || 'both'
 
     console.log(`Starting votes sync (mode: ${mode}, chamber: ${chamber})...`)
@@ -116,40 +159,66 @@ Deno.serve(async (req) => {
 
     let totalVotesProcessed = 0
     let totalMemberVotesCreated = 0
+    let totalApiCalls = 0
+    let totalWaitMs = 0
 
     if (chamber === 'house' || chamber === 'both') {
       const houseResult = await syncHouseVotes(supabase, memberMap, mode)
       totalVotesProcessed += houseResult.votesProcessed
       totalMemberVotesCreated += houseResult.memberVotesCreated
+      totalApiCalls += houseResult.apiCalls
+      totalWaitMs += houseResult.waitMs
     }
 
     if (chamber === 'senate' || chamber === 'both') {
       const senateResult = await syncSenateVotes(supabase, mode)
       totalVotesProcessed += senateResult.votesProcessed
       totalMemberVotesCreated += senateResult.memberVotesCreated
+      totalApiCalls += senateResult.apiCalls
+      totalWaitMs += senateResult.waitMs
     }
 
     // Get total votes for accurate cumulative progress
     const { count: totalVotesInDb } = await supabase
       .from('votes')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
 
     await supabase.from('sync_progress').upsert({
       id: 'votes',
       last_run_at: new Date().toISOString(),
+      last_synced_at: new Date().toISOString(),
       status: 'complete',
       total_processed: totalVotesInDb || totalVotesProcessed,
+      last_success_count: totalVotesProcessed,
       current_offset: 0,
       metadata: {
         last_batch_votes: totalVotesProcessed,
         last_batch_member_votes: totalMemberVotesCreated,
+        api_calls: totalApiCalls,
+        wait_time_ms: totalWaitMs,
       }
     }, { onConflict: 'id' })
+
+    // Log job run
+    await supabase.from('sync_job_runs').insert({
+      job_id: `votes-${Date.now()}`,
+      provider: PROVIDER,
+      job_type: 'votes',
+      status: 'succeeded',
+      started_at: new Date(startTime).toISOString(),
+      finished_at: new Date().toISOString(),
+      records_fetched: totalVotesProcessed,
+      records_upserted: totalVotesProcessed,
+      api_calls: totalApiCalls,
+      wait_time_ms: totalWaitMs,
+      metadata: { member_votes: totalMemberVotesCreated, mode, chamber }
+    })
 
     const result = {
       success: true, mode, chamber,
       votesProcessed: totalVotesProcessed,
       memberVotesCreated: totalMemberVotesCreated,
+      apiCalls: totalApiCalls,
       message: `Synced ${totalVotesProcessed} votes with ${totalMemberVotesCreated} member vote records`
     }
     console.log('Votes sync completed:', result)
@@ -157,21 +226,59 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (error) {
     console.error('Votes sync error:', error)
+    
+    // Log failed job run
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    
+    await supabase.from('sync_job_runs').insert({
+      job_id: `votes-${Date.now()}`,
+      provider: PROVIDER,
+      job_type: 'votes',
+      status: 'failed',
+      started_at: new Date(startTime).toISOString(),
+      finished_at: new Date().toISOString(),
+      error: String(error),
+    })
+    
     return new Response(JSON.stringify({ success: false, error: String(error) }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
 
 async function syncHouseVotes(supabase: any, memberMap: Map<string, { id: string; chamber: string }>, mode: string) {
   const year = 2025
-  let totalVotesProcessed = 0, totalMemberVotesCreated = 0
-  const maxRolls = mode === 'full' ? 500 : 50
+  let totalVotesProcessed = 0
+  let totalMemberVotesCreated = 0
+  let apiCalls = 0
+  let waitMs = 0
 
-  for (let rollNumber = 1; rollNumber <= maxRolls; rollNumber++) {
+  // Get watermark for incremental sync
+  const { lastCursor } = await getWatermark(supabase, DATASET_HOUSE)
+  const startRoll = mode === 'delta' && lastCursor?.lastRoll ? lastCursor.lastRoll + 1 : 1
+  const maxRolls = mode === 'full' ? 500 : 100
+  
+  console.log(`House votes: starting from roll ${startRoll}`)
+
+  let lastSuccessfulRoll = startRoll - 1
+
+  for (let rollNumber = startRoll; rollNumber <= startRoll + maxRolls; rollNumber++) {
     try {
       const paddedRoll = rollNumber.toString().padStart(3, '0')
       const xmlUrl = `https://clerk.house.gov/evs/${year}/roll${paddedRoll}.xml`
-      const response = await fetch(xmlUrl)
-      if (!response.ok) { if (response.status === 404) break; continue }
+      
+      const { response, metrics } = await fetchWithRetry(xmlUrl, {}, 'house_clerk', HTTP_CONFIG)
+      apiCalls++
+      waitMs += metrics.totalWaitMs
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`House roll ${rollNumber} not found, stopping`)
+          break
+        }
+        continue
+      }
+      
       const xmlText = await response.text()
 
       const congress = parseInt(extractXmlValue(xmlText, 'congress') || '119')
@@ -199,6 +306,7 @@ async function syncHouseVotes(supabase: any, memberMap: Map<string, { id: string
         voteId = existing.id
       }
       totalVotesProcessed++
+      lastSuccessfulRoll = rollNumber
 
       const recordedVotePattern = /<recorded-vote>\s*<legislator\s+name-id="([A-Z]\d{6})"[^>]*>[^<]*<\/legislator>\s*<vote>([^<]*)<\/vote>\s*<\/recorded-vote>/gi
       const memberVoteRecords: any[] = []
@@ -217,28 +325,55 @@ async function syncHouseVotes(supabase: any, memberMap: Map<string, { id: string
         if (!error) totalMemberVotesCreated += memberVoteRecords.length
       }
       console.log(`House roll ${rollNumber}: ${memberVoteRecords.length} member votes`)
-      await new Promise(r => setTimeout(r, 100))
-    } catch (e) { console.log(`Error processing house roll ${rollNumber}: ${e}`) }
+    } catch (e) {
+      console.log(`Error processing house roll ${rollNumber}: ${e}`)
+    }
   }
-  return { votesProcessed: totalVotesProcessed, memberVotesCreated: totalMemberVotesCreated }
+
+  // Update watermark
+  await updateWatermark(supabase, DATASET_HOUSE, { lastRoll: lastSuccessfulRoll, year }, totalVotesProcessed, true)
+
+  return { votesProcessed: totalVotesProcessed, memberVotesCreated: totalMemberVotesCreated, apiCalls, waitMs }
 }
 
 async function syncSenateVotes(supabase: any, mode: string) {
   const congress = 119, session = 1
-  let totalVotesProcessed = 0, totalMemberVotesCreated = 0
+  let totalVotesProcessed = 0
+  let totalMemberVotesCreated = 0
+  let apiCalls = 0
+  let waitMs = 0
 
   const { data: senators } = await supabase.from('members').select('id, last_name, state').eq('chamber', 'senate').eq('in_office', true)
   const senatorByNameState = new Map<string, string>()
   for (const s of senators || []) senatorByNameState.set(`${s.last_name.toLowerCase()}|${s.state.toLowerCase()}`, s.id)
   console.log(`Built senator lookup with ${senatorByNameState.size} senators`)
 
-  const maxRolls = mode === 'full' ? 500 : 50
-  for (let rollNumber = 1; rollNumber <= maxRolls; rollNumber++) {
+  // Get watermark for incremental sync
+  const { lastCursor } = await getWatermark(supabase, DATASET_SENATE)
+  const startRoll = mode === 'delta' && lastCursor?.lastRoll ? lastCursor.lastRoll + 1 : 1
+  const maxRolls = mode === 'full' ? 500 : 100
+  
+  console.log(`Senate votes: starting from roll ${startRoll}`)
+
+  let lastSuccessfulRoll = startRoll - 1
+
+  for (let rollNumber = startRoll; rollNumber <= startRoll + maxRolls; rollNumber++) {
     try {
       const paddedRoll = rollNumber.toString().padStart(5, '0')
       const xmlUrl = `https://www.senate.gov/legislative/LIS/roll_call_votes/vote${congress}${session}/vote_${congress}_${session}_${paddedRoll}.xml`
-      const response = await fetch(xmlUrl)
-      if (!response.ok) { if (response.status === 404) break; continue }
+      
+      const { response, metrics } = await fetchWithRetry(xmlUrl, {}, 'senate_gov', HTTP_CONFIG)
+      apiCalls++
+      waitMs += metrics.totalWaitMs
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`Senate roll ${rollNumber} not found, stopping`)
+          break
+        }
+        continue
+      }
+      
       const xmlText = await response.text()
 
       const voteDate = parseSenateDate(extractXmlValue(xmlText, 'vote_date') || '')
@@ -264,6 +399,7 @@ async function syncSenateVotes(supabase: any, mode: string) {
         voteId = existing.id
       }
       totalVotesProcessed++
+      lastSuccessfulRoll = rollNumber
 
       // Parse member votes - match by last_name + state
       const memberPattern = /<member>\s*<member_full>[^<]*<\/member_full>\s*<last_name>([^<]+)<\/last_name>\s*<first_name>[^<]*<\/first_name>\s*<party>[^<]*<\/party>\s*<state>([^<]+)<\/state>\s*<vote_cast>([^<]*)<\/vote_cast>/gi
@@ -287,8 +423,13 @@ async function syncSenateVotes(supabase: any, mode: string) {
         if (!error) totalMemberVotesCreated += memberVoteRecords.length
       }
       console.log(`Senate roll ${rollNumber}: ${memberVoteRecords.length} member votes`)
-      await new Promise(r => setTimeout(r, 100))
-    } catch (e) { console.log(`Error processing senate roll ${rollNumber}: ${e}`) }
+    } catch (e) {
+      console.log(`Error processing senate roll ${rollNumber}: ${e}`)
+    }
   }
-  return { votesProcessed: totalVotesProcessed, memberVotesCreated: totalMemberVotesCreated }
+
+  // Update watermark
+  await updateWatermark(supabase, DATASET_SENATE, { lastRoll: lastSuccessfulRoll, congress, session }, totalVotesProcessed, true)
+
+  return { votesProcessed: totalVotesProcessed, memberVotesCreated: totalMemberVotesCreated, apiCalls, waitMs }
 }
