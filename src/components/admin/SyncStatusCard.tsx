@@ -19,6 +19,10 @@ interface SyncProgressData {
   metadata?: Json;
   last_matched_count?: number | null;
   error_message?: string | null;
+  lock_until?: string | null;
+  last_success_count?: number | null;
+  last_failure_count?: number | null;
+  cursor_json?: Json;
 }
 
 interface SyncConfig {
@@ -863,6 +867,21 @@ export function SyncStatusCard() {
                             {progress?.updated_at && progress.status === "running" && (
                               <span className="flex items-center gap-1">
                                 Updated: {formatTimeAgo(progress.updated_at)}
+                              </span>
+                            )}
+                            {progress?.lock_until && new Date(progress.lock_until) > new Date() && (
+                              <Badge variant="outline" className="text-xs text-amber-600">
+                                Locked until {new Date(progress.lock_until).toLocaleTimeString()}
+                              </Badge>
+                            )}
+                            {(progress?.last_success_count != null && progress.last_success_count > 0) && (
+                              <span className="text-emerald-600">
+                                ✓{progress.last_success_count}
+                              </span>
+                            )}
+                            {(progress?.last_failure_count != null && progress.last_failure_count > 0) && (
+                              <span className="text-destructive">
+                                ✗{progress.last_failure_count}
                               </span>
                             )}
                           </div>
