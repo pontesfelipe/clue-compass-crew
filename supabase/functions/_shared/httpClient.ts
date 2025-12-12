@@ -1,4 +1,4 @@
-// Centralized HTTP client with rate limiting, backoff, and retry logic
+// Centralized HTTP client with rate limiting, backoff, retry logic, and timeboxing
 // All sync functions should use this to ensure consistent behavior
 
 export interface HttpClientConfig {
@@ -8,6 +8,7 @@ export interface HttpClientConfig {
   jitterPercent?: number;
   timeoutMs?: number;
   maxConcurrency?: number;
+  minDelayBetweenRequestsMs?: number; // Minimum delay between consecutive requests to same provider
 }
 
 export interface RequestMetrics {
@@ -17,6 +18,39 @@ export interface RequestMetrics {
   endpoint: string;
 }
 
+// Timebox budget tracker for job-level time limits
+export class TimeBudget {
+  private startTime: number;
+  private maxDurationMs: number;
+  private warningThresholdMs: number;
+
+  constructor(maxDurationSeconds: number = 30) {
+    this.startTime = Date.now();
+    this.maxDurationMs = maxDurationSeconds * 1000;
+    this.warningThresholdMs = this.maxDurationMs * 0.85; // Warn at 85%
+  }
+
+  elapsed(): number {
+    return Date.now() - this.startTime;
+  }
+
+  remaining(): number {
+    return Math.max(0, this.maxDurationMs - this.elapsed());
+  }
+
+  isExpired(): boolean {
+    return this.elapsed() >= this.maxDurationMs;
+  }
+
+  isNearExpiry(): boolean {
+    return this.elapsed() >= this.warningThresholdMs;
+  }
+
+  shouldContinue(): boolean {
+    return !this.isExpired() && !this.isNearExpiry();
+  }
+}
+
 const DEFAULT_CONFIG: Required<HttpClientConfig> = {
   maxRetries: 6,
   baseDelayMs: 2000,
@@ -24,10 +58,15 @@ const DEFAULT_CONFIG: Required<HttpClientConfig> = {
   jitterPercent: 0.3,
   timeoutMs: 30000,
   maxConcurrency: 2,
+  minDelayBetweenRequestsMs: 300, // Default 300ms between requests
 };
 
 // Simple in-memory concurrency limiter per provider
 const activeCalls: Map<string, number> = new Map();
+// Track last request time per provider for minimum delay enforcement
+const lastRequestTime: Map<string, number> = new Map();
+// Track 429 rates per provider for observability
+const rateLimitHits: Map<string, { count: number; lastHit: number }> = new Map();
 
 function getActiveCount(provider: string): number {
   return activeCalls.get(provider) || 0;
@@ -44,10 +83,37 @@ function decrementActive(provider: string): void {
   }
 }
 
+function recordRateLimitHit(provider: string): void {
+  const existing = rateLimitHits.get(provider) || { count: 0, lastHit: 0 };
+  rateLimitHits.set(provider, { count: existing.count + 1, lastHit: Date.now() });
+  console.log(`[httpClient] 429 rate limit hit for ${provider}, total hits: ${existing.count + 1}`);
+}
+
+export function getRateLimitStats(): Record<string, { count: number; lastHit: number }> {
+  const stats: Record<string, { count: number; lastHit: number }> = {};
+  for (const [provider, data] of rateLimitHits) {
+    stats[provider] = data;
+  }
+  return stats;
+}
+
 async function waitForSlot(provider: string, maxConcurrency: number): Promise<void> {
   while (getActiveCount(provider) >= maxConcurrency) {
     await sleep(100);
   }
+}
+
+async function enforceMinDelay(provider: string, minDelayMs: number): Promise<number> {
+  const lastTime = lastRequestTime.get(provider) || 0;
+  const elapsed = Date.now() - lastTime;
+  const waitNeeded = Math.max(0, minDelayMs - elapsed);
+  
+  if (waitNeeded > 0) {
+    await sleep(waitNeeded);
+  }
+  
+  lastRequestTime.set(provider, Date.now());
+  return waitNeeded;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -88,14 +154,24 @@ export async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
   provider: string = 'default',
-  config: HttpClientConfig = {}
+  config: HttpClientConfig = {},
+  budget?: TimeBudget
 ): Promise<{ response: Response; metrics: RequestMetrics }> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   let lastError: Error | null = null;
   let totalWaitMs = 0;
   
+  // Check time budget before starting
+  if (budget && budget.isExpired()) {
+    throw new Error(`Time budget expired before request to ${url}`);
+  }
+  
   await waitForSlot(provider, mergedConfig.maxConcurrency);
   incrementActive(provider);
+  
+  // Enforce minimum delay between requests to same provider
+  const delayWait = await enforceMinDelay(provider, mergedConfig.minDelayBetweenRequestsMs);
+  totalWaitMs += delayWait;
   
   try {
     for (let attempt = 0; attempt <= mergedConfig.maxRetries; attempt++) {
@@ -122,8 +198,27 @@ export async function fetchWithRetry(
           };
         }
         
+        // Track 429s for observability
+        if (response.status === 429) {
+          recordRateLimitHit(provider);
+        }
+        
         // Handle retry
         if (attempt < mergedConfig.maxRetries) {
+          // Check time budget before retrying
+          if (budget && budget.isNearExpiry()) {
+            console.log(`[httpClient] Time budget near expiry, returning partial result for ${url}`);
+            return {
+              response,
+              metrics: {
+                attempts: attempt + 1,
+                totalWaitMs,
+                finalStatus: response.status,
+                endpoint: url,
+              },
+            };
+          }
+          
           const retryAfterMs = parseRetryAfter(response.headers);
           const waitMs = retryAfterMs ?? calculateBackoff(attempt, mergedConfig);
           
@@ -168,9 +263,10 @@ export async function fetchJson<T>(
   url: string,
   options: RequestInit = {},
   provider: string = 'default',
-  config: HttpClientConfig = {}
+  config: HttpClientConfig = {},
+  budget?: TimeBudget
 ): Promise<{ data: T; metrics: RequestMetrics }> {
-  const { response, metrics } = await fetchWithRetry(url, options, provider, config);
+  const { response, metrics } = await fetchWithRetry(url, options, provider, config, budget);
   
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
