@@ -649,7 +649,10 @@ export function SyncStatusCard() {
   const getSyncStats = () => {
     const running = syncProgress.filter((s) => s.status === "running").length;
     const complete = syncProgress.filter((s) => s.status === "complete").length;
-    const errors = syncProgress.filter((s) => s.status === "error").length;
+    // Count both current error status AND recent failed job runs for consistency
+    const progressErrors = syncProgress.filter((s) => s.status === "error").length;
+    const jobRunErrors = jobRuns.filter((r) => r.status === "failed").length;
+    const errors = Math.max(progressErrors, jobRunErrors);
     const total = SYNC_CONFIGS.length;
     return { running, complete, errors, total };
   };
