@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer, RotateCcw, Download } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, RefreshCw, Play, CheckCircle2, AlertCircle, Clock, Pause, Users, FileText, Vote, DollarSign, Calculator, MapPin, Zap, Bell, Brain, BarChart3, Briefcase, Timer, RotateCcw, Download, ChevronDown, ChevronRight, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Json } from "@/integrations/supabase/types";
 import { CronExpressionParser } from "cron-parser";
@@ -23,6 +24,21 @@ interface SyncProgressData {
   last_success_count?: number | null;
   last_failure_count?: number | null;
   cursor_json?: Json;
+}
+
+interface JobRunData {
+  id: string;
+  job_id: string;
+  provider: string;
+  job_type: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  records_fetched: number;
+  records_upserted: number;
+  api_calls: number;
+  wait_time_ms: number;
+  error: string | null;
 }
 
 interface SyncConfig {
@@ -253,6 +269,8 @@ export function SyncStatusCard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isPaused, setIsPaused] = useState(false);
   const [isTogglingPause, setIsTogglingPause] = useState(false);
+  const [jobRuns, setJobRuns] = useState<JobRunData[]>([]);
+  const [isJobRunsOpen, setIsJobRunsOpen] = useState(false);
 
   // Fetch pause state
   const fetchPauseState = async () => {
@@ -335,13 +353,30 @@ export function SyncStatusCard() {
     }
   };
 
+  const fetchJobRuns = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("sync_job_runs")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setJobRuns((data || []) as JobRunData[]);
+    } catch (error) {
+      console.error("Error fetching job runs:", error);
+    }
+  };
+
   useEffect(() => {
     fetchSyncProgress();
     fetchPauseState();
+    fetchJobRuns();
     
     const interval = setInterval(() => {
       if (autoRefresh) {
         fetchSyncProgress();
+        fetchJobRuns();
       }
     }, 5000);
 
@@ -769,6 +804,78 @@ export function SyncStatusCard() {
               </Button>
             </div>
           )}
+          
+          {/* Recent Job Runs - Collapsible Observability Section */}
+          <Collapsible open={isJobRunsOpen} onOpenChange={setIsJobRunsOpen} className="mb-6">
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between" size="sm">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  <span>Recent Job Runs ({jobRuns.length})</span>
+                  {jobRuns.some(r => r.status === 'running') && (
+                    <Badge variant="default" className="bg-amber-500 animate-pulse text-xs">Live</Badge>
+                  )}
+                  {jobRuns.filter(r => r.status === 'failed').length > 0 && (
+                    <Badge variant="destructive" className="text-xs">
+                      {jobRuns.filter(r => r.status === 'failed').length} failed
+                    </Badge>
+                  )}
+                </div>
+                {isJobRunsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                {jobRuns.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    No job runs recorded yet
+                  </div>
+                ) : (
+                  jobRuns.map((run) => (
+                    <div key={run.id} className="p-3 text-sm hover:bg-muted/50">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs capitalize">{run.provider}</Badge>
+                          <span className="font-medium">{run.job_type}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {run.status === 'running' && (
+                            <Badge className="bg-amber-500 animate-pulse text-xs">Running</Badge>
+                          )}
+                          {run.status === 'succeeded' && (
+                            <Badge className="bg-emerald-500 text-xs">✓ Success</Badge>
+                          )}
+                          {run.status === 'failed' && (
+                            <Badge variant="destructive" className="text-xs">✗ Failed</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>{formatTimeAgo(run.started_at)}</span>
+                        {run.finished_at && (
+                          <span>
+                            Duration: {Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s
+                          </span>
+                        )}
+                        <span>Fetched: {run.records_fetched}</span>
+                        <span>Upserted: {run.records_upserted}</span>
+                        <span>API calls: {run.api_calls}</span>
+                        {run.wait_time_ms > 0 && (
+                          <span className="text-amber-600">Wait: {run.wait_time_ms}ms</span>
+                        )}
+                      </div>
+                      {run.error && (
+                        <p className="text-xs text-destructive mt-1 truncate" title={run.error}>
+                          Error: {run.error}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Category Filter */}
           <div className="flex gap-2 mb-6">
             {(["all", "congress", "finance", "scores"] as const).map((cat) => (

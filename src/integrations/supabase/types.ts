@@ -1243,41 +1243,113 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_job_runs: {
+        Row: {
+          api_calls: number | null
+          created_at: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          job_id: string
+          job_type: string
+          metadata: Json | null
+          provider: string
+          records_fetched: number | null
+          records_upserted: number | null
+          scope: Json | null
+          started_at: string | null
+          status: string
+          wait_time_ms: number | null
+        }
+        Insert: {
+          api_calls?: number | null
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_id: string
+          job_type: string
+          metadata?: Json | null
+          provider: string
+          records_fetched?: number | null
+          records_upserted?: number | null
+          scope?: Json | null
+          started_at?: string | null
+          status?: string
+          wait_time_ms?: number | null
+        }
+        Update: {
+          api_calls?: number | null
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_id?: string
+          job_type?: string
+          metadata?: Json | null
+          provider?: string
+          records_fetched?: number | null
+          records_upserted?: number | null
+          scope?: Json | null
+          started_at?: string | null
+          status?: string
+          wait_time_ms?: number | null
+        }
+        Relationships: []
+      }
       sync_jobs: {
         Row: {
+          attempt_count: number | null
           created_at: string
+          cursor: Json | null
           frequency_minutes: number | null
           id: string
           is_enabled: boolean | null
           job_type: string
+          last_error: string | null
           last_run_at: string | null
           max_duration_seconds: number | null
           next_run_at: string | null
           priority: number | null
+          provider: string | null
+          scope: Json | null
+          status: string | null
           updated_at: string
         }
         Insert: {
+          attempt_count?: number | null
           created_at?: string
+          cursor?: Json | null
           frequency_minutes?: number | null
           id: string
           is_enabled?: boolean | null
           job_type: string
+          last_error?: string | null
           last_run_at?: string | null
           max_duration_seconds?: number | null
           next_run_at?: string | null
           priority?: number | null
+          provider?: string | null
+          scope?: Json | null
+          status?: string | null
           updated_at?: string
         }
         Update: {
+          attempt_count?: number | null
           created_at?: string
+          cursor?: Json | null
           frequency_minutes?: number | null
           id?: string
           is_enabled?: boolean | null
           job_type?: string
+          last_error?: string | null
           last_run_at?: string | null
           max_duration_seconds?: number | null
           next_run_at?: string | null
           priority?: number | null
+          provider?: string | null
+          scope?: Json | null
+          status?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1335,6 +1407,45 @@ export type Database = {
           metadata?: Json | null
           status?: string | null
           total_processed?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sync_state: {
+        Row: {
+          created_at: string | null
+          dataset: string
+          id: string
+          last_cursor: Json | null
+          last_modified: string | null
+          last_success_at: string | null
+          provider: string
+          records_total: number | null
+          scope_key: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dataset: string
+          id?: string
+          last_cursor?: Json | null
+          last_modified?: string | null
+          last_success_at?: string | null
+          provider: string
+          records_total?: number | null
+          scope_key?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dataset?: string
+          id?: string
+          last_cursor?: Json | null
+          last_modified?: string | null
+          last_success_at?: string | null
+          provider?: string
+          records_total?: number | null
+          scope_key?: string
           updated_at?: string | null
         }
         Relationships: []

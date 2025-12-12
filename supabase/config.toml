@@ -47,6 +47,12 @@ verify_jwt = false
 [functions.sync-orchestrator]
 verify_jwt = false
 
+[functions.scheduled-sync]
+verify_jwt = false
+
+[functions.sync-worker]
+verify_jwt = false
+
 # === UTILITIES ===
 
 [functions.data-status]
