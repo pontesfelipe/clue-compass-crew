@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X } from "lucide-react";
+import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X, Newspaper, Calendar, ExternalLink, ChevronDown } from "lucide-react";
 import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
@@ -2198,6 +2198,237 @@ export function DocumentationContent() {
                           <p className="text-xs text-muted-foreground">{item.fields}</p>
                         </div>
                       ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Congress News Page Documentation */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Newspaper className="h-5 w-5" />
+                      Congress News Page (/news)
+                    </CardTitle>
+                    <CardDescription>
+                      Comprehensive documentation of the Congress News page - floor schedules, elections, and legislative activity
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Overview */}
+                    <div>
+                      <h4 className="font-semibold mb-2">Overview</h4>
+                      <p className="text-sm text-muted-foreground">
+                        The Congress News page provides users with up-to-date information about congressional floor activity, 
+                        upcoming elections across all 50 states, and recent legislative actions. It serves as a central hub 
+                        for staying informed about what's happening in Congress.
+                      </p>
+                    </div>
+
+                    {/* Page Sections */}
+                    <div>
+                      <h4 className="font-semibold mb-3">Page Sections</h4>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {/* Floor Schedule */}
+                        <div className="p-4 rounded-lg border bg-muted/30">
+                          <h5 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                            <Clock className="h-4 w-4 text-primary" />
+                            Upcoming Floor Schedule
+                          </h5>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p><strong>Purpose:</strong> Shows what bills and actions are scheduled for debate and votes in both chambers.</p>
+                            <p><strong>Data Source:</strong> <code className="bg-muted px-1 rounded">get-floor-schedule</code> edge function</p>
+                            <p><strong>Update Frequency:</strong> Daily at 04:00 UTC via cron job</p>
+                            <p><strong>API Source:</strong> Congress.gov floor updates XML feeds for House and Senate</p>
+                            <div className="mt-2">
+                              <p className="font-medium text-foreground">Displayed Fields:</p>
+                              <ul className="list-disc list-inside ml-2 mt-1">
+                                <li>Chamber (House/Senate badge)</li>
+                                <li>Bill number (if applicable)</li>
+                                <li>State tag (for state-specific items)</li>
+                                <li>Description of scheduled action</li>
+                                <li>Scheduled date</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Upcoming Elections */}
+                        <div className="p-4 rounded-lg border bg-muted/30">
+                          <h5 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4 text-primary" />
+                            Upcoming Elections
+                          </h5>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p><strong>Purpose:</strong> Displays major upcoming federal elections with countdown timers.</p>
+                            <p><strong>Data Source:</strong> Static constants in <code className="bg-muted px-1 rounded">CongressNewsPage.tsx</code></p>
+                            <div className="mt-2">
+                              <p className="font-medium text-foreground">Currently Tracked Elections:</p>
+                              <ul className="list-disc list-inside ml-2 mt-1">
+                                <li><strong>2026 Midterms</strong> (Nov 3, 2026): All 435 House seats + 33 Senate seats</li>
+                                <li><strong>2028 Presidential</strong> (Nov 7, 2028): President + all 435 House + 33 Senate</li>
+                              </ul>
+                            </div>
+                            <div className="mt-2">
+                              <p className="font-medium text-foreground">Election Types:</p>
+                              <ul className="list-disc list-inside ml-2 mt-1">
+                                <li><Badge className="bg-primary/20 text-primary text-xs">General</Badge> - Main election day</li>
+                                <li><Badge className="bg-secondary text-secondary-foreground text-xs">Primary</Badge> - Party primaries</li>
+                                <li><Badge className="bg-accent text-accent-foreground text-xs">Special</Badge> - Vacancy elections</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2026 State Primaries */}
+                        <div className="p-4 rounded-lg border bg-muted/30 md:col-span-2">
+                          <h5 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                            <Vote className="h-4 w-4 text-primary" />
+                            2026 State Primary Elections
+                          </h5>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p><strong>Purpose:</strong> Comprehensive listing of all 50 state primary dates with registration information.</p>
+                            <p><strong>Data Source:</strong> Static <code className="bg-muted px-1 rounded">STATE_ELECTION_INFO_2026</code> array</p>
+                            
+                            <div className="mt-3 grid gap-4 md:grid-cols-2">
+                              <div>
+                                <p className="font-medium text-foreground mb-2">Primary Types Explained:</p>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs">Open</Badge>
+                                    <span>Any registered voter can vote in any party's primary</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 text-xs">Closed</Badge>
+                                    <span>Only registered party members can vote in that party's primary</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-xs">Semi-Closed</Badge>
+                                    <span>Registered party members + unaffiliated voters can participate</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-xs">Top-Two</Badge>
+                                    <span>All candidates on one ballot; top two advance regardless of party</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 text-xs">Jungle</Badge>
+                                    <span>Similar to Top-Two; all candidates compete, top advance to runoff</span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <p className="font-medium text-foreground mb-2">Displayed Fields Per State:</p>
+                                <ul className="list-disc list-inside ml-2">
+                                  <li><strong>State name</strong> with abbreviation badge</li>
+                                  <li><strong>Primary date</strong> (formatted as "Month Day, Year")</li>
+                                  <li><strong>Primary type</strong> (with color-coded badge)</li>
+                                  <li><strong>Registration deadline</strong> (days before election)</li>
+                                  <li><strong>Registration notes</strong> (e.g., "Same Day Registration", "SDR available")</li>
+                                </ul>
+                              </div>
+                            </div>
+
+                            <div className="mt-3">
+                              <p className="font-medium text-foreground mb-1">Registration Deadline Formats:</p>
+                              <ul className="list-disc list-inside ml-2">
+                                <li><strong>X days before</strong> - Must register X days before election</li>
+                                <li><strong>Same Day Registration</strong> - Can register on election day</li>
+                                <li><strong>SDR available</strong> - Same Day Registration is an option</li>
+                                <li><strong>None required</strong> - No voter registration required (e.g., North Dakota)</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Recent Legislative Activity */}
+                        <div className="p-4 rounded-lg border bg-muted/30">
+                          <h5 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                            <FileText className="h-4 w-4 text-primary" />
+                            Recent Legislative Activity
+                          </h5>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p><strong>Purpose:</strong> Shows the most recent bill actions and updates from Congress.</p>
+                            <p><strong>Data Source:</strong> <code className="bg-muted px-1 rounded">bills</code> table</p>
+                            <p><strong>Query:</strong> Top 10 bills ordered by <code>latest_action_date DESC</code></p>
+                            <div className="mt-2">
+                              <p className="font-medium text-foreground">Displayed Fields:</p>
+                              <ul className="list-disc list-inside ml-2 mt-1">
+                                <li>Bill number (e.g., "HR 1234", "S 567")</li>
+                                <li>Policy area badge</li>
+                                <li>Enacted badge (if passed into law)</li>
+                                <li>Bill title (short_title or title)</li>
+                                <li>Latest action text</li>
+                                <li>Time since action (relative)</li>
+                                <li>Link to full bill page</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Votes Link */}
+                        <div className="p-4 rounded-lg border bg-muted/30">
+                          <h5 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                            <ExternalLink className="h-4 w-4 text-primary" />
+                            Congressional Votes Link
+                          </h5>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p><strong>Purpose:</strong> Quick-access card linking to the full votes page.</p>
+                            <p><strong>Navigation:</strong> Links to <code className="bg-muted px-1 rounded">/votes</code></p>
+                            <p><strong>Description:</strong> "Browse all roll call votes with detailed breakdowns"</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Technical Details */}
+                    <div>
+                      <h4 className="font-semibold mb-3">Technical Implementation</h4>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="p-3 rounded-lg border">
+                          <h5 className="font-semibold text-sm">Edge Function</h5>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <code>get-floor-schedule</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">Fetches House/Senate floor XML</p>
+                        </div>
+                        <div className="p-3 rounded-lg border">
+                          <h5 className="font-semibold text-sm">Cron Schedule</h5>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <code>0 4 * * *</code>
+                          </p>
+                          <p className="text-xs text-muted-foreground">Daily at 04:00 UTC</p>
+                        </div>
+                        <div className="p-3 rounded-lg border">
+                          <h5 className="font-semibold text-sm">Cache Duration</h5>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            30 minutes (staleTime)
+                          </p>
+                          <p className="text-xs text-muted-foreground">Client-side React Query cache</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Features */}
+                    <div>
+                      <h4 className="font-semibold mb-2">Interactive Features</h4>
+                      <div className="grid gap-2 md:grid-cols-2 text-xs">
+                        <div className="flex items-center gap-2 p-2 rounded border">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                          <span>State search for primaries (by name or abbreviation)</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 rounded border">
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          <span>Expandable list (show first 10 or all 50 states)</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 rounded border">
+                          <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                          <span>Bill links to dedicated bill detail pages</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 rounded border">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span>Relative time display (e.g., "2 days ago")</span>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
