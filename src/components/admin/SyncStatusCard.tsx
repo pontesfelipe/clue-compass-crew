@@ -462,6 +462,7 @@ export function SyncStatusCard() {
     setIsExporting(true);
     const timestamp = new Date().toISOString().split("T")[0];
     const exportResults: { table: string; count: number; success: boolean }[] = [];
+    const allTablesData: Record<string, any[]> = {};
 
     try {
       for (const table of EXPORT_TABLES) {
@@ -495,43 +496,40 @@ export function SyncStatusCard() {
             }
           }
 
-          if (allData.length > 0) {
-            downloadAsJson(allData, `civicscore-${table.name}-${timestamp}.json`);
-            exportResults.push({ table: table.name, count: allData.length, success: true });
-          } else {
-            exportResults.push({ table: table.name, count: 0, success: true });
-          }
-
-          // Small delay between downloads to prevent browser issues
-          await new Promise(resolve => setTimeout(resolve, 200));
+          allTablesData[table.name] = allData;
+          exportResults.push({ table: table.name, count: allData.length, success: true });
         } catch (tableError) {
           console.error(`Failed to export ${table.name}:`, tableError);
+          allTablesData[table.name] = [];
           exportResults.push({ table: table.name, count: 0, success: false });
         }
       }
 
-      // Generate a summary file
-      const summary = {
-        exportedAt: new Date().toISOString(),
-        version: "1.0.0",
-        tables: exportResults,
-        totalRecords: exportResults.reduce((sum, r) => sum + r.count, 0),
-        successfulTables: exportResults.filter(r => r.success).length,
-        failedTables: exportResults.filter(r => !r.success).length,
+      // Create single consolidated export file
+      const consolidatedExport = {
+        metadata: {
+          exportedAt: new Date().toISOString(),
+          version: "1.0.0",
+          tables: exportResults,
+          totalRecords: exportResults.reduce((sum, r) => sum + r.count, 0),
+          successfulTables: exportResults.filter(r => r.success).length,
+          failedTables: exportResults.filter(r => !r.success).length,
+        },
+        data: allTablesData,
       };
       
-      downloadAsJson(summary, `civicscore-export-summary-${timestamp}.json`);
+      downloadAsJson(consolidatedExport, `civicscore-full-export-${timestamp}.json`);
 
       // Log the export action
       await supabase.from("ai_usage_log").insert({
         operation_type: "database_export",
         success: true,
-        metadata: summary,
+        metadata: consolidatedExport.metadata,
       });
 
       toast({
         title: "Export Complete",
-        description: `Exported ${summary.totalRecords.toLocaleString()} records from ${summary.successfulTables} tables.`,
+        description: `Exported ${consolidatedExport.metadata.totalRecords.toLocaleString()} records from ${consolidatedExport.metadata.successfulTables} tables to a single file.`,
       });
     } catch (error) {
       console.error("Export failed:", error);
