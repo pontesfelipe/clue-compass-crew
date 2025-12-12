@@ -1,21 +1,85 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X } from "lucide-react";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "1.0.0";
+const DOCUMENTATION_VERSION = "1.0.1";
 const LAST_UPDATED = "2024-12-12";
 
-interface DocumentSection {
+// Searchable index for documentation
+interface SearchableItem {
   id: string;
+  category: "table" | "function" | "endpoint" | "screen" | "integration";
   title: string;
-  content: string;
+  description: string;
+  keywords: string[];
+  tab: string;
 }
+
+const SEARCHABLE_ITEMS: SearchableItem[] = [
+  // Tables
+  { id: "members", category: "table", title: "members", description: "Stores all 539 Congress members with biographical data", keywords: ["bioguide_id", "party", "chamber", "state", "district", "congress", "politician"], tab: "data-model" },
+  { id: "bills", category: "table", title: "bills", description: "Legislative bills from House and Senate", keywords: ["bill_type", "congress", "policy_area", "subjects", "enacted", "legislation"], tab: "data-model" },
+  { id: "votes", category: "table", title: "votes", description: "Roll call votes from both chambers", keywords: ["roll_number", "vote_date", "result", "yea", "nay", "chamber"], tab: "data-model" },
+  { id: "member_votes", category: "table", title: "member_votes", description: "Individual member vote records", keywords: ["position", "yea", "nay", "present", "not_voting"], tab: "data-model" },
+  { id: "bill_sponsorships", category: "table", title: "bill_sponsorships", description: "Bill sponsorship and co-sponsorship records", keywords: ["sponsor", "cosponsor", "legislation"], tab: "data-model" },
+  { id: "member_scores", category: "table", title: "member_scores", description: "Calculated performance scores", keywords: ["productivity", "attendance", "bipartisanship", "alignment", "overall_score"], tab: "data-model" },
+  { id: "state_scores", category: "table", title: "state_scores", description: "Pre-computed state-level aggregates", keywords: ["avg_member_score", "party_breakdown", "state"], tab: "data-model" },
+  { id: "member_contributions", category: "table", title: "member_contributions", description: "FEC campaign contribution records", keywords: ["contributor", "donation", "campaign", "finance", "fec", "pac"], tab: "data-model" },
+  { id: "funding_metrics", category: "table", title: "funding_metrics", description: "Aggregated funding analysis", keywords: ["grassroots", "pac_dependence", "local_money", "small_donors"], tab: "data-model" },
+  { id: "member_sponsors", category: "table", title: "member_sponsors", description: "PAC and organizational sponsors", keywords: ["pac", "organization", "support", "finance"], tab: "data-model" },
+  { id: "profiles", category: "table", title: "profiles", description: "User profile information", keywords: ["user", "email", "home_state", "zip_code", "profile"], tab: "data-model" },
+  { id: "issues", category: "table", title: "issues", description: "Policy issues for alignment scoring", keywords: ["policy", "issue", "alignment", "slug"], tab: "data-model" },
+  { id: "issue_questions", category: "table", title: "issue_questions", description: "Questions for each issue", keywords: ["question", "weight", "dimension", "alignment"], tab: "data-model" },
+  { id: "user_answers", category: "table", title: "user_answers", description: "User responses to questions", keywords: ["answer", "response", "alignment", "profile"], tab: "data-model" },
+  { id: "user_issue_priorities", category: "table", title: "user_issue_priorities", description: "User priority issues", keywords: ["priority", "importance", "issue", "user"], tab: "data-model" },
+  { id: "politician_issue_positions", category: "table", title: "politician_issue_positions", description: "AI-computed politician positions", keywords: ["position", "score", "ai", "alignment"], tab: "data-model" },
+  { id: "user_politician_alignment", category: "table", title: "user_politician_alignment", description: "Computed alignment scores", keywords: ["alignment", "match", "score", "breakdown"], tab: "data-model" },
+  { id: "member_committees", category: "table", title: "member_committees", description: "Committee memberships", keywords: ["committee", "chair", "ranking", "membership"], tab: "data-model" },
+  { id: "member_summaries", category: "table", title: "member_summaries", description: "AI-generated member summaries", keywords: ["ai", "summary", "generated", "activity"], tab: "data-model" },
+  
+  // Edge Functions
+  { id: "sync-congress-members", category: "function", title: "sync-congress-members", description: "Sync all Congress members from Congress.gov", keywords: ["sync", "member", "congress", "cron", "daily"], tab: "edge-functions" },
+  { id: "sync-bills", category: "function", title: "sync-bills", description: "Sync HR and S bills with sponsorships", keywords: ["sync", "bill", "sponsorship", "cron", "legislation"], tab: "edge-functions" },
+  { id: "sync-votes", category: "function", title: "sync-votes", description: "Sync votes and member positions", keywords: ["sync", "vote", "position", "cron", "roll_call"], tab: "edge-functions" },
+  { id: "sync-member-details", category: "function", title: "sync-member-details", description: "Fetch additional member details", keywords: ["sync", "committee", "statement", "detail"], tab: "edge-functions" },
+  { id: "sync-fec-finance", category: "function", title: "sync-fec-finance", description: "Sync FEC contribution data", keywords: ["sync", "fec", "contribution", "finance", "donation"], tab: "edge-functions" },
+  { id: "sync-fec-funding", category: "function", title: "sync-fec-funding", description: "Compute funding metrics", keywords: ["sync", "fec", "funding", "metrics", "grassroots"], tab: "edge-functions" },
+  { id: "calculate-member-scores", category: "function", title: "calculate-member-scores", description: "Calculate member performance scores", keywords: ["score", "calculate", "productivity", "attendance"], tab: "edge-functions" },
+  { id: "recalculate-state-scores", category: "function", title: "recalculate-state-scores", description: "Pre-compute state aggregates", keywords: ["state", "aggregate", "score", "calculate"], tab: "edge-functions" },
+  { id: "classify-issue-signals", category: "function", title: "classify-issue-signals", description: "AI-classify bills into issues", keywords: ["ai", "classify", "issue", "signal", "bill"], tab: "edge-functions" },
+  { id: "compute-politician-positions", category: "function", title: "compute-politician-positions", description: "Aggregate signals to positions", keywords: ["position", "compute", "aggregate", "signal"], tab: "edge-functions" },
+  { id: "generate-member-summary", category: "function", title: "generate-member-summary", description: "AI member activity summary", keywords: ["ai", "summary", "generate", "member"], tab: "edge-functions" },
+  { id: "generate-bill-impact", category: "function", title: "generate-bill-impact", description: "AI bill impact analysis", keywords: ["ai", "impact", "bill", "analysis"], tab: "edge-functions" },
+  
+  // Integrations
+  { id: "congress-gov", category: "integration", title: "Congress.gov API", description: "Primary source for member data, bills, and votes", keywords: ["api", "congress", "member", "bill", "vote", "bioguide"], tab: "integrations" },
+  { id: "fec-api", category: "integration", title: "FEC API", description: "Campaign finance data source", keywords: ["api", "fec", "finance", "contribution", "pac", "donation"], tab: "integrations" },
+  { id: "house-clerk", category: "integration", title: "House Clerk XML", description: "Detailed House vote records with member positions", keywords: ["house", "xml", "vote", "clerk", "position"], tab: "integrations" },
+  { id: "senate-gov", category: "integration", title: "Senate.gov XML", description: "Senate vote records", keywords: ["senate", "xml", "vote", "position"], tab: "integrations" },
+  { id: "lovable-ai", category: "integration", title: "Lovable AI (Gemini)", description: "AI-powered analysis for summaries and classifications", keywords: ["ai", "gemini", "summary", "classification", "impact"], tab: "integrations" },
+  
+  // Screens
+  { id: "route-home", category: "screen", title: "Homepage (/)", description: "US map, stats, CTAs", keywords: ["home", "index", "map", "landing"], tab: "screens" },
+  { id: "route-map", category: "screen", title: "Map (/map)", description: "Interactive state map with filters", keywords: ["map", "state", "interactive", "filter"], tab: "screens" },
+  { id: "route-members", category: "screen", title: "Members (/members)", description: "All 539 members alphabetically", keywords: ["member", "list", "all", "directory"], tab: "screens" },
+  { id: "route-member", category: "screen", title: "Member Detail (/member/:id)", description: "Full member profile with scores, votes, finance", keywords: ["member", "detail", "profile", "score", "vote"], tab: "screens" },
+  { id: "route-bills", category: "screen", title: "Bills (/bills)", description: "Bill listing with filters", keywords: ["bill", "list", "legislation", "filter"], tab: "screens" },
+  { id: "route-votes", category: "screen", title: "Votes (/votes)", description: "Vote listing with filters", keywords: ["vote", "list", "roll_call", "filter"], tab: "screens" },
+  { id: "route-state", category: "screen", title: "State (/state/:state)", description: "State-specific members", keywords: ["state", "member", "delegation"], tab: "screens" },
+  { id: "route-compare", category: "screen", title: "Compare (/compare)", description: "Member comparison tool", keywords: ["compare", "comparison", "member", "side-by-side"], tab: "screens" },
+  { id: "route-news", category: "screen", title: "Congress News (/news)", description: "Floor schedule, elections", keywords: ["news", "floor", "schedule", "election"], tab: "screens" },
+  { id: "route-profile", category: "screen", title: "My Profile (/my-profile)", description: "User profile management", keywords: ["profile", "user", "settings", "account"], tab: "screens" },
+  { id: "route-matches", category: "screen", title: "My Matches (/my-profile/matches)", description: "Top aligned politicians", keywords: ["match", "alignment", "politician", "recommendation"], tab: "screens" },
+  { id: "route-tracked", category: "screen", title: "Tracked Members (/tracked)", description: "Tracked member activity", keywords: ["track", "follow", "member", "activity"], tab: "screens" },
+  { id: "route-admin", category: "screen", title: "Admin Dashboard (/admin)", description: "Admin controls and analytics", keywords: ["admin", "dashboard", "analytics", "management"], tab: "screens" },
+];
 
 const generateMarkdownDocument = () => {
   return `# CivicScore Platform Documentation
@@ -673,6 +737,19 @@ overall_alignment = sum(issue_alignment_i * p_i) / sum(p_i)
 export function DocumentationContent() {
   const [activeSection, setActiveSection] = useState("overview");
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return SEARCHABLE_ITEMS.filter(item => 
+      item.title.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query) ||
+      item.keywords.some(k => k.toLowerCase().includes(query))
+    );
+  }, [searchQuery]);
+
   const handleDownload = () => {
     const markdown = generateMarkdownDocument();
     const blob = new Blob([markdown], { type: "text/markdown" });
@@ -686,11 +763,36 @@ export function DocumentationContent() {
     URL.revokeObjectURL(url);
   };
 
+  const handleSearchResultClick = (item: SearchableItem) => {
+    setActiveTab(item.tab);
+    setSearchQuery("");
+  };
+
+  const getCategoryIcon = (category: SearchableItem["category"]) => {
+    switch (category) {
+      case "table": return <Database className="h-4 w-4" />;
+      case "function": return <Workflow className="h-4 w-4" />;
+      case "endpoint": return <Globe className="h-4 w-4" />;
+      case "screen": return <Layout className="h-4 w-4" />;
+      case "integration": return <Globe className="h-4 w-4" />;
+    }
+  };
+
+  const getCategoryColor = (category: SearchableItem["category"]) => {
+    switch (category) {
+      case "table": return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+      case "function": return "bg-purple-500/10 text-purple-500 border-purple-500/20";
+      case "endpoint": return "bg-green-500/10 text-green-500 border-green-500/20";
+      case "screen": return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+      case "integration": return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
@@ -709,9 +811,68 @@ export function DocumentationContent() {
               </Button>
             </div>
           </div>
+          
+          {/* Search Bar */}
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tables, functions, endpoints, screens..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+            
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && (
+              <Card className="absolute z-50 w-full mt-1 shadow-lg">
+                <ScrollArea className="max-h-80">
+                  <div className="p-2 space-y-1">
+                    {searchResults.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSearchResultClick(item)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted text-left transition-colors"
+                      >
+                        <div className={`p-2 rounded-md border ${getCategoryColor(item.category)}`}>
+                          {getCategoryIcon(item.category)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium font-mono text-sm">{item.title}</span>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {item.category}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate">{item.description}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </Card>
+            )}
+            
+            {searchQuery && searchResults.length === 0 && (
+              <Card className="absolute z-50 w-full mt-1 shadow-lg">
+                <div className="p-4 text-center text-muted-foreground">
+                  No results found for "{searchQuery}"
+                </div>
+              </Card>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid grid-cols-5 mb-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="data-model">Data Model</TabsTrigger>
