@@ -9,11 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, FileText, Vote, DollarSign, Calculator, MapPin, Shield, Bell, Brain, Search, X } from "lucide-react";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "1.1.0";
+const DOCUMENTATION_VERSION = "2.0.0";
 const LAST_UPDATED = "2024-12-12";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.0.0", date: "2024-12-12", changes: [
+    "Complete documentation overhaul with detailed explanations",
+    "Added comprehensive score calculation formulas",
+    "Added detailed member page component breakdown",
+    "Added alignment calculation step-by-step explanation",
+    "Added funding metrics calculation details",
+    "Added data source field mappings for all components"
+  ]},
   { version: "1.1.0", date: "2024-12-12", changes: [
     "Added database export functionality to Data Sync dashboard",
     "Added search functionality within documentation",
