@@ -30,6 +30,22 @@ interface CongressMember {
   }
 }
 
+// Helper function to check if syncs are paused
+async function isSyncPaused(supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('feature_toggles')
+      .select('enabled')
+      .eq('id', 'sync_paused')
+      .single()
+    
+    if (error || !data) return false
+    return data.enabled === true
+  } catch {
+    return false
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -44,6 +60,15 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Check if syncs are paused
+    if (await isSyncPaused(supabase)) {
+      console.log('Sync paused - skipping congress members sync')
+      return new Response(
+        JSON.stringify({ success: false, message: 'Syncs are currently paused', paused: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     console.log('Starting Congress member sync...')
 

@@ -10,11 +10,17 @@ import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, Fi
 import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "2.2.0";
+const DOCUMENTATION_VERSION = "2.3.0";
 const LAST_UPDATED = "2024-12-12";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.3.0", date: "2024-12-12", changes: [
+    "Added Pause/Resume All Syncs functionality to Data Sync dashboard",
+    "Added comprehensive Congress News page documentation",
+    "Edge functions now check pause state before execution",
+    "Added sync_paused feature toggle for controlling sync operations"
+  ]},
   { version: "2.2.0", date: "2024-12-12", changes: [
     "Expanded FEC documentation with comprehensive explanation of campaign finance data",
     "Added detailed lobbying data explanation and why it matters",
@@ -774,6 +780,37 @@ overall_alignment = sum(issue_alignment_i * p_i) / sum(p_i)
 
 ## 11. Admin Features
 
+### Pause/Resume All Syncs
+**Location**: Data Sync tab in Admin Dashboard
+**Purpose**: Temporarily halt all automated and manual data synchronization operations
+
+**How It Works**:
+1. Click "Pause All" button in the Data Sync dashboard header
+2. A \`sync_paused\` feature toggle is set to \`true\` in the database
+3. All edge functions check this toggle before executing
+4. Cron jobs will still fire on schedule but immediately return without processing
+5. Click "Resume Syncs" to re-enable synchronization
+
+**Use Cases**:
+- Performing database maintenance without interference
+- Debugging sync issues without new data flowing in
+- Temporarily stopping sync during high-traffic periods
+- Preventing race conditions during manual data corrections
+
+**Edge Functions Affected**:
+- sync-congress-members
+- sync-bills
+- sync-votes
+- sync-fec-finance
+- sync-fec-funding
+- calculate-member-scores
+- classify-issue-signals
+
+**Technical Details**:
+- State stored in \`feature_toggles\` table with id \`sync_paused\`
+- Actions logged to \`ai_usage_log\` as \`sync_pause\` / \`sync_resume\`
+- Paused syncs return \`{ success: false, paused: true }\` response
+
 ### Database Export
 **Location**: Data Sync tab in Admin Dashboard
 **Purpose**: Export all database tables for backup or analysis
@@ -796,7 +833,7 @@ overall_alignment = sum(issue_alignment_i * p_i) / sum(p_i)
 **Location**: Documentation tab in Admin Dashboard
 **Purpose**: Quickly find tables, functions, endpoints, or screens
 
-**Searchable Items**: ${SEARCHABLE_ITEMS.length} items indexed
+**Searchable Items**: \${SEARCHABLE_ITEMS.length} items indexed
 **Categories**: Tables, Edge Functions, Integrations, Screens
 **Features**:
 - Real-time search as you type
@@ -809,8 +846,11 @@ overall_alignment = sum(issue_alignment_i * p_i) / sum(p_i)
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.1.0 | 2024-12-12 | Added database export functionality, documentation search, searchable index |
-| 1.0.1 | 2024-12-12 | Added documentation search functionality |
+| 2.3.0 | 2024-12-12 | Added Pause/Resume All Syncs, Congress News documentation |
+| 2.2.0 | 2024-12-12 | Expanded FEC documentation, funding metrics formulas |
+| 2.1.0 | 2024-12-12 | Added Data Flow tab with Mermaid diagrams |
+| 2.0.0 | 2024-12-12 | Complete documentation overhaul |
+| 1.1.0 | 2024-12-12 | Added database export functionality, documentation search |
 | 1.0.0 | 2024-12-12 | Initial documentation release |
 
 ---

@@ -247,6 +247,67 @@ export function SyncStatusCard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeCategory, setActiveCategory] = useState<"all" | "congress" | "finance" | "scores">("all");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isPaused, setIsPaused] = useState(false);
+  const [isTogglingPause, setIsTogglingPause] = useState(false);
+
+  // Fetch pause state
+  const fetchPauseState = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("feature_toggles")
+        .select("enabled")
+        .eq("id", "sync_paused")
+        .single();
+      
+      if (!error && data) {
+        setIsPaused(data.enabled);
+      }
+    } catch (error) {
+      console.error("Error fetching pause state:", error);
+    }
+  };
+
+  // Toggle pause state
+  const togglePause = async () => {
+    setIsTogglingPause(true);
+    try {
+      const newState = !isPaused;
+      const { error } = await supabase
+        .from("feature_toggles")
+        .update({ enabled: newState, updated_at: new Date().toISOString() })
+        .eq("id", "sync_paused");
+
+      if (error) throw error;
+
+      setIsPaused(newState);
+
+      // Log the action
+      await supabase.from("ai_usage_log").insert({
+        operation_type: newState ? "sync_pause" : "sync_resume",
+        success: true,
+        metadata: {
+          action: newState ? "paused" : "resumed",
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      toast({
+        title: newState ? "Syncs Paused" : "Syncs Resumed",
+        description: newState 
+          ? "All data synchronization operations are now paused." 
+          : "Data synchronization operations have resumed.",
+      });
+    } catch (error) {
+      console.error("Error toggling pause:", error);
+      toast({
+        title: "Error",
+        description: "Failed to toggle pause state",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTogglingPause(false);
+    }
+  };
 
   // Update current time every minute for next run calculations
   useEffect(() => {
@@ -272,6 +333,7 @@ export function SyncStatusCard() {
 
   useEffect(() => {
     fetchSyncProgress();
+    fetchPauseState();
     
     const interval = setInterval(() => {
       if (autoRefresh) {
@@ -631,6 +693,22 @@ export function SyncStatusCard() {
             </span>
             <div className="flex gap-2 flex-wrap">
               <Button 
+                variant={isPaused ? "default" : "outline"}
+                size="sm" 
+                onClick={togglePause}
+                disabled={isTogglingPause}
+                className={isPaused ? "bg-amber-500 hover:bg-amber-600" : ""}
+              >
+                {isTogglingPause ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : isPaused ? (
+                  <Play className="h-4 w-4 mr-2" />
+                ) : (
+                  <Pause className="h-4 w-4 mr-2" />
+                )}
+                {isPaused ? "Resume Syncs" : "Pause All"}
+              </Button>
+              <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={exportAllData}
@@ -673,6 +751,22 @@ export function SyncStatusCard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Pause Banner */}
+          {isPaused && (
+            <div className="mb-6 p-4 rounded-lg border-2 border-amber-500 bg-amber-500/10 flex items-center gap-3">
+              <Pause className="h-5 w-5 text-amber-500" />
+              <div className="flex-1">
+                <p className="font-medium text-amber-700 dark:text-amber-300">Data Syncs Paused</p>
+                <p className="text-sm text-muted-foreground">
+                  All automated and manual sync operations are currently paused. Cron jobs will check this state and skip execution.
+                </p>
+              </div>
+              <Button size="sm" onClick={togglePause} disabled={isTogglingPause}>
+                <Play className="h-4 w-4 mr-2" />
+                Resume
+              </Button>
+            </div>
+          )}
           {/* Category Filter */}
           <div className="flex gap-2 mb-6">
             {(["all", "congress", "finance", "scores"] as const).map((cat) => (
