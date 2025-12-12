@@ -10,11 +10,23 @@ import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, Fi
 import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "2.3.0";
-const LAST_UPDATED = "2024-12-12";
+const DOCUMENTATION_VERSION = "2.4.0";
+const LAST_UPDATED = "2025-12-12";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.4.0", date: "2025-12-12", changes: [
+    "Major Data Pipeline Improvements: Added sync orchestrator with job locking",
+    "Added data_anomalies table for quality monitoring and alerting",
+    "Added sync_jobs table for configurable job scheduling",
+    "Added sync_health view for monitoring pipeline health status",
+    "Enhanced FEC sync with rate limiting, retries, and exponential backoff",
+    "Added contribution_uid for idempotent FEC record upserts",
+    "Added more contribution fields: receipt_date, contributor_city/zip/employer/occupation, committee_id/name, memo_text, transaction_type",
+    "Added cursor_json column for resumable incremental syncs",
+    "Added lock_until column to prevent overlapping job executions",
+    "Added data quality checks: state coverage, member scores, recent votes, FEC contributions"
+  ]},
   { version: "2.3.0", date: "2024-12-12", changes: [
     "Added Pause/Resume All Syncs functionality to Data Sync dashboard",
     "Added comprehensive Congress News page documentation",
@@ -95,11 +107,12 @@ const SEARCHABLE_ITEMS: SearchableItem[] = [
   { id: "member_summaries", category: "table", title: "member_summaries", description: "AI-generated member summaries", keywords: ["ai", "summary", "generated", "activity"], tab: "data-model" },
   
   // Edge Functions
+  { id: "sync-orchestrator", category: "function", title: "sync-orchestrator", description: "Orchestrates sync jobs, manages locks, runs quality checks", keywords: ["sync", "orchestrator", "lock", "quality", "health"], tab: "edge-functions" },
   { id: "sync-congress-members", category: "function", title: "sync-congress-members", description: "Sync all Congress members from Congress.gov", keywords: ["sync", "member", "congress", "cron", "daily"], tab: "edge-functions" },
   { id: "sync-bills", category: "function", title: "sync-bills", description: "Sync HR and S bills with sponsorships", keywords: ["sync", "bill", "sponsorship", "cron", "legislation"], tab: "edge-functions" },
   { id: "sync-votes", category: "function", title: "sync-votes", description: "Sync votes and member positions", keywords: ["sync", "vote", "position", "cron", "roll_call"], tab: "edge-functions" },
   { id: "sync-member-details", category: "function", title: "sync-member-details", description: "Fetch additional member details", keywords: ["sync", "committee", "statement", "detail"], tab: "edge-functions" },
-  { id: "sync-fec-finance", category: "function", title: "sync-fec-finance", description: "Sync FEC contribution data", keywords: ["sync", "fec", "contribution", "finance", "donation"], tab: "edge-functions" },
+  { id: "sync-fec-finance", category: "function", title: "sync-fec-finance", description: "Sync FEC contribution data with job locking and rate limiting", keywords: ["sync", "fec", "contribution", "finance", "donation", "lock"], tab: "edge-functions" },
   { id: "sync-fec-funding", category: "function", title: "sync-fec-funding", description: "Compute funding metrics", keywords: ["sync", "fec", "funding", "metrics", "grassroots"], tab: "edge-functions" },
   { id: "calculate-member-scores", category: "function", title: "calculate-member-scores", description: "Calculate member performance scores", keywords: ["score", "calculate", "productivity", "attendance"], tab: "edge-functions" },
   { id: "recalculate-state-scores", category: "function", title: "recalculate-state-scores", description: "Pre-compute state aggregates", keywords: ["state", "aggregate", "score", "calculate"], tab: "edge-functions" },
@@ -107,6 +120,10 @@ const SEARCHABLE_ITEMS: SearchableItem[] = [
   { id: "compute-politician-positions", category: "function", title: "compute-politician-positions", description: "Aggregate signals to positions", keywords: ["position", "compute", "aggregate", "signal"], tab: "edge-functions" },
   { id: "generate-member-summary", category: "function", title: "generate-member-summary", description: "AI member activity summary", keywords: ["ai", "summary", "generate", "member"], tab: "edge-functions" },
   { id: "generate-bill-impact", category: "function", title: "generate-bill-impact", description: "AI bill impact analysis", keywords: ["ai", "impact", "bill", "analysis"], tab: "edge-functions" },
+  
+  // New Tables from Pipeline Improvements
+  { id: "data_anomalies", category: "table", title: "data_anomalies", description: "Tracks data quality issues and anomalies", keywords: ["anomaly", "quality", "error", "warning", "monitoring"], tab: "data-model" },
+  { id: "sync_jobs", category: "table", title: "sync_jobs", description: "Configurable sync job definitions and schedules", keywords: ["job", "schedule", "cron", "frequency", "priority"], tab: "data-model" },
   
   // Integrations
   { id: "congress-gov", category: "integration", title: "Congress.gov API", description: "Primary source for member data, bills, and votes", keywords: ["api", "congress", "member", "bill", "vote", "bioguide"], tab: "integrations" },
