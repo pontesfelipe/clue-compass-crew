@@ -232,6 +232,42 @@ export type Database = {
         }
         Relationships: []
       }
+      data_anomalies: {
+        Row: {
+          anomaly_type: string
+          created_at: string
+          details_json: Json | null
+          detected_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          resolved_at: string | null
+          severity: string
+        }
+        Insert: {
+          anomaly_type: string
+          created_at?: string
+          details_json?: Json | null
+          detected_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          resolved_at?: string | null
+          severity?: string
+        }
+        Update: {
+          anomaly_type?: string
+          created_at?: string
+          details_json?: Json | null
+          detected_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          resolved_at?: string | null
+          severity?: string
+        }
+        Relationships: []
+      }
       feature_toggles: {
         Row: {
           created_at: string
@@ -492,38 +528,68 @@ export type Database = {
       member_contributions: {
         Row: {
           amount: number
+          committee_id: string | null
+          committee_name: string | null
+          contribution_uid: string | null
+          contributor_city: string | null
+          contributor_employer: string | null
           contributor_name: string
+          contributor_occupation: string | null
           contributor_state: string | null
           contributor_type: string
+          contributor_zip: string | null
           created_at: string | null
           cycle: number
           id: string
           industry: string | null
           member_id: string
+          memo_text: string | null
+          receipt_date: string | null
+          transaction_type: string | null
           updated_at: string | null
         }
         Insert: {
           amount?: number
+          committee_id?: string | null
+          committee_name?: string | null
+          contribution_uid?: string | null
+          contributor_city?: string | null
+          contributor_employer?: string | null
           contributor_name: string
+          contributor_occupation?: string | null
           contributor_state?: string | null
           contributor_type: string
+          contributor_zip?: string | null
           created_at?: string | null
           cycle: number
           id?: string
           industry?: string | null
           member_id: string
+          memo_text?: string | null
+          receipt_date?: string | null
+          transaction_type?: string | null
           updated_at?: string | null
         }
         Update: {
           amount?: number
+          committee_id?: string | null
+          committee_name?: string | null
+          contribution_uid?: string | null
+          contributor_city?: string | null
+          contributor_employer?: string | null
           contributor_name?: string
+          contributor_occupation?: string | null
           contributor_state?: string | null
           contributor_type?: string
+          contributor_zip?: string | null
           created_at?: string | null
           cycle?: number
           id?: string
           industry?: string | null
           member_id?: string
+          memo_text?: string | null
+          receipt_date?: string | null
+          transaction_type?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1177,16 +1243,59 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_jobs: {
+        Row: {
+          created_at: string
+          frequency_minutes: number | null
+          id: string
+          is_enabled: boolean | null
+          job_type: string
+          last_run_at: string | null
+          max_duration_seconds: number | null
+          next_run_at: string | null
+          priority: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          frequency_minutes?: number | null
+          id: string
+          is_enabled?: boolean | null
+          job_type: string
+          last_run_at?: string | null
+          max_duration_seconds?: number | null
+          next_run_at?: string | null
+          priority?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          frequency_minutes?: number | null
+          id?: string
+          is_enabled?: boolean | null
+          job_type?: string
+          last_run_at?: string | null
+          max_duration_seconds?: number | null
+          next_run_at?: string | null
+          priority?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sync_progress: {
         Row: {
           created_at: string | null
           current_offset: number
           cursor: string | null
+          cursor_json: Json | null
           error_message: string | null
           id: string
+          last_failure_count: number | null
           last_matched_count: number | null
           last_run_at: string | null
+          last_success_count: number | null
           last_synced_at: string | null
+          lock_until: string | null
           metadata: Json | null
           status: string | null
           total_processed: number | null
@@ -1196,11 +1305,15 @@ export type Database = {
           created_at?: string | null
           current_offset?: number
           cursor?: string | null
+          cursor_json?: Json | null
           error_message?: string | null
           id: string
+          last_failure_count?: number | null
           last_matched_count?: number | null
           last_run_at?: string | null
+          last_success_count?: number | null
           last_synced_at?: string | null
+          lock_until?: string | null
           metadata?: Json | null
           status?: string | null
           total_processed?: number | null
@@ -1210,11 +1323,15 @@ export type Database = {
           created_at?: string | null
           current_offset?: number
           cursor?: string | null
+          cursor_json?: Json | null
           error_message?: string | null
           id?: string
+          last_failure_count?: number | null
           last_matched_count?: number | null
           last_run_at?: string | null
+          last_success_count?: number | null
           last_synced_at?: string | null
+          lock_until?: string | null
           metadata?: Json | null
           status?: string | null
           total_processed?: number | null
@@ -1517,7 +1634,22 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      sync_health: {
+        Row: {
+          frequency_minutes: number | null
+          health_status: string | null
+          is_enabled: boolean | null
+          job_id: string | null
+          last_failure_count: number | null
+          last_run_at: string | null
+          last_success_count: number | null
+          lock_until: string | null
+          minutes_since_last_run: number | null
+          status: string | null
+          total_processed: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
