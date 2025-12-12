@@ -513,6 +513,22 @@ async function syncFecBackground(
   console.log(`FEC sync complete: ${successful}/${processed} members synced`);
 }
 
+// Helper function to check if syncs are paused
+async function isSyncPaused(supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('feature_toggles')
+      .select('enabled')
+      .eq('id', 'sync_paused')
+      .single();
+    
+    if (error || !data) return false;
+    return data.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -528,6 +544,15 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Check if syncs are paused
+    if (await isSyncPaused(supabase)) {
+      console.log('Sync paused - skipping FEC funding sync');
+      return new Response(
+        JSON.stringify({ success: false, message: 'Syncs are currently paused', paused: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const url = new URL(req.url);
     const mode = url.searchParams.get("mode") || "incremental";

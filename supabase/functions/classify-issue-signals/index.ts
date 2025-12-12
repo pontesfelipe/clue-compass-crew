@@ -13,6 +13,22 @@ interface IssueClassification {
   reasoning: string;
 }
 
+// Helper function to check if syncs are paused
+async function isSyncPaused(supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('feature_toggles')
+      .select('enabled')
+      .eq('id', 'sync_paused')
+      .single();
+    
+    if (error || !data) return false;
+    return data.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -23,6 +39,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Check if syncs are paused
+    if (await isSyncPaused(supabase)) {
+      console.log('Sync paused - skipping issue classification');
+      return new Response(
+        JSON.stringify({ success: false, message: 'Syncs are currently paused', paused: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const { batch_size = 50, force_reclassify = false, prioritize_chamber, use_policy_area_mapping = true } = await req.json().catch(() => ({}));
 
