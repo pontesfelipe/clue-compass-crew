@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PartyVoteBreakdown } from "@/components/PartyVoteBreakdown";
 import { cn } from "@/lib/utils";
-import { Calendar, Users, Vote, ExternalLink, FileText } from "lucide-react";
+import { Calendar, Users, Vote, ExternalLink, FileText, Tag, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Tooltip as RadixTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 
 interface VoteDetailDialogProps {
   voteId: string | null;
@@ -59,7 +60,28 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
         .maybeSingle();
 
       if (error) throw error;
-      return data;
+      
+      // If there's a related bill, fetch its issue classifications
+      let issueClassifications: any[] = [];
+      if (data?.bills?.id) {
+        const { data: issueSignals } = await supabase
+          .from("issue_signals")
+          .select(`
+            direction,
+            weight,
+            issues (
+              id,
+              label,
+              icon_name
+            )
+          `)
+          .eq("external_ref", data.bills.id)
+          .eq("signal_type", "bill_sponsorship");
+        
+        issueClassifications = issueSignals || [];
+      }
+      
+      return { ...data, issueClassifications };
     },
     enabled: !!voteId,
   });
@@ -146,6 +168,40 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
                         <> This legislation falls under the policy area of <span className="font-medium">{vote.bills.policy_area}</span>.</>
                       )}
                     </p>
+                    
+                    {/* AI-Classified Issue Areas */}
+                    {vote.issueClassifications && vote.issueClassifications.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        <span className="text-xs text-muted-foreground">Issue areas:</span>
+                        <TooltipProvider>
+                          {vote.issueClassifications.slice(0, 4).map((signal: any, i: number) => (
+                            <RadixTooltip key={i}>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn(
+                                    "text-xs cursor-help",
+                                    signal.direction > 0 && "bg-score-good/10 text-score-good border-score-good/30",
+                                    signal.direction < 0 && "bg-score-bad/10 text-score-bad border-score-bad/30",
+                                    signal.direction === 0 && "bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {signal.direction > 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : 
+                                   signal.direction < 0 ? <TrendingDown className="h-3 w-3 mr-1" /> : 
+                                   <Minus className="h-3 w-3 mr-1" />}
+                                  {signal.issues?.label}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">
+                                  This bill {signal.direction > 0 ? 'supports' : signal.direction < 0 ? 'opposes' : 'is neutral on'} {signal.issues?.label?.toLowerCase()} policies
+                                </p>
+                              </TooltipContent>
+                            </RadixTooltip>
+                          ))}
+                        </TooltipProvider>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -257,7 +313,7 @@ export function VoteDetailDialog({ voteId, memberPosition, onClose }: VoteDetail
                           <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                         ))}
                       </Pie>
-                      <Tooltip 
+                      <RechartsTooltip 
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;

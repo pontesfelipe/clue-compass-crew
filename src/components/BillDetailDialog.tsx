@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Calendar, Users, FileText, ExternalLink, Gavel, CheckCircle2, Lightbulb } from "lucide-react";
+import { Calendar, Users, FileText, ExternalLink, Gavel, CheckCircle2, Lightbulb, Tag, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 
 interface BillDetailDialogProps {
@@ -82,10 +83,26 @@ export function BillDetailDialog({ billId, onClose }: BillDetailDialogProps) {
         .eq("bill_id", billId)
         .eq("is_sponsor", false);
 
+      // Fetch issue classifications (AI-classified policy areas)
+      const { data: issueSignals } = await supabase
+        .from("issue_signals")
+        .select(`
+          direction,
+          weight,
+          issues (
+            id,
+            label,
+            icon_name
+          )
+        `)
+        .eq("external_ref", billId)
+        .eq("signal_type", "bill_sponsorship");
+
       return {
         ...billData,
         sponsor: sponsorData?.members,
         cosponsorCount: cosponsorCount || 0,
+        issueClassifications: issueSignals || [],
       };
     },
     enabled: !!billId,
@@ -110,20 +127,57 @@ export function BillDetailDialog({ billId, onClose }: BillDetailDialogProps) {
           </div>
         ) : bill ? (
           <div className="space-y-6">
-            {/* Bill Number and Status */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <Badge variant="secondary" className="text-sm font-mono">
-                {formatBillNumber(bill)}
-              </Badge>
-              {status && (
-                <Badge variant="outline" className={cn("text-sm", status.color)}>
-                  {status.label}
+            {/* Bill Number, Status and Policy Areas */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Badge variant="secondary" className="text-sm font-mono">
+                  {formatBillNumber(bill)}
                 </Badge>
-              )}
-              {bill.policy_area && (
-                <Badge variant="outline" className="text-sm">
-                  {bill.policy_area}
-                </Badge>
+                {status && (
+                  <Badge variant="outline" className={cn("text-sm", status.color)}>
+                    {status.label}
+                  </Badge>
+                )}
+                {bill.policy_area && (
+                  <Badge variant="outline" className="text-sm">
+                    <Tag className="h-3 w-3 mr-1" />
+                    {bill.policy_area}
+                  </Badge>
+                )}
+              </div>
+
+              {/* AI-Classified Issue Areas */}
+              {bill.issueClassifications && bill.issueClassifications.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">Issue areas:</span>
+                  <TooltipProvider>
+                    {bill.issueClassifications.slice(0, 5).map((signal: any, i: number) => (
+                      <Tooltip key={i}>
+                        <TooltipTrigger asChild>
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "text-xs cursor-help",
+                              signal.direction > 0 && "bg-score-good/10 text-score-good border-score-good/30",
+                              signal.direction < 0 && "bg-score-bad/10 text-score-bad border-score-bad/30",
+                              signal.direction === 0 && "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            {signal.direction > 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : 
+                             signal.direction < 0 ? <TrendingDown className="h-3 w-3 mr-1" /> : 
+                             <Minus className="h-3 w-3 mr-1" />}
+                            {signal.issues?.label}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">
+                            This bill {signal.direction > 0 ? 'supports' : signal.direction < 0 ? 'opposes' : 'is neutral on'} {signal.issues?.label?.toLowerCase()} policies
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </TooltipProvider>
+                </div>
               )}
             </div>
 
