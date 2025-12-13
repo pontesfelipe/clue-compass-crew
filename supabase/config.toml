@@ -78,3 +78,6 @@ verify_jwt = false
 
 [functions.send-weekly-digest]
 verify_jwt = false
+
+[functions.sync-committees]
+verify_jwt = false
