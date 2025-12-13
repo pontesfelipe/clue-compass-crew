@@ -25,13 +25,90 @@ const STATE_ABBREVS: Record<string, string> = {
   "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
   "Wisconsin": "WI", "Wyoming": "WY", "District of Columbia": "DC",
   "Puerto Rico": "PR", "Guam": "GU", "American Samoa": "AS",
-  "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
+"U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
+};
+
+// Common political nicknames -> legal first names mapping
+const NICKNAME_MAP: Record<string, string[]> = {
+  'ted': ['rafael', 'edward', 'theodore'],
+  'bernie': ['bernard'],
+  'chuck': ['charles'],
+  'mike': ['michael'],
+  'bill': ['william'],
+  'bob': ['robert'],
+  'dick': ['richard'],
+  'jim': ['james'],
+  'joe': ['joseph'],
+  'tom': ['thomas'],
+  'dan': ['daniel'],
+  'dave': ['david'],
+  'ben': ['benjamin'],
+  'ed': ['edward', 'edwin'],
+  'al': ['albert', 'alan', 'alfred'],
+  'pete': ['peter'],
+  'tim': ['timothy'],
+  'matt': ['matthew'],
+  'rick': ['richard', 'eric', 'frederick'],
+  'ron': ['ronald'],
+  'don': ['donald'],
+  'andy': ['andrew'],
+  'tony': ['anthony'],
+  'steve': ['steven', 'stephen'],
+  'chris': ['christopher', 'christian'],
+  'nick': ['nicholas'],
+  'pat': ['patrick', 'patricia'],
+  'ken': ['kenneth'],
+  'larry': ['lawrence'],
+  'jerry': ['gerald', 'jerome'],
+  'jeff': ['jeffrey'],
+  'greg': ['gregory'],
+  'sam': ['samuel'],
+  'max': ['maxwell', 'maximilian'],
+  'jack': ['john', 'jackson'],
+  'marty': ['martin'],
+  'mitch': ['mitchell'],
+  'josh': ['joshua'],
+  'will': ['william'],
+  'charlie': ['charles'],
+  'liz': ['elizabeth'],
+  'beth': ['elizabeth'],
+  'debbie': ['deborah'],
+  'deborah': ['debbie'],
+  'nancy': ['ann'],
+  'sue': ['susan'],
+  'cathy': ['catherine'],
+  'kate': ['katherine', 'catherine'],
+  'maggie': ['margaret'],
+  'meg': ['margaret'],
 };
 
 function getStateAbbrev(stateName: string): string {
   // If already an abbreviation, return as-is
   if (stateName.length === 2) return stateName.toUpperCase();
   return STATE_ABBREVS[stateName] || stateName;
+}
+
+// Get possible search names (original + nickname variants)
+function getSearchNames(fullName: string): string[] {
+  const names = [fullName];
+  const nameParts = fullName.split(',');
+  const lastName = nameParts[0]?.trim() || '';
+  const firstName = nameParts[1]?.trim()?.split(' ')[0]?.toLowerCase() || '';
+  
+  // Add nickname variants
+  if (NICKNAME_MAP[firstName]) {
+    for (const legalName of NICKNAME_MAP[firstName]) {
+      names.push(`${lastName}, ${legalName.charAt(0).toUpperCase() + legalName.slice(1)}`);
+    }
+  }
+  // Also check reverse - if member uses legal name but FEC has nickname
+  for (const [nickname, legalNames] of Object.entries(NICKNAME_MAP)) {
+    if (legalNames.includes(firstName)) {
+      names.push(`${lastName}, ${nickname.charAt(0).toUpperCase() + nickname.slice(1)}`);
+    }
+  }
+  
+  return names;
 }
 
 interface FundingMetrics {
@@ -109,7 +186,7 @@ async function fecGet(
   return results;
 }
 
-// Get candidate by name and state - try multiple strategies
+// Get candidate by name and state - try multiple strategies including nicknames
 async function findCandidateId(
   name: string, 
   state: string, 
@@ -117,47 +194,51 @@ async function findCandidateId(
   stats: ProcessingStats
 ): Promise<string | null> {
   const stateAbbrev = getStateAbbrev(state);
+  const searchNames = getSearchNames(name);
   
-  // Strategy 1: Search by full name
-  let results = await fecGet("/candidates/search/", {
-    name: name,
-    state: stateAbbrev,
-    is_active_candidate: "true",
-    sort: "-election_years",
-  }, apiKey, stats);
-  
-  if (results.length > 0) {
-    console.log(`Found candidate ${name} via full name search: ${results[0].candidate_id}`);
-    return results[0].candidate_id;
+  // Try each name variant (original + nickname variants)
+  for (const searchName of searchNames) {
+    // Strategy 1: Search by full name
+    let results = await fecGet("/candidates/search/", {
+      name: searchName,
+      state: stateAbbrev,
+      is_active_candidate: "true",
+      sort: "-election_years",
+    }, apiKey, stats);
+    
+    if (results.length > 0) {
+      console.log(`Found candidate ${name} via full name search (tried: ${searchName}): ${results[0].candidate_id}`);
+      return results[0].candidate_id;
+    }
+    
+    // Strategy 2: Try last name only
+    const lastName = searchName.split(",")[0]?.trim() || searchName.split(" ").pop() || searchName;
+    results = await fecGet("/candidates/search/", {
+      name: lastName,
+      state: stateAbbrev,
+      is_active_candidate: "true",
+      sort: "-election_years",
+    }, apiKey, stats);
+    
+    if (results.length > 0) {
+      console.log(`Found candidate ${name} via last name search: ${results[0].candidate_id}`);
+      return results[0].candidate_id;
+    }
+    
+    // Strategy 3: Try without active filter for former candidates
+    results = await fecGet("/candidates/search/", {
+      name: lastName,
+      state: stateAbbrev,
+      sort: "-election_years",
+    }, apiKey, stats);
+    
+    if (results.length > 0) {
+      console.log(`Found candidate ${name} via inactive search: ${results[0].candidate_id}`);
+      return results[0].candidate_id;
+    }
   }
   
-  // Strategy 2: Try last name only
-  const lastName = name.split(",")[0]?.trim() || name.split(" ").pop() || name;
-  results = await fecGet("/candidates/search/", {
-    name: lastName,
-    state: stateAbbrev,
-    is_active_candidate: "true",
-    sort: "-election_years",
-  }, apiKey, stats);
-  
-  if (results.length > 0) {
-    console.log(`Found candidate ${name} via last name search: ${results[0].candidate_id}`);
-    return results[0].candidate_id;
-  }
-  
-  // Strategy 3: Try without active filter for former candidates
-  results = await fecGet("/candidates/search/", {
-    name: lastName,
-    state: stateAbbrev,
-    sort: "-election_years",
-  }, apiKey, stats);
-  
-  if (results.length > 0) {
-    console.log(`Found candidate ${name} via inactive search: ${results[0].candidate_id}`);
-    return results[0].candidate_id;
-  }
-  
-  console.log(`No FEC candidate found for ${name} in ${stateAbbrev}`);
+  console.log(`No FEC candidate found for ${name} in ${stateAbbrev} (tried ${searchNames.length} name variants)`);
   return null;
 }
 
