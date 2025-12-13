@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper } from "lucide-react";
+import { Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { ResetProfileDialog } from "@/components/ResetProfileDialog";
+import { Logo } from "@/components/Logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,15 +20,10 @@ export function Header() {
   const { isAdmin } = useAdmin();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="civic-container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <BarChart3 className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="font-serif text-xl font-semibold text-primary">
-            CivicScore
-          </span>
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/98 backdrop-blur-sm">
+      <div className="civic-container flex h-14 items-center justify-between">
+        <Link to="/" className="flex items-center">
+          <Logo size="sm" />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

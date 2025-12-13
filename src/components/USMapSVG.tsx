@@ -13,24 +13,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
-// Score color scale: higher = more green (better score)
+// Neutral score color scale - muted, analytical, non-partisan
+// Colors communicate data state, never ideology
 const getScoreColor = (score: number | null): string => {
   if (score === null) return "#d1d5db"; // muted gray
-  if (score >= 81) return "#16a34a";  // Excellent - dark green
-  if (score >= 71) return "#22c55e";  // Good - light green
-  if (score >= 66) return "#f59e0b";  // Average - amber
-  if (score >= 61) return "#f97316";  // Below average - orange
-  return "#dc2626";                    // Below 60 - red
+  if (score >= 81) return "#4f7f6a";  // Muted teal-green (data-positive)
+  if (score >= 71) return "#6b9b8a";  // Light teal
+  if (score >= 66) return "#8a8a8a";  // Neutral gray
+  if (score >= 61) return "#a68b5b";  // Muted amber
+  return "#8a6b5b";                    // Muted brown
 };
 
-// HSL version for tiles
+// HSL version for tiles - neutral, muted palette
 const getScoreColorHSL = (score: number | null): string => {
   if (score === null) return "hsl(var(--muted))";
-  if (score >= 81) return "hsl(142 76% 36%)";
-  if (score >= 71) return "hsl(142 71% 45%)";
-  if (score >= 66) return "hsl(38 92% 50%)";
-  if (score >= 61) return "hsl(25 95% 53%)";
-  return "hsl(0 72% 51%)";
+  if (score >= 81) return "hsl(150 25% 40%)";
+  if (score >= 71) return "hsl(150 20% 50%)";
+  if (score >= 66) return "hsl(0 0% 54%)";
+  if (score >= 61) return "hsl(38 30% 50%)";
+  return "hsl(20 20% 45%)";
 };
 
 // Fixed US state grid layout for tiles view
@@ -252,8 +253,8 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
 
       {/* Tooltip */}
       {hoveredStateData && (
-        <div className="absolute top-16 left-4 z-20 rounded-lg bg-card border border-border shadow-civic-lg p-4 min-w-[200px] animate-scale-in pointer-events-none">
-          <h4 className="font-serif font-semibold text-foreground">{hoveredStateData.name}</h4>
+        <div className="absolute top-16 left-4 z-20 rounded-md bg-card border border-border shadow-lg p-4 min-w-[200px] pointer-events-none">
+          <h4 className="font-medium text-foreground">{hoveredStateData.name}</h4>
           {TERRITORIES.includes(hoveredState!) && (
             <span className="text-xs text-muted-foreground italic">Non-voting delegate</span>
           )}
@@ -372,17 +373,17 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             </p>
           </div>
 
-          {/* Top Performing States */}
-          <div className="p-4 rounded-lg bg-card border border-border md:col-span-1">
+          {/* Higher Performing States */}
+          <div className="p-4 rounded-md bg-card border border-border md:col-span-1">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
-              <span className="text-sm font-medium text-muted-foreground">Top States</span>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Higher Scores</span>
             </div>
             <div className="space-y-1">
               {stats.topStates.map((state, i) => (
                 <div key={state.abbr} className="flex items-center justify-between">
                   <span className="text-sm text-foreground">{i + 1}. {state.name}</span>
-                  <span className="text-sm font-bold text-emerald-500">
+                  <span className="text-sm font-medium text-foreground">
                     {state.score}
                   </span>
                 </div>
@@ -390,17 +391,17 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             </div>
           </div>
 
-          {/* Bottom States */}
-          <div className="p-4 rounded-lg bg-card border border-border md:col-span-1">
+          {/* Lower Scores - neutral language */}
+          <div className="p-4 rounded-md bg-card border border-border md:col-span-1">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingDown className="h-4 w-4 text-red-500" />
-              <span className="text-sm font-medium text-muted-foreground">Needs Improvement</span>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Lower Scores</span>
             </div>
             <div className="space-y-1">
               {stats.bottomStates.map((state, i) => (
                 <div key={state.abbr} className="flex items-center justify-between">
                   <span className="text-sm text-foreground">{i + 1}. {state.name}</span>
-                  <span className="text-sm font-bold text-red-500">
+                  <span className="text-sm font-medium text-foreground">
                     {state.score}
                   </span>
                 </div>
@@ -408,16 +409,16 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
+          {/* Legend - neutral colors */}
+          <div className="p-4 rounded-md bg-card border border-border">
+            <p className="text-sm font-medium text-foreground mb-3">Score Range</p>
             <div className="space-y-1.5">
               {[
-                { color: "#16a34a", range: "81+", label: "Excellent" },
-                { color: "#22c55e", range: "71-80", label: "Good" },
-                { color: "#f59e0b", range: "66-70", label: "Average" },
-                { color: "#f97316", range: "61-65", label: "Below avg" },
-                { color: "#dc2626", range: "≤60", label: "Needs work" },
+                { color: "#4f7f6a", range: "81+", label: "Higher" },
+                { color: "#6b9b8a", range: "71-80", label: "" },
+                { color: "#8a8a8a", range: "66-70", label: "Mid-range" },
+                { color: "#a68b5b", range: "61-65", label: "" },
+                { color: "#8a6b5b", range: "≤60", label: "Lower" },
               ].map((item) => (
                 <div key={item.range} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
