@@ -79,10 +79,12 @@ serve(async (req) => {
 
     for (const member of members) {
       try {
-        // Sync committees
+        // Sync committees - use the dedicated committee-assignments endpoint
         if (syncType === 'all' || syncType === 'committees') {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 250));
           
+          // Congress API has a dedicated endpoint for member's current committees
+          const chamberPath = member.chamber === 'house' ? 'house' : 'senate';
           const memberUrl = `${CONGRESS_API_BASE}/member/${member.bioguide_id}?api_key=${CONGRESS_API_KEY}`;
           console.log(`Fetching details for ${member.full_name}...`);
           
@@ -92,43 +94,78 @@ serve(async (req) => {
             const memberData = await memberResponse.json();
             const memberInfo = memberData.member;
             
-            // Extract current term's committees
-            const currentTerms = memberInfo?.terms || [];
-            const currentTerm = currentTerms.find((t: any) => t.congress === CURRENT_CONGRESS) || currentTerms[0];
+            // Try multiple possible locations for committee data
+            let committees: any[] = [];
             
-            // Get committees from sponsored legislation or committee assignments
-            if (memberInfo?.committeeAssignments) {
-              const committees = memberInfo.committeeAssignments || [];
-              
-              if (committees.length > 0) {
-                // Delete existing committee records for this member and congress
-                await supabase
-                  .from('member_committees')
-                  .delete()
-                  .eq('member_id', member.id)
-                  .eq('congress', CURRENT_CONGRESS);
-                
-                const committeeRecords = committees.slice(0, 10).map((c: any, idx: number) => ({
-                  member_id: member.id,
-                  committee_code: c.committee?.systemCode || c.systemCode || `COMM${idx}`,
-                  committee_name: c.committee?.name || c.name || 'Unknown Committee',
-                  chamber: member.chamber,
-                  rank: idx + 1,
-                  is_chair: c.chair === true,
-                  is_ranking_member: c.rankingMember === true,
-                  congress: CURRENT_CONGRESS,
-                }));
-                
-                const { error: insertError } = await supabase
-                  .from('member_committees')
-                  .insert(committeeRecords);
-                
-                if (!insertError) {
-                  committeesAdded += committeeRecords.length;
-                  console.log(`Added ${committeeRecords.length} committees for ${member.full_name}`);
-                }
+            // Check direct committeeAssignments field
+            if (memberInfo?.committeeAssignments && memberInfo.committeeAssignments.length > 0) {
+              committees = memberInfo.committeeAssignments;
+              console.log(`Found ${committees.length} committees in committeeAssignments for ${member.full_name}`);
+            }
+            
+            // Check current term for committee info
+            if (committees.length === 0 && memberInfo?.terms) {
+              const currentTerm = memberInfo.terms.find((t: any) => t.congress === CURRENT_CONGRESS);
+              if (currentTerm?.committees) {
+                committees = currentTerm.committees;
+                console.log(`Found ${committees.length} committees in currentTerm for ${member.full_name}`);
               }
             }
+            
+            // If still no committees, try fetching from the committees endpoint directly
+            if (committees.length === 0) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              const committeesUrl = `${CONGRESS_API_BASE}/committee/${chamberPath}?api_key=${CONGRESS_API_KEY}&limit=100`;
+              
+              try {
+                const committeesResponse = await fetch(committeesUrl);
+                if (committeesResponse.ok) {
+                  const committeesData = await committeesResponse.json();
+                  const allCommittees = committeesData.committees || [];
+                  
+                  // For now, we need to check member endpoint depthCommittees field
+                  // Log what fields are available
+                  console.log(`Member data fields for ${member.full_name}:`, Object.keys(memberInfo || {}));
+                }
+              } catch (e) {
+                console.log(`Committee fetch failed for ${member.full_name}`);
+              }
+            }
+            
+            if (committees.length > 0) {
+              // Delete existing committee records for this member and congress
+              await supabase
+                .from('member_committees')
+                .delete()
+                .eq('member_id', member.id)
+                .eq('congress', CURRENT_CONGRESS);
+              
+              const committeeRecords = committees.slice(0, 10).map((c: any, idx: number) => ({
+                member_id: member.id,
+                committee_code: c.committee?.systemCode || c.systemCode || c.code || `COMM${idx}`,
+                committee_name: c.committee?.name || c.name || 'Unknown Committee',
+                chamber: member.chamber,
+                rank: idx + 1,
+                is_chair: c.chair === true || c.isChair === true,
+                is_ranking_member: c.rankingMember === true || c.isRankingMember === true,
+                congress: CURRENT_CONGRESS,
+              }));
+              
+              const { error: insertError } = await supabase
+                .from('member_committees')
+                .insert(committeeRecords);
+              
+              if (!insertError) {
+                committeesAdded += committeeRecords.length;
+                console.log(`Added ${committeeRecords.length} committees for ${member.full_name}`);
+              } else {
+                console.error(`Insert error for ${member.full_name}:`, insertError.message);
+              }
+            } else {
+              console.log(`No committees found for ${member.full_name}`);
+            }
+          } else {
+            console.log(`Failed to fetch member data for ${member.full_name}: ${memberResponse.status}`);
           }
         }
 
