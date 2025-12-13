@@ -247,10 +247,10 @@ Deno.serve(async (req) => {
 
     console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`)
 
-    // Get members to sync
+    // Get members to sync - include fec_candidate_id to avoid re-searching
     const { data: members, count: totalMembers } = await supabase
       .from('members')
-      .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber', { count: 'exact' })
+      .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids', { count: 'exact' })
       .eq('in_office', true)
       .order('last_name')
       .range(offset, offset + limit - 1)
@@ -291,103 +291,112 @@ Deno.serve(async (req) => {
         const lastName = member.last_name.replace(/[^a-zA-Z\s]/g, '').trim()
         const office = member.chamber === 'house' ? 'H' : 'S'
         
-        // Search for candidate using httpClient
-        const candidateSearchUrl = `${FEC_API_BASE}/candidates/?api_key=${FEC_API_KEY}&name=${encodeURIComponent(lastName)}&state=${stateAbbr}&office=${office}&is_active_candidate=true&sort=-election_years&per_page=20`
-        
-        console.log(`Searching FEC for: ${member.full_name} (${stateAbbr}, ${office})`)
-        
-        const { response: candidateResponse, metrics: candidateMetrics } = await fetchWithRetry(candidateSearchUrl, {}, PROVIDER, HTTP_CONFIG)
-        apiCalls++
-        totalWaitMs += candidateMetrics.totalWaitMs
-        
-        if (!candidateResponse?.ok) {
-          if (candidateResponse?.status === 429) {
-            console.error('Rate limited. Saving progress and stopping.')
-            errorCount++
-            break
-          }
-          console.log(`FEC search failed for ${member.full_name}`)
-          processedCount++
-          continue
-        }
-
-        const candidateData = await candidateResponse.json()
-        const candidates = candidateData.results || []
-        
-        // Find matching candidate - STRICT first name matching to avoid wrong matches
-        let matchingCandidate = null
-        const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '')
-        const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '')
-        
-        // Get possible legal names from nickname map
-        const possibleFirstNames = [memberFirstName]
-        if (NICKNAME_MAP[memberFirstName]) {
-          possibleFirstNames.push(...NICKNAME_MAP[memberFirstName])
-        }
-        // Also check reverse - if member uses legal name but FEC has nickname
-        for (const [nickname, legalNames] of Object.entries(NICKNAME_MAP)) {
-          if (legalNames.includes(memberFirstName)) {
-            possibleFirstNames.push(nickname)
-          }
-        }
-        
-        // Score-based matching for better accuracy
+        // Check if we already have a cached FEC candidate ID
+        let matchingCandidate: any = null
         let bestScore = 0
-        let bestCandidate = null
         
-        for (const c of candidates) {
-          if (!c.name) continue
-          const fecName = c.name.toLowerCase()
-          const nameParts = fecName.split(',')
-          const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || ''
-          const fecFirstPart = nameParts[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || ''
+        if (member.fec_candidate_id) {
+          // Use cached candidate ID - skip search
+          console.log(`Using cached FEC ID for ${member.full_name}: ${member.fec_candidate_id}`)
+          matchingCandidate = { candidate_id: member.fec_candidate_id, name: member.full_name }
+          bestScore = 100
+        } else {
+          // Search for candidate using httpClient
+          const candidateSearchUrl = `${FEC_API_BASE}/candidates/?api_key=${FEC_API_KEY}&name=${encodeURIComponent(lastName)}&state=${stateAbbr}&office=${office}&is_active_candidate=true&sort=-election_years&per_page=20`
           
-          // Last name must match exactly
-          if (fecLastName !== memberLastName) continue
+          console.log(`Searching FEC for: ${member.full_name} (${stateAbbr}, ${office})`)
           
-          let score = 0
+          const { response: candidateResponse, metrics: candidateMetrics } = await fetchWithRetry(candidateSearchUrl, {}, PROVIDER, HTTP_CONFIG)
+          apiCalls++
+          totalWaitMs += candidateMetrics.totalWaitMs
           
-          // Check against all possible first names (including nicknames)
-          for (const possibleName of possibleFirstNames) {
-            // Exact first name match = 100 points
-            if (fecFirstPart === possibleName) {
-              score = Math.max(score, possibleName === memberFirstName ? 100 : 90) // Slight penalty for nickname match
+          if (!candidateResponse?.ok) {
+            if (candidateResponse?.status === 429) {
+              console.error('Rate limited. Saving progress and stopping.')
+              errorCount++
+              break
             }
-            // First name starts with possible name (e.g., "al" matches "albert")
-            else if (fecFirstPart.startsWith(possibleName) && possibleName.length >= 2) {
-              score = Math.max(score, 80)
-            }
-            // Possible name starts with FEC first name (e.g., "albert" matches "al")
-            else if (possibleName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
-              score = Math.max(score, 70)
-            }
-            // At least 3 chars match at start (weak match)
-            else if (fecFirstPart.length >= 3 && possibleName.length >= 3 && 
-                     fecFirstPart.substring(0, 3) === possibleName.substring(0, 3)) {
-              score = Math.max(score, 50)
+            console.log(`FEC search failed for ${member.full_name}`)
+            processedCount++
+            continue
+          }
+
+          const candidateData = await candidateResponse.json()
+          const candidates = candidateData.results || []
+          
+          // Find matching candidate - STRICT first name matching to avoid wrong matches
+          const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '')
+          const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '')
+          
+          // Get possible legal names from nickname map
+          const possibleFirstNames = [memberFirstName]
+          if (NICKNAME_MAP[memberFirstName]) {
+            possibleFirstNames.push(...NICKNAME_MAP[memberFirstName])
+          }
+          // Also check reverse - if member uses legal name but FEC has nickname
+          for (const [nickname, legalNames] of Object.entries(NICKNAME_MAP)) {
+            if (legalNames.includes(memberFirstName)) {
+              possibleFirstNames.push(nickname)
             }
           }
           
-          // No first name match = skip
-          if (score === 0) continue
+          // Score-based matching for better accuracy
+          let bestCandidate: any = null
           
-          // Bonus for matching office type
-          if (c.office === office) score += 10
-          
-          // Bonus for recent election years
-          if (c.election_years?.includes(2024)) score += 5
-          if (c.election_years?.includes(2022)) score += 3
-          
-          if (score > bestScore) {
-            bestScore = score
-            bestCandidate = c
+          for (const c of candidates) {
+            if (!c.name) continue
+            const fecName = c.name.toLowerCase()
+            const nameParts = fecName.split(',')
+            const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || ''
+            const fecFirstPart = nameParts[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || ''
+            
+            // Last name must match exactly
+            if (fecLastName !== memberLastName) continue
+            
+            let score = 0
+            
+            // Check against all possible first names (including nicknames)
+            for (const possibleName of possibleFirstNames) {
+              // Exact first name match = 100 points
+              if (fecFirstPart === possibleName) {
+                score = Math.max(score, possibleName === memberFirstName ? 100 : 90) // Slight penalty for nickname match
+              }
+              // First name starts with possible name (e.g., "al" matches "albert")
+              else if (fecFirstPart.startsWith(possibleName) && possibleName.length >= 2) {
+                score = Math.max(score, 80)
+              }
+              // Possible name starts with FEC first name (e.g., "albert" matches "al")
+              else if (possibleName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
+                score = Math.max(score, 70)
+              }
+              // At least 3 chars match at start (weak match)
+              else if (fecFirstPart.length >= 3 && possibleName.length >= 3 && 
+                       fecFirstPart.substring(0, 3) === possibleName.substring(0, 3)) {
+                score = Math.max(score, 50)
+              }
+            }
+            
+            // No first name match = skip
+            if (score === 0) continue
+            
+            // Bonus for matching office type
+            if (c.office === office) score += 10
+            
+            // Bonus for recent election years
+            if (c.election_years?.includes(2024)) score += 5
+            if (c.election_years?.includes(2022)) score += 3
+            
+            if (score > bestScore) {
+              bestScore = score
+              bestCandidate = c
+            }
           }
-        }
-        
-        // Require minimum score of 50 to prevent bad matches
-        if (bestCandidate && bestScore >= 50) {
-          matchingCandidate = bestCandidate
-          console.log(`Matched (score=${bestScore}): ${member.full_name} -> ${bestCandidate.name} (${bestCandidate.candidate_id})`)
+          
+          // Require minimum score of 50 to prevent bad matches
+          if (bestCandidate && bestScore >= 50) {
+            matchingCandidate = bestCandidate
+            console.log(`Matched (score=${bestScore}): ${member.full_name} -> ${bestCandidate.name} (${bestCandidate.candidate_id})`)
+          }
         }
 
         if (!matchingCandidate) {
@@ -398,6 +407,23 @@ Deno.serve(async (req) => {
 
         const candidateId = matchingCandidate.candidate_id
         matchedCount++
+
+        // Store the FEC candidate ID on the member record for future syncs
+        if (!member.fec_candidate_id || member.fec_candidate_id !== candidateId) {
+          const { error: updateCandidateError } = await supabase
+            .from('members')
+            .update({ 
+              fec_candidate_id: candidateId,
+              fec_last_synced_at: new Date().toISOString()
+            })
+            .eq('id', member.id)
+          
+          if (updateCandidateError) {
+            console.error(`Failed to store FEC candidate ID for ${member.full_name}:`, updateCandidateError)
+          } else {
+            console.log(`Stored FEC candidate ID ${candidateId} for ${member.full_name}`)
+          }
+        }
 
         // Get committees using httpClient
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=5`
