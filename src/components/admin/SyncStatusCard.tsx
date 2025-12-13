@@ -75,6 +75,16 @@ const SYNC_CONFIGS: SyncConfig[] = [
     cronSchedule: "0 1 * * *", // Daily at 1 AM
   },
   {
+    id: "sync-committees",
+    label: "Committees",
+    description: "Syncs committee assignments from unitedstates/congress",
+    expectedTotal: 539,
+    icon: <Users className="h-4 w-4" />,
+    functionName: "sync-committees",
+    category: "congress",
+    cronSchedule: "0 3 * * 0", // Weekly Sunday at 3 AM
+  },
+  {
     id: "bills",
     label: "Bills & Sponsorships",
     description: "Syncs all bills from Congress 118 & 119 with sponsorship data",
@@ -114,6 +124,16 @@ const SYNC_CONFIGS: SyncConfig[] = [
     functionName: "sync-fec-funding",
     category: "finance",
     cronSchedule: "0 2 * * *", // Nightly at 2 AM
+  },
+  {
+    id: "sync-lobbying",
+    label: "Lobbying Data",
+    description: "Syncs lobbying disclosures from Senate LDA API",
+    expectedTotal: 539,
+    icon: <DollarSign className="h-4 w-4" />,
+    functionName: "sync-lobbying",
+    category: "finance",
+    cronSchedule: "0 4 * * 0", // Weekly Sunday at 4 AM
   },
   // Scores & Analysis
   {
@@ -215,6 +235,8 @@ function getCronDescription(cronSchedule: string): string {
   if (cronSchedule === "0 0 * * *") return "Daily 00:00 UTC";
   if (cronSchedule === "0 1 * * *") return "Daily 01:00 UTC";
   if (cronSchedule === "0 2 * * *") return "Daily 02:00 UTC";
+  if (cronSchedule === "0 3 * * 0") return "Weekly Sun 03:00 UTC";
+  if (cronSchedule === "0 4 * * 0") return "Weekly Sun 04:00 UTC";
   if (cronSchedule === "0 8 * * *") return "Daily 08:00 UTC";
   return cronSchedule;
 }
