@@ -259,10 +259,14 @@ Deno.serve(async (req) => {
         const candidateData = await candidateResponse.json()
         const candidates = candidateData.results || []
         
-        // Find matching candidate
+        // Find matching candidate - STRICT first name matching to avoid wrong matches
         let matchingCandidate = null
         const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '')
         const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '')
+        
+        // Score-based matching for better accuracy
+        let bestScore = 0
+        let bestCandidate = null
         
         for (const c of candidates) {
           if (!c.name) continue
@@ -271,32 +275,54 @@ Deno.serve(async (req) => {
           const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || ''
           const fecFirstPart = nameParts[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || ''
           
-          const lastNameMatch = fecLastName === memberLastName
-          const firstNameMatch = fecFirstPart === memberFirstName ||
-                                (fecFirstPart.length >= 3 && memberFirstName.startsWith(fecFirstPart.substring(0, 3))) ||
-                                (memberFirstName.length >= 3 && fecFirstPart.startsWith(memberFirstName.substring(0, 3)))
+          // Last name must match exactly
+          if (fecLastName !== memberLastName) continue
           
-          if (lastNameMatch && firstNameMatch) {
-            matchingCandidate = c
-            console.log(`Matched: ${member.full_name} -> ${c.name} (${c.candidate_id})`)
-            break
+          let score = 0
+          
+          // Exact first name match = 100 points
+          if (fecFirstPart === memberFirstName) {
+            score = 100
+          }
+          // First name starts with member's first name (e.g., "al" matches "albert")
+          else if (fecFirstPart.startsWith(memberFirstName) && memberFirstName.length >= 2) {
+            score = 80
+          }
+          // Member's first name starts with FEC first name (e.g., "albert" matches "al")
+          else if (memberFirstName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
+            score = 70
+          }
+          // At least 3 chars match at start (weak match)
+          else if (fecFirstPart.length >= 3 && memberFirstName.length >= 3 && 
+                   fecFirstPart.substring(0, 3) === memberFirstName.substring(0, 3)) {
+            score = 50
+          }
+          // No first name match = skip (avoid wrong matches like "Al Green" -> "James Green")
+          else {
+            continue
+          }
+          
+          // Bonus for matching office type
+          if (c.office === office) score += 10
+          
+          // Bonus for recent election years
+          if (c.election_years?.includes(2024)) score += 5
+          if (c.election_years?.includes(2022)) score += 3
+          
+          if (score > bestScore) {
+            bestScore = score
+            bestCandidate = c
           }
         }
         
-        if (!matchingCandidate) {
-          for (const c of candidates) {
-            if (!c.name) continue
-            const fecLastName = c.name.toLowerCase().split(',')[0]?.trim().replace(/[^a-z]/g, '') || ''
-            if (fecLastName === memberLastName && c.office === office) {
-              matchingCandidate = c
-              console.log(`Fallback match: ${member.full_name} -> ${c.name}`)
-              break
-            }
-          }
+        // Require minimum score of 50 to prevent bad matches
+        if (bestCandidate && bestScore >= 50) {
+          matchingCandidate = bestCandidate
+          console.log(`Matched (score=${bestScore}): ${member.full_name} -> ${bestCandidate.name} (${bestCandidate.candidate_id})`)
         }
 
         if (!matchingCandidate) {
-          console.log(`No FEC match for ${member.full_name}`)
+          console.log(`No FEC match for ${member.full_name} (best score: ${bestScore})`)
           processedCount++
           continue
         }
