@@ -32,7 +32,6 @@ import { useComparison } from "@/contexts/ComparisonContext";
 import { MemberFinanceSection, FundingProfile } from "@/features/finance";
 import { MemberAISummary } from "@/components/MemberAISummary";
 import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
-import { MemberPolicyAreaChart } from "@/components/MemberPolicyAreaChart";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
 import { toast } from "@/hooks/use-toast";
 import { VoteDetailDialog } from "@/components/VoteDetailDialog";
@@ -482,15 +481,9 @@ export default function MemberPage() {
           <AlignmentWidget politicianId={member.id} politicianName={member.fullName} />
         </div>
 
-        {/* AI Summary, Policy Areas, and Focus Chart */}
+        {/* AI Summary and Policy Areas */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">
           <MemberAISummary memberId={member.id} memberName={member.fullName} />
-          <MemberPolicyAreaChart 
-            sponsoredBills={member.sponsoredBills || []} 
-            cosponsoredBills={member.cosponsoredBills || []} 
-          />
-        </div>
-        <div className="mb-8">
           <MemberPolicyAreas memberId={member.id} memberState={member.state} memberParty={member.party} />
         </div>
 
