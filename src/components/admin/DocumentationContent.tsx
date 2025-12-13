@@ -10,11 +10,17 @@ import { Download, BookOpen, Database, Workflow, Globe, Clock, Layout, Users, Fi
 import { MermaidDiagram } from "./MermaidDiagram";
 
 // Version tracking
-const DOCUMENTATION_VERSION = "2.4.0";
-const LAST_UPDATED = "2025-12-12";
+const DOCUMENTATION_VERSION = "2.5.0";
+const LAST_UPDATED = "2025-12-13";
 
 // Changelog
 const CHANGELOG = [
+  { version: "2.5.0", date: "2025-12-13", changes: [
+    "Added Nickname Mapping for FEC Data Matching: Politicians with common nicknames (e.g., Ted Cruz → Rafael Edward Cruz) are now properly matched to FEC records",
+    "Nickname map includes 30+ common political nicknames (Ted, Bill, Bob, Dick, Jim, etc.)",
+    "Updated sync-fec-finance and sync-fec-funding edge functions with nickname support",
+    "Enhanced committee assignment details: clicking committees now shows description, jurisdiction, and member role explanation"
+  ]},
   { version: "2.4.0", date: "2025-12-12", changes: [
     "Major Data Pipeline Improvements: Added sync orchestrator with job locking",
     "Added data_anomalies table for quality monitoring and alerting",
@@ -545,19 +551,30 @@ Computed alignment scores.
 **Frequency**: Daily at 2 AM (incremental)
 **Tables Updated**: \`member_contributions\`, \`member_sponsors\`
 **Logic**:
-1. Match members to FEC candidate IDs
+1. Match members to FEC candidate IDs using nickname mapping
 2. Fetch itemized contributions (Schedule A)
 3. Categorize contributors (individual, pac, committee)
 4. Store granular contribution records
+
+**Nickname Mapping**: Handles politicians who go by nicknames different from their legal names:
+- Ted Cruz → Rafael Edward Cruz
+- Bill Clinton → William Clinton
+- Bob Dole → Robert Dole
+- Dick Cheney → Richard Cheney
+- Jim Jordan → James Jordan
+- And 25+ more common political nicknames
 
 #### \`sync-fec-funding\`
 **Purpose**: Compute funding metrics.
 **Frequency**: Daily at 3 AM
 **Tables Updated**: \`funding_metrics\`
 **Logic**:
-1. Aggregate contributions by member
-2. Calculate percentages (in-state, small donors, PACs)
-3. Compute scores (grassroots, PAC dependence, local money)
+1. Match members to FEC candidate IDs using nickname mapping
+2. Aggregate contributions by member
+3. Calculate percentages (in-state, small donors, PACs)
+4. Compute scores (grassroots, PAC dependence, local money)
+
+**Nickname Mapping**: Same nickname support as sync-fec-finance ensures consistent FEC data matching across all finance functions.
 
 ### Score Calculation Functions
 
