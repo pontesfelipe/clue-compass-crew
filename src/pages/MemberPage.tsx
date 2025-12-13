@@ -560,8 +560,8 @@ export default function MemberPage() {
                           {status}
                         </Badge>
                       </div>
-                      {bill.policy_area && (
-                        <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
+                      {bill.policyArea && (
+                        <p className="text-xs text-muted-foreground mt-2">{bill.policyArea}</p>
                       )}
                     </button>
                   );
@@ -616,8 +616,8 @@ export default function MemberPage() {
                           {status}
                         </Badge>
                       </div>
-                      {bill.policy_area && (
-                        <p className="text-xs text-muted-foreground mt-2">{bill.policy_area}</p>
+                      {bill.policyArea && (
+                        <p className="text-xs text-muted-foreground mt-2">{bill.policyArea}</p>
                       )}
                     </button>
                   );
