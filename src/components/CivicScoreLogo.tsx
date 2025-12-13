@@ -19,9 +19,9 @@ export function CivicScoreLogo({ className = "h-8" }: { className?: string }) {
         Ci
       </text>
       
-      {/* Checkmark as "v" in white with red outline for visibility on light backgrounds */}
+      {/* Checkmark as "v" - positioned to align with text baseline */}
       <path
-        d="M32 8 L38 18 L50 4"
+        d="M30 18 L37 26 L50 12"
         stroke="#DC2626"
         strokeWidth="4"
         strokeLinecap="round"
@@ -29,7 +29,7 @@ export function CivicScoreLogo({ className = "h-8" }: { className?: string }) {
         fill="none"
       />
       <path
-        d="M32 8 L38 18 L50 4"
+        d="M30 18 L37 26 L50 12"
         stroke="white"
         strokeWidth="2.5"
         strokeLinecap="round"
