@@ -36,6 +36,61 @@ const stateAbbreviations: Record<string, string> = {
   "U.S. Virgin Islands": "VI", "Northern Mariana Islands": "MP"
 }
 
+// Common political nicknames -> legal first names mapping
+const NICKNAME_MAP: Record<string, string[]> = {
+  'ted': ['rafael', 'edward', 'theodore'],
+  'bernie': ['bernard'],
+  'chuck': ['charles'],
+  'mike': ['michael'],
+  'bill': ['william'],
+  'bob': ['robert'],
+  'dick': ['richard'],
+  'jim': ['james'],
+  'joe': ['joseph'],
+  'tom': ['thomas'],
+  'dan': ['daniel'],
+  'dave': ['david'],
+  'ben': ['benjamin'],
+  'ed': ['edward', 'edwin'],
+  'al': ['albert', 'alan', 'alfred'],
+  'pete': ['peter'],
+  'tim': ['timothy'],
+  'matt': ['matthew'],
+  'rick': ['richard', 'eric', 'frederick'],
+  'ron': ['ronald'],
+  'don': ['donald'],
+  'andy': ['andrew'],
+  'tony': ['anthony'],
+  'steve': ['steven', 'stephen'],
+  'chris': ['christopher', 'christian'],
+  'nick': ['nicholas'],
+  'pat': ['patrick', 'patricia'],
+  'ken': ['kenneth'],
+  'larry': ['lawrence'],
+  'jerry': ['gerald', 'jerome'],
+  'jeff': ['jeffrey'],
+  'greg': ['gregory'],
+  'sam': ['samuel'],
+  'max': ['maxwell', 'maximilian'],
+  'jack': ['john', 'jackson'],
+  'marty': ['martin'],
+  'mitch': ['mitchell'],
+  'josh': ['joshua'],
+  'will': ['william'],
+  'charlie': ['charles'],
+  'liz': ['elizabeth'],
+  'beth': ['elizabeth'],
+  'debbie': ['deborah'],
+  'deborah': ['debbie'],
+  'nancy': ['ann'],
+  'sue': ['susan'],
+  'cathy': ['catherine'],
+  'kate': ['katherine', 'catherine'],
+  'maggie': ['margaret'],
+  'meg': ['margaret'],
+  'betty': ['elizabeth'],
+}
+
 const SPONSOR_THRESHOLD = 5000
 
 // Helper: Check if syncs are paused
@@ -264,6 +319,18 @@ Deno.serve(async (req) => {
         const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '')
         const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '')
         
+        // Get possible legal names from nickname map
+        const possibleFirstNames = [memberFirstName]
+        if (NICKNAME_MAP[memberFirstName]) {
+          possibleFirstNames.push(...NICKNAME_MAP[memberFirstName])
+        }
+        // Also check reverse - if member uses legal name but FEC has nickname
+        for (const [nickname, legalNames] of Object.entries(NICKNAME_MAP)) {
+          if (legalNames.includes(memberFirstName)) {
+            possibleFirstNames.push(nickname)
+          }
+        }
+        
         // Score-based matching for better accuracy
         let bestScore = 0
         let bestCandidate = null
@@ -280,27 +347,29 @@ Deno.serve(async (req) => {
           
           let score = 0
           
-          // Exact first name match = 100 points
-          if (fecFirstPart === memberFirstName) {
-            score = 100
+          // Check against all possible first names (including nicknames)
+          for (const possibleName of possibleFirstNames) {
+            // Exact first name match = 100 points
+            if (fecFirstPart === possibleName) {
+              score = Math.max(score, possibleName === memberFirstName ? 100 : 90) // Slight penalty for nickname match
+            }
+            // First name starts with possible name (e.g., "al" matches "albert")
+            else if (fecFirstPart.startsWith(possibleName) && possibleName.length >= 2) {
+              score = Math.max(score, 80)
+            }
+            // Possible name starts with FEC first name (e.g., "albert" matches "al")
+            else if (possibleName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
+              score = Math.max(score, 70)
+            }
+            // At least 3 chars match at start (weak match)
+            else if (fecFirstPart.length >= 3 && possibleName.length >= 3 && 
+                     fecFirstPart.substring(0, 3) === possibleName.substring(0, 3)) {
+              score = Math.max(score, 50)
+            }
           }
-          // First name starts with member's first name (e.g., "al" matches "albert")
-          else if (fecFirstPart.startsWith(memberFirstName) && memberFirstName.length >= 2) {
-            score = 80
-          }
-          // Member's first name starts with FEC first name (e.g., "albert" matches "al")
-          else if (memberFirstName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
-            score = 70
-          }
-          // At least 3 chars match at start (weak match)
-          else if (fecFirstPart.length >= 3 && memberFirstName.length >= 3 && 
-                   fecFirstPart.substring(0, 3) === memberFirstName.substring(0, 3)) {
-            score = 50
-          }
-          // No first name match = skip (avoid wrong matches like "Al Green" -> "James Green")
-          else {
-            continue
-          }
+          
+          // No first name match = skip
+          if (score === 0) continue
           
           // Bonus for matching office type
           if (c.office === office) score += 10
