@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
-import { CivicScoreLogo, CivicScoreLogoMark } from "@/components/CivicScoreLogo";
 import { useAdmin } from "@/hooks/useAdmin";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { ResetProfileDialog } from "@/components/ResetProfileDialog";
@@ -23,8 +22,12 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="civic-container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <CivicScoreLogoMark className="h-9 w-9 md:hidden" />
-          <CivicScoreLogo className="hidden h-8 md:block" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+            <BarChart3 className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="font-serif text-xl font-semibold text-primary">
+            CivicScore
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
