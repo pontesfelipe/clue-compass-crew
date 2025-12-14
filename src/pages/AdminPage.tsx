@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity, Brain, BookOpen } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity, Brain, BookOpen, HeartPulse } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
@@ -20,6 +20,7 @@ import { EditUserDialog } from "@/components/admin/EditUserDialog";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import { UserActivityLog } from "@/components/admin/UserActivityLog";
 import { DocumentationContent } from "@/components/admin/DocumentationContent";
+import { DataHealthPanel } from "@/components/admin/DataHealthPanel";
 import {
   Select,
   SelectContent,
@@ -393,6 +394,10 @@ export default function AdminPage() {
                 <Activity className="h-4 w-4" />
                 Activity Log
               </TabsTrigger>
+              <TabsTrigger value="health" className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4" />
+                Data Health
+              </TabsTrigger>
               <TabsTrigger value="docs" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 Documentation
@@ -761,6 +766,10 @@ export default function AdminPage() {
 
             <TabsContent value="activity">
               <UserActivityLog />
+            </TabsContent>
+
+            <TabsContent value="health">
+              <DataHealthPanel />
             </TabsContent>
 
             <TabsContent value="docs">
