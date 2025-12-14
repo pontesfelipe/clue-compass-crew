@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -16,7 +18,8 @@ import {
   Target,
   Loader2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Check
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -55,6 +58,9 @@ interface DataGaps {
 }
 
 export function DataHealthPanel() {
+  const { toast } = useToast();
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+
   // Fetch sync health
   const { data: syncHealth, isLoading: loadingSyncHealth, refetch: refetchSyncHealth } = useQuery({
     queryKey: ["admin-sync-health"],
@@ -156,6 +162,34 @@ export function DataHealthPanel() {
     refetchSyncHealth();
     refetchAnomalies();
     refetchGaps();
+  };
+
+  const handleResolveAnomaly = async (anomalyId: string) => {
+    setResolvingId(anomalyId);
+    try {
+      const { error } = await supabase
+        .from("data_anomalies")
+        .update({ resolved_at: new Date().toISOString() })
+        .eq("id", anomalyId);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Anomaly Resolved",
+        description: "The data anomaly has been marked as resolved.",
+      });
+      
+      refetchAnomalies();
+    } catch (error) {
+      console.error("Error resolving anomaly:", error);
+      toast({
+        title: "Error",
+        description: "Failed to resolve anomaly. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setResolvingId(null);
+    }
   };
 
   const isLoading = loadingSyncHealth || loadingAnomalies || loadingGaps;
@@ -505,6 +539,22 @@ export function DataHealthPanel() {
                       Detected {formatDistanceToNow(new Date(anomaly.detected_at), { addSuffix: true })}
                     </p>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleResolveAnomaly(anomaly.id)}
+                    disabled={resolvingId === anomaly.id}
+                    className="shrink-0"
+                  >
+                    {resolvingId === anomaly.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-1" />
+                        Resolve
+                      </>
+                    )}
+                  </Button>
                 </div>
               ))}
             </div>
