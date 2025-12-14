@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper } from "lucide-react";
+import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper, Landmark } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -60,6 +60,12 @@ export function Header() {
             <Link to="/news">
               <Newspaper className="mr-2 h-4 w-4" />
               News
+            </Link>
+          </Button>
+          <Button variant="civic-ghost" size="sm" asChild>
+            <Link to="/governors">
+              <Landmark className="mr-2 h-4 w-4" />
+              Governors
             </Link>
           </Button>
           <Button variant="civic-ghost" size="sm" asChild>
