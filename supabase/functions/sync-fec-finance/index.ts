@@ -527,13 +527,21 @@ Deno.serve(async (req) => {
           }
 
           // Identify sponsors from aggregates
+          // Valid sponsor_type: 'corporation', 'nonprofit', 'trade_association', 'union'
+          // Valid relationship_type: 'donor', 'endorsement', 'pac_support'
           for (const [name, data] of contributorAggregates) {
             if (data.amount >= SPONSOR_THRESHOLD && (data.type === 'pac' || data.type === 'corporate' || data.type === 'union')) {
+              // Map contributor type to valid sponsor_type
+              let sponsorType = 'corporation' // default
+              if (data.type === 'union') sponsorType = 'union'
+              else if (data.type === 'pac') sponsorType = 'trade_association'
+              else if (data.type === 'corporate') sponsorType = 'corporation'
+              
               sponsors.push({
                 member_id: member.id,
                 sponsor_name: name,
-                sponsor_type: data.type,
-                relationship_type: 'major_donor',
+                sponsor_type: sponsorType,
+                relationship_type: 'donor',
                 total_support: data.amount,
                 cycle: CURRENT_CYCLE,
               })
@@ -573,15 +581,15 @@ Deno.serve(async (req) => {
           if (totals) {
             const pacAmount = totals.other_political_committee_contributions || 0
             const existingPacTotal = sponsors
-              .filter(s => s.sponsor_type === 'pac')
+              .filter(s => s.sponsor_type === 'trade_association')
               .reduce((sum, s) => sum + s.total_support, 0)
             
             if (pacAmount > existingPacTotal && pacAmount > 0) {
               sponsors.push({
                 member_id: member.id,
                 sponsor_name: 'Other PAC Contributions',
-                sponsor_type: 'pac',
-                relationship_type: 'contributor',
+                sponsor_type: 'trade_association', // PAC -> trade_association
+                relationship_type: 'pac_support',
                 total_support: pacAmount - existingPacTotal,
                 cycle: CURRENT_CYCLE,
               })
@@ -592,8 +600,8 @@ Deno.serve(async (req) => {
               sponsors.push({
                 member_id: member.id,
                 sponsor_name: `${member.party === 'D' ? 'Democratic' : member.party === 'R' ? 'Republican' : 'Independent'} Party Committee`,
-                sponsor_type: 'party',
-                relationship_type: 'party_support',
+                sponsor_type: 'nonprofit', // Party -> nonprofit
+                relationship_type: 'pac_support',
                 total_support: partyAmount,
                 cycle: CURRENT_CYCLE,
               })
@@ -608,17 +616,26 @@ Deno.serve(async (req) => {
 
         // Insert sponsors
         if (sponsors.length > 0) {
-          await supabase
+          const { error: deleteSponsorsError } = await supabase
             .from('member_sponsors')
             .delete()
             .eq('member_id', member.id)
             .eq('cycle', CURRENT_CYCLE)
+          
+          if (deleteSponsorsError) {
+            console.error(`Error deleting sponsors for ${member.full_name}:`, deleteSponsorsError)
+          }
 
-          await supabase
+          const { error: insertSponsorsError } = await supabase
             .from('member_sponsors')
             .insert(sponsors)
           
-          console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name}`)
+          if (insertSponsorsError) {
+            console.error(`Error inserting sponsors for ${member.full_name}:`, insertSponsorsError)
+            console.log('Sponsor data:', JSON.stringify(sponsors[0]))
+          } else {
+            console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name}`)
+          }
         }
 
         // Insert industry lobbying data
