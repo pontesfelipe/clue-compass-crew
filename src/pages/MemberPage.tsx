@@ -69,8 +69,11 @@ function formatBillNumber(bill: any): string {
     hres: "H.Res.",
     sres: "S.Res.",
   };
-  const prefix = typeMap[bill.bill_type] || bill.bill_type?.toUpperCase() || "";
-  return `${prefix}${bill.bill_number}`;
+  // Support both camelCase (mapped) and snake_case (raw) properties
+  const billType = bill.billType || bill.bill_type;
+  const billNumber = bill.billNumber || bill.bill_number;
+  const prefix = typeMap[billType] || billType?.toUpperCase() || "";
+  return `${prefix}${billNumber}`;
 }
 
 function getBillStatus(bill: any): string {
