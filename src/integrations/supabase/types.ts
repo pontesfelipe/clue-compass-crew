@@ -357,6 +357,78 @@ export type Database = {
           },
         ]
       }
+      governors: {
+        Row: {
+          capitol_address: string | null
+          capitol_phone: string | null
+          created_at: string | null
+          email: string | null
+          facebook_url: string | null
+          first_name: string | null
+          id: string
+          image_url: string | null
+          instagram_url: string | null
+          is_current: boolean | null
+          last_name: string | null
+          name: string
+          openstates_id: string | null
+          party: string
+          raw: Json | null
+          state: string
+          term_end: string | null
+          term_start: string | null
+          twitter_handle: string | null
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          capitol_address?: string | null
+          capitol_phone?: string | null
+          created_at?: string | null
+          email?: string | null
+          facebook_url?: string | null
+          first_name?: string | null
+          id?: string
+          image_url?: string | null
+          instagram_url?: string | null
+          is_current?: boolean | null
+          last_name?: string | null
+          name: string
+          openstates_id?: string | null
+          party: string
+          raw?: Json | null
+          state: string
+          term_end?: string | null
+          term_start?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          capitol_address?: string | null
+          capitol_phone?: string | null
+          created_at?: string | null
+          email?: string | null
+          facebook_url?: string | null
+          first_name?: string | null
+          id?: string
+          image_url?: string | null
+          instagram_url?: string | null
+          is_current?: boolean | null
+          last_name?: string | null
+          name?: string
+          openstates_id?: string | null
+          party?: string
+          raw?: Json | null
+          state?: string
+          term_end?: string | null
+          term_start?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       issue_questions: {
         Row: {
           created_at: string

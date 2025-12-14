@@ -84,3 +84,6 @@ verify_jwt = false
 
 [functions.sync-lobbying]
 verify_jwt = false
+
+[functions.sync-governors]
+verify_jwt = false
