@@ -257,7 +257,21 @@ async function getCandidateCommittees(
   return committeeIds;
 }
 
-// Get committee financial totals - try multiple cycles if needed
+// Get CANDIDATE financial totals (aggregates all committees - much more reliable)
+async function getCandidateTotals(
+  candidateId: string, 
+  cycle: number, 
+  apiKey: string,
+  stats: ProcessingStats
+): Promise<any | null> {
+  const results = await fecGet(`/candidate/${candidateId}/totals/`, {
+    cycle: cycle,
+  }, apiKey, stats);
+  
+  return results[0] || null;
+}
+
+// Get committee financial totals - try multiple cycles if needed (kept as fallback)
 async function getCommitteeTotals(
   committeeId: string, 
   cycle: number, 
@@ -427,28 +441,28 @@ async function processMember(
     let outOfStateAmount = 0;
     let itemizedTotal = 0;
     
-    // Aggregate across all committees (CRITICAL: committee -> candidate rollup)
-    for (const committeeId of fecCommitteeIds) {
-      const totals = await getCommitteeTotals(committeeId, cycle, apiKey, stats);
+    // Use CANDIDATE TOTALS endpoint - much more efficient and reliable
+    const candidateTotals = await getCandidateTotals(fecCandidateId, cycle, apiKey, stats);
+    
+    if (candidateTotals) {
+      totalReceipts = candidateTotals.receipts || 0;
+      fromIndividuals = candidateTotals.individual_contributions || 0;
+      fromCommittees = candidateTotals.other_political_committee_contributions || 0;
       
-      if (totals) {
-        totalReceipts += totals.receipts || 0;
-        fromIndividuals += totals.individual_contributions || 0;
-        fromCommittees += totals.other_political_committee_contributions || 0;
-        
-        console.log(`  Committee ${committeeId} cycle ${cycle}: receipts=$${totals.receipts || 0}, individuals=$${totals.individual_contributions || 0}`);
-      }
-      
+      console.log(`  Candidate ${fecCandidateId} cycle ${cycle}: receipts=$${totalReceipts}, individuals=$${fromIndividuals}`);
+    }
+    
+    // Only fetch geographic breakdown if we have receipts (to reduce API calls)
+    if (totalReceipts > 0 && fecCommitteeIds.length > 0) {
+      // Only check the primary committee (first one) for geographic data to reduce API calls
+      const primaryCommittee = fecCommitteeIds[0];
       const stateBreakdown = await getCommitteeContributionsByState(
-        committeeId, cycle, stateAbbrev, apiKey, stats
+        primaryCommittee, cycle, stateAbbrev, apiKey, stats
       );
       
-      inStateAmount += stateBreakdown.inState;
-      outOfStateAmount += stateBreakdown.outOfState;
-      itemizedTotal += stateBreakdown.itemizedTotal;
-      
-      // Rate limit between committees
-      await new Promise(resolve => setTimeout(resolve, 100));
+      inStateAmount = stateBreakdown.inState;
+      outOfStateAmount = stateBreakdown.outOfState;
+      itemizedTotal = stateBreakdown.itemizedTotal;
     }
     
     // CRITICAL: Only skip if zero receipts - not if other fields are zero
