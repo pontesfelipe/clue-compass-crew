@@ -20,9 +20,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured')
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured')
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -151,16 +151,16 @@ Please provide a 2-3 paragraph summary that:
 
 Keep the language simple and avoid political jargon. Focus on facts, not opinions.`
 
-    console.log('Calling Lovable AI...')
+    console.log('Calling OpenAI...')
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are a helpful, non-partisan political analyst who explains congressional activity in simple terms for everyday citizens.' },
           { role: 'user', content: prompt }
@@ -202,7 +202,7 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
     await supabase.from('ai_usage_log').insert({
       operation_type: 'member_summary',
       tokens_used: tokensUsed,
-      model: 'google/gemini-2.5-flash',
+      model: 'gpt-4o-mini',
       success: true,
       metadata: { member_id: memberId, member_name: member.full_name }
     })
@@ -238,7 +238,7 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     await supabase.from('ai_usage_log').insert({
       operation_type: 'member_summary',
-      model: 'google/gemini-2.5-flash',
+      model: 'gpt-4o-mini',
       success: false,
       error_message: errorMessage
     })
