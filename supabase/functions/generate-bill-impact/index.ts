@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: 'gpt-5-2025-08-07',
             messages: [
               {
                 role: 'system',
@@ -113,7 +113,7 @@ Output format (use this exact structure):
           await supabase.from('ai_usage_log').insert({
             operation_type: 'bill_impact',
             tokens_used: tokensUsed,
-            model: 'gpt-4o-mini',
+            model: 'gpt-5-2025-08-07',
             success: true,
             metadata: { bill_id: bill.id, bill_number: `${bill.bill_type.toUpperCase()}${bill.bill_number}` }
           })
@@ -130,7 +130,7 @@ Output format (use this exact structure):
         // Log failed AI usage
         await supabase.from('ai_usage_log').insert({
           operation_type: 'bill_impact',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-2025-08-07',
           success: false,
           error_message: String(e),
           metadata: { bill_id: bill.id }
