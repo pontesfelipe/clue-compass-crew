@@ -32,7 +32,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5-2025-08-07",
         messages: [
           {
             role: "system",
@@ -59,7 +59,7 @@ Be concise, helpful, and accurate. When discussing specific data, note that you 
       // Log failed AI usage
       await supabase.from('ai_usage_log').insert({
         operation_type: 'admin_chat',
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-2025-08-07',
         success: false,
         error_message: `HTTP ${status}`,
         metadata: { messages_count: messages.length }
@@ -91,7 +91,7 @@ Be concise, helpful, and accurate. When discussing specific data, note that you 
     // Log successful AI usage (for streaming, we don't have token count)
     await supabase.from('ai_usage_log').insert({
       operation_type: 'admin_chat',
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-2025-08-07',
       success: true,
       metadata: { messages_count: messages.length }
     });
@@ -105,7 +105,7 @@ Be concise, helpful, and accurate. When discussing specific data, note that you 
     // Log failed AI usage
     await supabase.from('ai_usage_log').insert({
       operation_type: 'admin_chat',
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-2025-08-07',
       success: false,
       error_message: error instanceof Error ? error.message : "Unknown error"
     });

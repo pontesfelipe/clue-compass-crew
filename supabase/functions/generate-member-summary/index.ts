@@ -160,7 +160,7 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-2025-08-07',
         messages: [
           { role: 'system', content: 'You are a helpful, non-partisan political analyst who explains congressional activity in simple terms for everyday citizens.' },
           { role: 'user', content: prompt }
@@ -202,7 +202,7 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
     await supabase.from('ai_usage_log').insert({
       operation_type: 'member_summary',
       tokens_used: tokensUsed,
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-2025-08-07',
       success: true,
       metadata: { member_id: memberId, member_name: member.full_name }
     })
@@ -238,7 +238,7 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     await supabase.from('ai_usage_log').insert({
       operation_type: 'member_summary',
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-2025-08-07',
       success: false,
       error_message: errorMessage
     })

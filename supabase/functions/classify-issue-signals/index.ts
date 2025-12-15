@@ -212,11 +212,10 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "gpt-4o-mini",
+            model: "gpt-5-2025-08-07",
             messages: [
               { role: "user", content: prompt }
             ],
-            temperature: 0.3,
           }),
         });
 
@@ -237,7 +236,7 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
         await supabase.from('ai_usage_log').insert({
           operation_type: 'issue_classification',
           tokens_used: tokensUsed,
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-2025-08-07',
           success: true,
           metadata: { bill_id: bill.id, bill_number: `${bill.bill_type?.toUpperCase() || ''}${bill.bill_number || ''}` }
         });
@@ -295,7 +294,7 @@ If the bill doesn't clearly fit any issue, return an empty array: []`;
         // Log failed AI usage
         await supabase.from('ai_usage_log').insert({
           operation_type: 'issue_classification',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-2025-08-07',
           success: false,
           error_message: String(billError),
           metadata: { bill_id: bill.id }
