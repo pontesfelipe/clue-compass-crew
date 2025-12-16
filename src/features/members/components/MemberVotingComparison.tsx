@@ -15,21 +15,36 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
   const { data, isLoading } = useQuery({
     queryKey: ["voting-comparison", memberId],
     queryFn: async () => {
-      // Get this member's votes
-      const { data: memberVotes, error: memberError } = await supabase
+      // Get this member's votes - sample 100 most recent for performance
+      const { data: memberVotes, error: memberError, count: totalVoteCount } = await supabase
         .from("member_votes")
-        .select("vote_id, position")
-        .eq("member_id", memberId);
+        .select("vote_id, position", { count: "exact" })
+        .eq("member_id", memberId)
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (memberError) throw memberError;
 
-      // Get party members' votes for comparison
+      if (!memberVotes || memberVotes.length === 0) {
+        return {
+          partyAlignment: null,
+          stateAlignment: null,
+          totalVotes: 0,
+          sampledVotes: 0,
+        };
+      }
+
+      const voteIds = memberVotes.map(v => v.vote_id);
+      const memberVoteMap = new Map(memberVotes.map(v => [v.vote_id, v.position]));
+
+      // Get party members for comparison (limit to 30 for reasonable query size)
       const { data: partyMembers, error: partyError } = await supabase
         .from("members")
         .select("id")
         .eq("party", party)
         .eq("in_office", true)
-        .neq("id", memberId);
+        .neq("id", memberId)
+        .limit(30);
 
       if (partyError) throw partyError;
 
@@ -43,107 +58,117 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
 
       if (stateError) throw stateError;
 
-      if (!memberVotes || memberVotes.length === 0) {
-        return {
-          partyAlignment: null,
-          stateAlignment: null,
-          totalVotes: 0,
-        };
-      }
-
-      const voteIds = memberVotes.map(v => v.vote_id);
-      const memberVoteMap = new Map(memberVotes.map(v => [v.vote_id, v.position]));
-
-      // Calculate party alignment
+      // Calculate party alignment - batch vote IDs to avoid large IN clause issues
       let partyMatches = 0;
       let partyTotal = 0;
 
       if (partyMembers && partyMembers.length > 0) {
         const partyMemberIds = partyMembers.map(m => m.id);
         
-        const { data: partyVotes, error: pvError } = await supabase
-          .from("member_votes")
-          .select("member_id, vote_id, position")
-          .in("vote_id", voteIds)
-          .in("member_id", partyMemberIds.slice(0, 50)); // Limit for performance
-
-        if (!pvError && partyVotes) {
-          // Group by vote_id to find majority party position
-          const votePositions = new Map<string, Map<string, number>>();
+        // Process in batches of 25 vote IDs to stay well under limits
+        const batchSize = 25;
+        for (let i = 0; i < voteIds.length; i += batchSize) {
+          const batchVoteIds = voteIds.slice(i, i + batchSize);
           
-          for (const vote of partyVotes) {
-            if (!votePositions.has(vote.vote_id)) {
-              votePositions.set(vote.vote_id, new Map());
-            }
-            const positionCounts = votePositions.get(vote.vote_id)!;
-            positionCounts.set(vote.position, (positionCounts.get(vote.position) || 0) + 1);
+          const { data: partyVotes, error: pvError } = await supabase
+            .from("member_votes")
+            .select("member_id, vote_id, position")
+            .in("vote_id", batchVoteIds)
+            .in("member_id", partyMemberIds);
+
+          if (pvError) {
+            console.error("Party votes query error:", pvError);
+            continue;
           }
 
-          // Compare member's votes to party majority
-          for (const [voteId, positions] of votePositions) {
-            const memberPosition = memberVoteMap.get(voteId);
-            if (!memberPosition) continue;
-
-            let majorityPosition = '';
-            let maxCount = 0;
-            for (const [pos, count] of positions) {
-              if (count > maxCount) {
-                maxCount = count;
-                majorityPosition = pos;
+          if (partyVotes) {
+            // Group by vote_id to find majority party position
+            const votePositions = new Map<string, Map<string, number>>();
+            
+            for (const vote of partyVotes) {
+              if (!votePositions.has(vote.vote_id)) {
+                votePositions.set(vote.vote_id, new Map());
               }
+              const positionCounts = votePositions.get(vote.vote_id)!;
+              positionCounts.set(vote.position, (positionCounts.get(vote.position) || 0) + 1);
             }
 
-            if (majorityPosition) {
-              partyTotal++;
-              if (memberPosition === majorityPosition) {
-                partyMatches++;
+            // Compare member's votes to party majority
+            for (const [voteId, positions] of votePositions) {
+              const memberPosition = memberVoteMap.get(voteId);
+              if (!memberPosition || memberPosition === "not_voting") continue;
+
+              let majorityPosition = '';
+              let maxCount = 0;
+              for (const [pos, count] of positions) {
+                if (pos !== "not_voting" && count > maxCount) {
+                  maxCount = count;
+                  majorityPosition = pos;
+                }
+              }
+
+              if (majorityPosition) {
+                partyTotal++;
+                if (memberPosition === majorityPosition) {
+                  partyMatches++;
+                }
               }
             }
           }
         }
       }
 
-      // Calculate state alignment similarly
+      // Calculate state alignment similarly - batch processing
       let stateMatches = 0;
       let stateTotal = 0;
 
       if (stateMembers && stateMembers.length > 0) {
         const stateMemberIds = stateMembers.map(m => m.id);
         
-        const { data: stateVotes, error: svError } = await supabase
-          .from("member_votes")
-          .select("member_id, vote_id, position")
-          .in("vote_id", voteIds)
-          .in("member_id", stateMemberIds);
-
-        if (!svError && stateVotes) {
-          const votePositions = new Map<string, Map<string, number>>();
+        const batchSize = 25;
+        for (let i = 0; i < voteIds.length; i += batchSize) {
+          const batchVoteIds = voteIds.slice(i, i + batchSize);
           
-          for (const vote of stateVotes) {
-            if (!votePositions.has(vote.vote_id)) {
-              votePositions.set(vote.vote_id, new Map());
-            }
-            const positionCounts = votePositions.get(vote.vote_id)!;
-            positionCounts.set(vote.position, (positionCounts.get(vote.position) || 0) + 1);
+          const { data: stateVotes, error: svError } = await supabase
+            .from("member_votes")
+            .select("member_id, vote_id, position")
+            .in("vote_id", batchVoteIds)
+            .in("member_id", stateMemberIds);
+
+          if (svError) {
+            console.error("State votes query error:", svError);
+            continue;
           }
 
-          for (const [voteId, positions] of votePositions) {
-            const memberPosition = memberVoteMap.get(voteId);
-            if (!memberPosition) continue;
-
-            let majorityPosition = '';
-            let maxCount = 0;
-            for (const [pos, count] of positions) {
-              if (count > maxCount) {
-                maxCount = count;
-                majorityPosition = pos;
+          if (stateVotes) {
+            const votePositions = new Map<string, Map<string, number>>();
+            
+            for (const vote of stateVotes) {
+              if (!votePositions.has(vote.vote_id)) {
+                votePositions.set(vote.vote_id, new Map());
               }
+              const positionCounts = votePositions.get(vote.vote_id)!;
+              positionCounts.set(vote.position, (positionCounts.get(vote.position) || 0) + 1);
             }
 
-            if (majorityPosition) {
-              stateTotal++;
-              if (memberPosition === majorityPosition) {
-                stateMatches++;
+            for (const [voteId, positions] of votePositions) {
+              const memberPosition = memberVoteMap.get(voteId);
+              if (!memberPosition || memberPosition === "not_voting") continue;
+
+              let majorityPosition = '';
+              let maxCount = 0;
+              for (const [pos, count] of positions) {
+                if (pos !== "not_voting" && count > maxCount) {
+                  maxCount = count;
+                  majorityPosition = pos;
+                }
+              }
+
+              if (majorityPosition) {
+                stateTotal++;
+                if (memberPosition === majorityPosition) {
+                  stateMatches++;
+                }
               }
             }
           }
@@ -153,7 +178,8 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
       return {
         partyAlignment: partyTotal > 0 ? Math.round((partyMatches / partyTotal) * 100) : null,
         stateAlignment: stateTotal > 0 ? Math.round((stateMatches / stateTotal) * 100) : null,
-        totalVotes: memberVotes.length,
+        totalVotes: totalVoteCount || memberVotes.length,
+        sampledVotes: memberVotes.length,
       };
     },
     enabled: !!memberId,
@@ -240,7 +266,9 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
         )}
 
         <p className="text-xs text-muted-foreground text-center pt-2">
-          Based on {data.totalVotes} recorded votes
+          Based on {data.sampledVotes === data.totalVotes 
+            ? `${data.totalVotes} recorded votes` 
+            : `${data.sampledVotes} of ${data.totalVotes} recent votes`}
         </p>
       </CardContent>
     </Card>
