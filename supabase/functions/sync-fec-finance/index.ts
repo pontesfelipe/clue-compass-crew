@@ -240,6 +240,9 @@ Deno.serve(async (req) => {
     try {
       const body = await req.json()
       if (body.reset) offset = 0
+      if (typeof body.offset === 'number' && Number.isFinite(body.offset)) {
+        offset = Math.max(0, Math.floor(body.offset))
+      }
       if (body.limit) limit = Math.min(body.limit, 50)
     } catch {
       // Use defaults
@@ -426,11 +429,12 @@ Deno.serve(async (req) => {
         }
 
         // Get committees using httpClient
-        const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=5`
+        // NOTE: per_page=5 can miss the principal committee; use a higher page size.
+        const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=100`
         const { response: committeesResponse, metrics: committeesMetrics } = await fetchWithRetry(committeesUrl, {}, PROVIDER, HTTP_CONFIG)
         apiCalls++
         totalWaitMs += committeesMetrics.totalWaitMs
-        
+
         if (!committeesResponse?.ok) {
           if (committeesResponse?.status === 429) break
           processedCount++
@@ -445,44 +449,90 @@ Deno.serve(async (req) => {
           continue
         }
 
-        const principalCommittee = committees.find((c: any) => c.committee_type === 'P') || committees[0]
-        const committeeId = principalCommittee.committee_id
-        const committeeName = principalCommittee.name || ''
+        // Persist committee IDs for debugging and future syncs
+        const fetchedCommitteeIds = Array.from(
+          new Set(
+            committees
+              .map((c: any) => c.committee_id)
+              .filter((id: any) => typeof id === 'string' && id.length > 0)
+          )
+        ).sort()
 
-        // Fetch itemized contributions using httpClient
-        const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${committeeId}&two_year_transaction_period=${CURRENT_CYCLE}&sort=-contribution_receipt_amount&per_page=100`
-        const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
-        apiCalls++
-        totalWaitMs += contributionsMetrics.totalWaitMs
+        const existingCommitteeIds = Array.from(new Set((member.fec_committee_ids || []).filter(Boolean))).sort()
+        if (fetchedCommitteeIds.join(',') !== existingCommitteeIds.join(',')) {
+          const { error: updateCommitteesError } = await supabase
+            .from('members')
+            .update({ fec_committee_ids: fetchedCommitteeIds })
+            .eq('id', member.id)
+
+          if (updateCommitteesError) {
+            console.error(`Failed to store FEC committee IDs for ${member.full_name}:`, updateCommitteesError)
+          }
+        }
+
+        // Pick the best committee for itemized contributions.
+        // Start with principal ('P'), but fall back to other committees if the principal returns 0 items.
+        const committeeCandidates = [
+          committees.find((c: any) => c.committee_type === 'P'),
+          ...committees.filter((c: any) => c.committee_type !== 'P'),
+        ].filter(Boolean)
+
+        let committeeId = committeeCandidates[0].committee_id
+        let committeeName = committeeCandidates[0].name || ''
+        let contributionsResults: any[] = []
+
+        for (const committee of committeeCandidates.slice(0, 10)) {
+          const candidateCommitteeId = committee.committee_id
+          if (!candidateCommitteeId) continue
+
+          const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${CURRENT_CYCLE}&sort=-contribution_receipt_amount&per_page=100`
+          const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
+          apiCalls++
+          totalWaitMs += contributionsMetrics.totalWaitMs
+
+          if (contributionsResponse?.status === 429) {
+            // Let outer loop handle release/watermark updates
+            break
+          }
+
+          if (!contributionsResponse?.ok) continue
+
+          const contributionsData = await contributionsResponse.json()
+          const results = contributionsData.results || []
+
+          if (results.length > 0) {
+            committeeId = candidateCommitteeId
+            committeeName = committee.name || ''
+            contributionsResults = results
+            break
+          }
+        }
 
         const allContributions: any[] = []
         const sponsors: any[] = []
         const industryTotals = new Map<string, { total: number; count: number }>()
         const contributorAggregates = new Map<string, any>()
 
-        if (contributionsResponse?.ok) {
-          const contributionsData = await contributionsResponse.json()
-          const contributions = contributionsData.results || []
-
-          for (const c of contributions) {
+        if (contributionsResults.length > 0) {
+          for (const c of contributionsResults) {
             const amount = c.contribution_receipt_amount || 0
             if (amount <= 0) continue
 
             let contributorName = c.contributor_name || 'Unknown'
             const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation, contributorName)
-            
+
             if (c.committee && c.committee.name) {
               contributorName = c.committee.name
             } else if (c.contributor_aggregate_ytd > 200 && contributorType === 'pac') {
               contributorName = c.contributor_name || 'Unknown PAC'
             }
-            
+
             const industry = inferIndustry(c.contributor_employer, c.contributor_occupation)
             const contributorState = c.contributor_state || null
             const receiptDate = c.receipt_date || null
 
             const contributionUid = generateContributionUid(c, member.id)
-            
+
             allContributions.push({
               member_id: member.id,
               contributor_name: contributorName,
@@ -519,9 +569,9 @@ Deno.serve(async (req) => {
             // Track industry totals
             if (industry) {
               const existingIndustry = industryTotals.get(industry) || { total: 0, count: 0 }
-              industryTotals.set(industry, { 
-                total: existingIndustry.total + amount, 
-                count: existingIndustry.count + 1 
+              industryTotals.set(industry, {
+                total: existingIndustry.total + amount,
+                count: existingIndustry.count + 1,
               })
             }
           }
@@ -536,7 +586,7 @@ Deno.serve(async (req) => {
               if (data.type === 'union') sponsorType = 'union'
               else if (data.type === 'pac') sponsorType = 'trade_association'
               else if (data.type === 'corporate') sponsorType = 'corporation'
-              
+
               sponsors.push({
                 member_id: member.id,
                 sponsor_name: name,
@@ -548,7 +598,6 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Use upsert with contribution_uid for idempotent inserts
           if (allContributions.length > 0) {
             await supabase
               .from('member_contributions')
@@ -559,7 +608,7 @@ Deno.serve(async (req) => {
             const { error: insertError } = await supabase
               .from('member_contributions')
               .insert(allContributions)
-            
+
             if (insertError) {
               console.error(`Error inserting contributions for ${member.full_name}:`, insertError)
             } else {
@@ -664,6 +713,12 @@ Deno.serve(async (req) => {
             console.log(`Inserted ${lobbyingRecords.length} industry records for ${member.full_name}`)
           }
         }
+
+        // Mark successful sync attempt for this member (even if contributions were 0)
+        await supabase
+          .from('members')
+          .update({ fec_last_synced_at: new Date().toISOString() })
+          .eq('id', member.id)
 
         processedCount++
 
