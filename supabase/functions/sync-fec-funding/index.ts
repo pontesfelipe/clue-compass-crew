@@ -536,14 +536,16 @@ async function processMember(
     }
   }
   
-  // Update last synced timestamp
-  await supabase
-    .from("members")
-    .update({ fec_last_synced_at: new Date().toISOString() })
-    .eq("id", member.id);
-  
+  // Only update last synced timestamp if we actually found data
+  // This allows retrying members who had FEC IDs but no financial data
   if (foundDataInAnyCycle) {
     stats.membersWithData++;
+    await supabase
+      .from("members")
+      .update({ fec_last_synced_at: new Date().toISOString() })
+      .eq("id", member.id);
+  } else {
+    console.log(`No funding data found for ${member.full_name} - will retry on next sync`);
   }
   
   return { 
