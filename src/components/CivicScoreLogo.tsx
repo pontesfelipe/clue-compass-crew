@@ -39,13 +39,13 @@ export function CivicScoreLogo({ size = "md", showText = true, className }: Civi
     <span className={cn("font-bold tracking-tight inline-flex items-baseline", config.text, className)}>
       <span className="text-civic-red">Ci</span>
       <svg 
-        viewBox="0 0 24 28" 
+        viewBox="0 0 24 24" 
         className={cn(
-          "inline-block -mx-0.5 translate-y-[0.15em]",
-          size === "sm" && "h-4 w-4",
-          size === "md" && "h-5 w-5",
-          size === "lg" && "h-7 w-7",
-          size === "xl" && "h-10 w-10 md:h-12 md:w-12"
+          "inline-block -mx-0.5 translate-y-[0.25em]",
+          size === "sm" && "h-5 w-4",
+          size === "md" && "h-6 w-5",
+          size === "lg" && "h-8 w-7",
+          size === "xl" && "h-12 w-10 md:h-14 md:w-12"
         )}
         fill="none"
         stroke="currentColor"
@@ -53,7 +53,7 @@ export function CivicScoreLogo({ size = "md", showText = true, className }: Civi
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <polyline points="20 8 9 19 4 14" className="text-primary" />
+        <polyline points="20 6 9 17 4 12" className="text-primary" />
       </svg>
       <span className="text-civic-navy dark:text-primary">icScore</span>
     </span>
