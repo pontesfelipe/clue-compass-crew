@@ -51,9 +51,9 @@ export default function Index() {
               </div>
               
               <h1 className="font-serif text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Understand Your
+                Understand who you are voting
                 <span className="block mt-2">
-                  <span className="civic-gradient-text">Political Landscape</span>
+                  <span className="civic-gradient-text">to represent you.</span>
                 </span>
               </h1>
               
