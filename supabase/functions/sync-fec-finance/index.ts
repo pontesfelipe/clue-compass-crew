@@ -151,13 +151,17 @@ async function acquireLock(supabase: any): Promise<boolean> {
 
   if (progress) {
     const existingLock = progress.lock_until ? new Date(progress.lock_until) : null
-    if (existingLock && existingLock > now) {
-      console.log(`Job ${JOB_ID} is locked until ${existingLock.toISOString()}`)
+    const isLocked = !!(existingLock && existingLock > now)
+
+    if (isLocked) {
+      console.log(`Job ${JOB_ID} is locked until ${existingLock!.toISOString()}`)
       return false
     }
+
+    // If a previous run crashed, status may remain "running" even though the lock expired.
+    // Treat that as stale and allow a new run to start.
     if (progress.status === 'running') {
-      console.log(`Job ${JOB_ID} is already running`)
-      return false
+      console.warn(`Job ${JOB_ID} was 'running' but lock expired; restarting`) 
     }
   }
 
