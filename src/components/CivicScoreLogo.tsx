@@ -41,7 +41,7 @@ export function CivicScoreLogo({ size = "md", showText = true, className }: Civi
       <svg 
         viewBox="0 0 24 24" 
         className={cn(
-          "inline-block -mx-0.5 translate-y-[0.45em]",
+          "inline-block -mx-0.5 translate-y-[0.4em]",
           size === "sm" && "h-5 w-4",
           size === "md" && "h-6 w-5",
           size === "lg" && "h-8 w-7",
