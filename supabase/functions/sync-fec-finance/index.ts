@@ -13,8 +13,7 @@ const DATASET = 'contributions'
 const JOB_ID = "fec-finance"
 const MAX_DURATION_SECONDS = 240
 const BATCH_SIZE = 15
-const CURRENT_CYCLE = 2024
-
+const CYCLES_TO_TRY = [2024, 2022, 2020] // Try multiple cycles if current has no data
 const HTTP_CONFIG: HttpClientConfig = {
   maxRetries: 5,
   baseDelayMs: 1000,
@@ -484,31 +483,37 @@ Deno.serve(async (req) => {
         let committeeId = committeeCandidates[0].committee_id
         let committeeName = committeeCandidates[0].name || ''
         let contributionsResults: any[] = []
+        let usedCycle = CYCLES_TO_TRY[0] // Track which cycle we found data in
 
-        for (const committee of committeeCandidates.slice(0, 10)) {
-          const candidateCommitteeId = committee.committee_id
-          if (!candidateCommitteeId) continue
+        // Try each cycle until we find contributions
+        cycleLoop: for (const cycle of CYCLES_TO_TRY) {
+          for (const committee of committeeCandidates.slice(0, 10)) {
+            const candidateCommitteeId = committee.committee_id
+            if (!candidateCommitteeId) continue
 
-          const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${CURRENT_CYCLE}&sort=-contribution_receipt_amount&per_page=100`
-          const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
-          apiCalls++
-          totalWaitMs += contributionsMetrics.totalWaitMs
+            const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&sort=-contribution_receipt_amount&per_page=100`
+            const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
+            apiCalls++
+            totalWaitMs += contributionsMetrics.totalWaitMs
 
-          if (contributionsResponse?.status === 429) {
-            // Let outer loop handle release/watermark updates
-            break
-          }
+            if (contributionsResponse?.status === 429) {
+              // Let outer loop handle release/watermark updates
+              break cycleLoop
+            }
 
-          if (!contributionsResponse?.ok) continue
+            if (!contributionsResponse?.ok) continue
 
-          const contributionsData = await contributionsResponse.json()
-          const results = contributionsData.results || []
+            const contributionsData = await contributionsResponse.json()
+            const results = contributionsData.results || []
 
-          if (results.length > 0) {
-            committeeId = candidateCommitteeId
-            committeeName = committee.name || ''
-            contributionsResults = results
-            break
+            if (results.length > 0) {
+              committeeId = candidateCommitteeId
+              committeeName = committee.name || ''
+              contributionsResults = results
+              usedCycle = cycle
+              console.log(`Found ${results.length} contributions for ${member.full_name} in cycle ${cycle}`)
+              break cycleLoop
+            }
           }
         }
 
@@ -542,7 +547,7 @@ Deno.serve(async (req) => {
               contributor_name: contributorName,
               contributor_type: contributorType,
               amount: amount,
-              cycle: CURRENT_CYCLE,
+              cycle: usedCycle,
               industry: industry,
               contributor_state: contributorState,
               receipt_date: receiptDate,
@@ -597,7 +602,7 @@ Deno.serve(async (req) => {
                 sponsor_type: sponsorType,
                 relationship_type: 'donor',
                 total_support: data.amount,
-                cycle: CURRENT_CYCLE,
+                cycle: usedCycle,
               })
             }
           }
@@ -607,7 +612,7 @@ Deno.serve(async (req) => {
               .from('member_contributions')
               .delete()
               .eq('member_id', member.id)
-              .eq('cycle', CURRENT_CYCLE)
+              .eq('cycle', usedCycle)
 
             const { error: insertError } = await supabase
               .from('member_contributions')
@@ -622,7 +627,7 @@ Deno.serve(async (req) => {
         }
 
         // Fetch totals for additional sponsor data
-        const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${CURRENT_CYCLE}`
+        const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${usedCycle}`
         const { response: totalsResponse, metrics: totalsMetrics } = await fetchWithRetry(totalsUrl, {}, PROVIDER, HTTP_CONFIG)
         apiCalls++
         totalWaitMs += totalsMetrics.totalWaitMs
@@ -644,7 +649,7 @@ Deno.serve(async (req) => {
                 sponsor_type: 'trade_association', // PAC -> trade_association
                 relationship_type: 'pac_support',
                 total_support: pacAmount - existingPacTotal,
-                cycle: CURRENT_CYCLE,
+                cycle: usedCycle,
               })
             }
 
@@ -656,7 +661,7 @@ Deno.serve(async (req) => {
                 sponsor_type: 'nonprofit', // Party -> nonprofit
                 relationship_type: 'pac_support',
                 total_support: partyAmount,
-                cycle: CURRENT_CYCLE,
+                cycle: usedCycle,
               })
 
               industryTotals.set('Party Committee Support', { 
@@ -673,7 +678,7 @@ Deno.serve(async (req) => {
             .from('member_sponsors')
             .delete()
             .eq('member_id', member.id)
-            .eq('cycle', CURRENT_CYCLE)
+            .eq('cycle', usedCycle)
           
           if (deleteSponsorsError) {
             console.error(`Error deleting sponsors for ${member.full_name}:`, deleteSponsorsError)
@@ -700,7 +705,7 @@ Deno.serve(async (req) => {
               industry: industry,
               total_spent: data.total,
               client_count: data.count,
-              cycle: CURRENT_CYCLE,
+              cycle: usedCycle,
             }))
 
           if (lobbyingRecords.length > 0) {
@@ -708,7 +713,7 @@ Deno.serve(async (req) => {
               .from('member_lobbying')
               .delete()
               .eq('member_id', member.id)
-              .eq('cycle', CURRENT_CYCLE)
+              .eq('cycle', usedCycle)
 
             await supabase
               .from('member_lobbying')
