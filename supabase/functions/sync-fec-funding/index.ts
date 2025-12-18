@@ -6,7 +6,14 @@ const corsHeaders = {
 };
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
-const CYCLES = [2020, 2022, 2024];
+
+// FEC cycles are even-numbered election years. Use a rolling window so senators in 2026/2028 cycles work.
+const CURRENT_CYCLE = (() => {
+  const year = new Date().getUTCFullYear();
+  return year % 2 === 0 ? year : year + 1;
+})();
+
+const CYCLES = [CURRENT_CYCLE - 4, CURRENT_CYCLE - 2, CURRENT_CYCLE];
 const BATCH_SIZE = 10;
 
 // State name to abbreviation mapping
