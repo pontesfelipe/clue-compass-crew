@@ -37,7 +37,7 @@ export function CivicScoreLogo({ size = "md", showText = true, className }: Civi
 
   return (
     <span className={cn("font-bold tracking-tight inline-flex items-baseline", config.text, className)}>
-      <span className="text-civic-red">Ci</span>
+      <span className="text-civic-red translate-y-[0.02em]">Ci</span>
       <svg 
         viewBox="0 0 24 24" 
         className={cn(
