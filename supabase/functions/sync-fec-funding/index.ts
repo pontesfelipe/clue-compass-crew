@@ -700,24 +700,20 @@ async function syncFecBackground(
     }, { onConflict: "id" });
   
   // Get members to sync
-  let query = supabase
+  // First, get member IDs that already have funding_metrics
+  const { data: membersWithMetrics } = await supabase
+    .from("funding_metrics")
+    .select("member_id")
+    .limit(1000);
+  
+  const memberIdsWithMetrics = new Set((membersWithMetrics || []).map((m: any) => m.member_id));
+  
+  // Fetch ALL in-office members then filter/sort appropriately
+  const { data: allMembers, error } = await supabase
     .from("members")
     .select("*")
-    .eq("in_office", true);
-  
-  if (mode === "incremental") {
-    // Only sync members not synced in last 3 days OR with no committee IDs
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    query = query.or(
-      `fec_last_synced_at.is.null,fec_last_synced_at.lt.${threeDaysAgo.toISOString()},fec_committee_ids.is.null`
-    );
-  }
-  
-  // Prioritize members without FEC data first
-  const { data: members, error } = await query
-    .order("fec_last_synced_at", { ascending: true, nullsFirst: true })
-    .limit(maxMembers);
+    .eq("in_office", true)
+    .order("last_name");
   
   if (error) {
     console.error("Error fetching members:", error);
@@ -728,9 +724,39 @@ async function syncFecBackground(
     return;
   }
   
+  // CRITICAL: Always prioritize members with fec_candidate_id but NO funding_metrics
+  // These members have been identified in FEC but never had metrics calculated
+  let members: any[] = [];
+  
+  if (mode === "incremental") {
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    
+    // Priority 1: Members with fec_candidate_id but no funding_metrics (regardless of fec_last_synced_at)
+    const priorityMembers = (allMembers || []).filter((m: any) => 
+      m.fec_candidate_id && !memberIdsWithMetrics.has(m.id)
+    );
+    
+    // Priority 2: Members not synced recently or with no committees
+    const staleMembers = (allMembers || []).filter((m: any) => {
+      // Skip if already in priority list
+      if (m.fec_candidate_id && !memberIdsWithMetrics.has(m.id)) return false;
+      // Include if: no sync timestamp, stale timestamp, or no committees
+      const isStale = !m.fec_last_synced_at || new Date(m.fec_last_synced_at) < threeDaysAgo;
+      const noCommittees = !m.fec_committee_ids || m.fec_committee_ids.length === 0;
+      return isStale || noCommittees;
+    });
+    
+    members = [...priorityMembers, ...staleMembers].slice(0, maxMembers);
+    console.log(`Priority: ${priorityMembers.length} members with FEC ID but no metrics`);
+  } else {
+    // Full mode: process all
+    members = (allMembers || []).slice(0, maxMembers);
+  }
+  
   // CRITICAL GUARD: Abort if no members to process
   if (!members || members.length === 0) {
-    console.log("No members to sync - all members already synced recently");
+    console.log("No members to sync - all members already have funding metrics");
     await supabase.from("sync_progress").update({ 
       status: "complete",
       error_message: null,
@@ -738,6 +764,9 @@ async function syncFecBackground(
     }).eq("id", "fec-funding");
     return;
   }
+  
+  const membersWithoutMetrics = members.filter((m: any) => !memberIdsWithMetrics.has(m.id)).length;
+  console.log(`Syncing ${membersWithoutMetrics} members without funding_metrics`);
   
   console.log(`Found ${members.length} members to sync`);
   console.log(`Members: ${members.slice(0, 5).map((m: any) => m.full_name).join(', ')}${members.length > 5 ? '...' : ''}`);
