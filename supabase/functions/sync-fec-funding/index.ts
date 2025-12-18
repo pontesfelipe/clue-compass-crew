@@ -797,7 +797,7 @@ async function syncFecBackground(
       console.log(`[${stats.membersProcessed}/${members.length}] ${member.full_name}: ${status}`);
       
       // Rate limiting between members
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 200));
     } catch (error) {
       console.error(`Error processing ${member.full_name}:`, error);
       stats.errors.push(`Exception for ${member.full_name}: ${error}`);
@@ -890,7 +890,7 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const mode = url.searchParams.get("mode") || "incremental";
-    const maxMembers = parseInt(url.searchParams.get("limit") || "20");
+    const maxMembers = parseInt(url.searchParams.get("limit") || "50");
 
     // Set a lock to prevent overlapping runs
     const lockUntil = new Date();
