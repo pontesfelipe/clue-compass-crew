@@ -173,16 +173,24 @@ Deno.serve(async (req) => {
     // Enqueue due jobs
     const enqueuedJobs: string[] = [];
     
-    for (const { job, progress } of jobsToEnqueue) {
-      // Update job status to queued
+    for (const { job } of jobsToEnqueue) {
+      // Ensure the job exists in sync_jobs, then mark it queued
       await supabase
         .from("sync_jobs")
-        .update({
-          status: 'queued',
+        .upsert({
+          id: job.id,
+          provider: job.provider,
+          job_type: job.job_type,
+          frequency_minutes: job.frequency_minutes ?? 60,
+          priority: job.priority ?? 50,
+          max_duration_seconds: job.max_duration_seconds ?? 300,
+          is_enabled: true,
+          status: "queued",
           next_run_at: now.toISOString(),
+          scope: job.scope ?? {},
+          cursor: {},
           updated_at: now.toISOString(),
-        })
-        .eq("id", job.id);
+        });
 
       // Create sync_progress entry if needed
       await supabase
