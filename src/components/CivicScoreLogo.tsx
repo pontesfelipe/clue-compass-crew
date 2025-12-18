@@ -45,7 +45,7 @@ export function CivicScoreLogo({ size = "md", showText = true, className }: Civi
           size === "sm" && "h-5 w-4 translate-y-[0.37em]",
           size === "md" && "h-6 w-5 translate-y-[0.37em]",
           size === "lg" && "h-8 w-7 translate-y-[0.37em]",
-          size === "xl" && "h-12 w-10 md:h-14 md:w-12 translate-y-[0.32em]"
+          size === "xl" && "h-12 w-10 md:h-14 md:w-12 translate-y-[0.35em]"
         )}
         fill="none"
         stroke="currentColor"
