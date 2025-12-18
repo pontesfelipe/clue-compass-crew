@@ -728,7 +728,11 @@ async function syncFecBackground(
   // These members have been identified in FEC but never had metrics calculated
   let members: any[] = [];
   
-  if (mode === "incremental") {
+  if (mode === "missing_only") {
+    // ONLY process members without ANY funding_metrics records
+    members = (allMembers || []).filter((m: any) => !memberIdsWithMetrics.has(m.id)).slice(0, maxMembers);
+    console.log(`Missing-only mode: ${members.length} members without funding_metrics (of ${(allMembers || []).length} total)`);
+  } else if (mode === "incremental") {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     
