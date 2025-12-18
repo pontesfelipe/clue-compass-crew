@@ -3,19 +3,14 @@ import { Footer } from "@/components/Footer";
 import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
 import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
-import { USMapSVG } from "@/components/USMapSVG";
 import { MemberCard } from "@/components/MemberCard";
-import { ScoreRing } from "@/components/ScoreRing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BarChart3, 
   Scale, 
   Map, 
-  Sliders, 
-  TrendingUp, 
   Users,
   ArrowRight,
-  CheckCircle,
   Shield,
   Database,
   Target
@@ -33,7 +28,7 @@ export default function Index() {
       <Header />
       <ProfileCompletionBanner />
       
-      {/* Hero Section */}
+      {/* Hero Section - Mission Focused */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{ 
@@ -43,80 +38,52 @@ export default function Index() {
         </div>
         
         <div className="civic-container relative py-20 lg:py-32">
-          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
-            <div className="space-y-8">
-              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-                <Shield className="h-4 w-4" />
-                Neutral · Data-driven · Non-partisan
-              </div>
-              
-              <h1 className="font-serif text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Understand who you are voting
-                <span className="block mt-2">
-                  <span className="civic-gradient-text">to represent you.</span>
-                </span>
-              </h1>
-              
-              <p className="text-lg text-muted-foreground max-w-lg leading-relaxed">
-                We turn public data on votes, money, and behavior into clear, neutral insights 
-                — so you can decide for yourself. No opinions. No party labels. Just actions and patterns.
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            {/* Mission Statement */}
+            <div className="space-y-6">
+              <h2 className="font-serif text-xl font-semibold text-foreground sm:text-2xl">
+                CivicScore's Mission
+              </h2>
+              <p className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
+                CivicScore's mission is to deliver public voting and campaign financial information 
+                of current politicians in your State on whether they are serving and protecting your 
+                human rights, with the goal of helping you to form your own opinions about the 
+                individuals you choose to represent your interests.
               </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button variant="hero" size="xl" asChild>
-                  <Link to="/map">
-                    See How Your State Performs
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <Button variant="civic-outline" size="xl" asChild>
-                  <Link to="/how-it-works">
-                    How It Works
-                  </Link>
-                </Button>
-              </div>
+            </div>
 
-              <div className="flex items-center gap-6 pt-4">
-                {[
-                  "535 Members Tracked",
-                  "Official Public Data",
-                  "No Ideology Labels"
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-score-excellent" />
-                    {item}
-                  </div>
-                ))}
+            {/* Neutral Badge */}
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-3 shadow-sm">
+                <Shield className="h-5 w-5 text-primary" />
+                <span className="text-base font-medium text-foreground">
+                  Neutral – Data driven – Non-partisan
+                </span>
               </div>
             </div>
 
-            <div className="relative">
-              <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/5 to-accent/5 blur-2xl" />
-              <div className="relative rounded-2xl border border-border bg-card p-6 shadow-civic-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-serif text-lg font-semibold text-foreground">National Overview</h3>
-                  <ScoreRing score={67} size="md" />
-                </div>
-                <USMapSVG showStats={false} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            {/* Main Headline */}
+            <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl pt-4">
+              Understand politicians you are choosing
+              <span className="block mt-2">
+                <span className="civic-gradient-text">to represent you</span>
+              </span>
+            </h1>
 
-      {/* What This Is Section */}
-      <section className="py-16 lg:py-20 border-t border-border">
-        <div className="civic-container">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="font-serif text-2xl font-bold text-foreground sm:text-3xl mb-6">
-              What This Is
-            </h2>
-            <p className="text-lg text-muted-foreground leading-relaxed">
-              Politics generates enormous amounts of public data, but it is scattered, technical, 
-              and difficult to trust. CivicScore brings verified public records together and presents 
-              them clearly. We measure how actions align with the priorities <em>you</em> choose — 
-              without telling you what to think or how to vote.
-            </p>
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/map">
+                  Select your State
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button variant="civic-outline" size="xl" asChild>
+                <Link to="/how-it-works">
+                  How it Works
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
