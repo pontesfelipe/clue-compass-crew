@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper, Landmark, Menu } from "lucide-react";
+import { Map, FileText, Scale, User, Vote, LogOut, Shield, UserCircle, Heart, Bookmark, RotateCcw, Newspaper, Landmark, Menu } from "lucide-react";
 import { MemberSearch } from "@/components/MemberSearch";
+import { CivicScoreLogo } from "@/components/CivicScoreLogo";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -56,13 +57,8 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
               <SheetHeader className="border-b p-4">
-                <SheetTitle className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                    <BarChart3 className="h-4 w-4 text-primary-foreground" />
-                  </div>
-                  <span className="font-serif text-lg font-semibold text-primary">
-                    CivicScore
-                  </span>
+                <SheetTitle>
+                  <CivicScoreLogo size="sm" />
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col p-4">
@@ -158,13 +154,8 @@ export function Header() {
           </Sheet>
 
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <BarChart3 className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="font-serif text-xl font-semibold text-primary hidden sm:inline">
-              CivicScore
-            </span>
+          <Link to="/" className="flex items-center">
+            <CivicScoreLogo size="md" />
           </Link>
         </div>
 
