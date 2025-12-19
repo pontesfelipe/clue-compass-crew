@@ -45,10 +45,9 @@ export default function Index() {
                 CivicScore's Mission
               </h2>
               <p className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-                CivicScore's mission is to deliver public voting and campaign financial information 
-                of current politicians in your State on whether they are serving and protecting your 
-                human rights, with the goal of helping you to form your own opinions about the 
-                individuals you choose to represent your interests.
+                CivicScore's mission is to deliver public voting and campaign finance information 
+                of current politicians in your State to help you form an opinion on whether they 
+                are serving and protecting your interests.
               </p>
             </div>
 
