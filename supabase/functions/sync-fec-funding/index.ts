@@ -7,13 +7,17 @@ const corsHeaders = {
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
 
-// FEC cycles are even-numbered election years. Use a rolling window so senators in 2026/2028 cycles work.
+// FEC cycles are even-numbered election years. Use a rolling window that includes:
+// - Past cycles for historical data
+// - Current cycle for House members and some Senators  
+// - NEXT cycle for Senators not up until 2026/2028 (they file under future cycle)
 const CURRENT_CYCLE = (() => {
   const year = new Date().getUTCFullYear();
   return year % 2 === 0 ? year : year + 1;
 })();
 
-const CYCLES = [CURRENT_CYCLE - 4, CURRENT_CYCLE - 2, CURRENT_CYCLE];
+// Include next cycle (+2) so we capture Senators fundraising for 2026
+const CYCLES = [CURRENT_CYCLE - 4, CURRENT_CYCLE - 2, CURRENT_CYCLE, CURRENT_CYCLE + 2];
 const BATCH_SIZE = 10;
 
 // State name to abbreviation mapping
