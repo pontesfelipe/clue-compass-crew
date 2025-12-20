@@ -491,7 +491,9 @@ Deno.serve(async (req) => {
             const candidateCommitteeId = committee.committee_id
             if (!candidateCommitteeId) continue
 
-            const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&sort=-contribution_receipt_amount&per_page=100`
+            // Fetch INDIVIDUAL contributions only (contributor_type=individual) to get real donor names
+            // This filters out PAC-to-PAC transfers and joint fundraising committee transfers
+            const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&contributor_type=individual&sort=-contribution_receipt_amount&per_page=100`
             const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
             apiCalls++
             totalWaitMs += contributionsMetrics.totalWaitMs
@@ -511,7 +513,7 @@ Deno.serve(async (req) => {
               committeeName = committee.name || ''
               contributionsResults = results
               usedCycle = cycle
-              console.log(`Found ${results.length} contributions for ${member.full_name} in cycle ${cycle}`)
+              console.log(`Found ${results.length} individual contributions for ${member.full_name} in cycle ${cycle}`)
               break cycleLoop
             }
           }
