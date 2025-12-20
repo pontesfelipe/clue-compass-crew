@@ -452,25 +452,46 @@ async function processMember(
     let outOfStateAmount = 0;
     let itemizedTotal = 0;
     
+    const primaryCommittee = fecCommitteeIds.length > 0 ? fecCommitteeIds[0] : null;
+
     // Use CANDIDATE TOTALS endpoint - much more efficient and reliable
     const candidateTotals = await getCandidateTotals(fecCandidateId, cycle, apiKey, stats);
-    
+
     if (candidateTotals) {
       totalReceipts = candidateTotals.receipts || 0;
       fromIndividuals = candidateTotals.individual_contributions || 0;
       fromCommittees = candidateTotals.other_political_committee_contributions || 0;
-      
-      console.log(`  Candidate ${fecCandidateId} cycle ${cycle}: receipts=$${totalReceipts}, individuals=$${fromIndividuals}`);
-    }
-    
-    // Only fetch geographic breakdown if we have receipts (to reduce API calls)
-    if (totalReceipts > 0 && fecCommitteeIds.length > 0) {
-      // Only check the primary committee (first one) for geographic data to reduce API calls
-      const primaryCommittee = fecCommitteeIds[0];
-      const stateBreakdown = await getCommitteeContributionsByState(
-        primaryCommittee, cycle, stateAbbrev, apiKey, stats
+
+      console.log(
+        `  Candidate ${fecCandidateId} cycle ${cycle}: receipts=$${totalReceipts}, individuals=$${fromIndividuals}`,
       );
-      
+    }
+
+    // Fallback: some candidates (esp. Senators in off-years) may have committee totals even
+    // when candidate totals are missing/zero for that cycle.
+    if (totalReceipts === 0 && primaryCommittee) {
+      const committeeTotals = await getCommitteeTotals(primaryCommittee, cycle, apiKey, stats);
+      if (committeeTotals) {
+        totalReceipts = committeeTotals.receipts || 0;
+        fromIndividuals = committeeTotals.individual_contributions || 0;
+        fromCommittees = committeeTotals.other_political_committee_contributions || 0;
+
+        console.log(
+          `  Fallback committee ${primaryCommittee} cycle ${cycle}: receipts=$${totalReceipts}, individuals=$${fromIndividuals}`,
+        );
+      }
+    }
+
+    // Only fetch geographic breakdown if we have receipts (to reduce API calls)
+    if (totalReceipts > 0 && primaryCommittee) {
+      const stateBreakdown = await getCommitteeContributionsByState(
+        primaryCommittee,
+        cycle,
+        stateAbbrev,
+        apiKey,
+        stats,
+      );
+
       inStateAmount = stateBreakdown.inState;
       outOfStateAmount = stateBreakdown.outOfState;
       itemizedTotal = stateBreakdown.itemizedTotal;
