@@ -46,22 +46,23 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
               )}
             </div>
             {(contribution.contributorEmployer || contribution.contributorOccupation) && (
-              <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                {[contribution.contributorOccupation, contribution.contributorEmployer]
-                  .filter(Boolean)
-                  .join(" at ")}
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1">
+                {contribution.contributorOccupation && (
+                  <span className="text-sm text-foreground/80">
+                    {contribution.contributorOccupation}
+                  </span>
+                )}
+                {contribution.contributorOccupation && contribution.contributorEmployer && (
+                  <span className="hidden sm:inline text-muted-foreground">•</span>
+                )}
+                {contribution.contributorEmployer && (
+                  <span className="text-sm text-muted-foreground truncate">
+                    {contribution.contributorEmployer}
+                  </span>
+                )}
+              </div>
             )}
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {contribution.entityType && (
-                <Badge 
-                  variant="outline" 
-                  className="text-xs bg-primary/10 text-primary border-primary/30"
-                >
-                  {contribution.entityType}
-                  {contribution.entityTypeDesc && ` - ${contribution.entityTypeDesc}`}
-                </Badge>
-              )}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <Badge 
                 variant="outline" 
                 className={cn("text-xs", typeColors[contribution.contributorType])}
@@ -69,9 +70,9 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
                 {contributorTypeLabels[contribution.contributorType]}
               </Badge>
               {contribution.industry && (
-                <span className="text-xs text-muted-foreground truncate">
+                <Badge variant="outline" className="text-xs">
                   {contribution.industry}
-                </span>
+                </Badge>
               )}
             </div>
           </div>
