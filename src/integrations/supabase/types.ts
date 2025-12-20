@@ -612,6 +612,8 @@ export type Database = {
           contributor_zip: string | null
           created_at: string | null
           cycle: number
+          entity_type: string | null
+          entity_type_desc: string | null
           id: string
           industry: string | null
           member_id: string
@@ -634,6 +636,8 @@ export type Database = {
           contributor_zip?: string | null
           created_at?: string | null
           cycle: number
+          entity_type?: string | null
+          entity_type_desc?: string | null
           id?: string
           industry?: string | null
           member_id: string
@@ -656,6 +660,8 @@ export type Database = {
           contributor_zip?: string | null
           created_at?: string | null
           cycle?: number
+          entity_type?: string | null
+          entity_type_desc?: string | null
           id?: string
           industry?: string | null
           member_id?: string

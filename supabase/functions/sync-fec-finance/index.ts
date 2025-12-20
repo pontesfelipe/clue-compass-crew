@@ -529,7 +529,11 @@ Deno.serve(async (req) => {
 
             // Keep the actual contributor name from FEC (donor's name for individuals)
             const contributorName = c.contributor_name || 'Unknown'
-            const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation, contributorName)
+            
+            // Use FEC entity_type for classification, fallback to heuristic
+            const entityType = c.entity_type || null
+            const entityTypeDesc = c.entity_type_desc || null
+            const contributorType = classifyFromEntityType(entityType, c.contributor_employer, c.contributor_occupation, contributorName)
             
             // Note: c.committee.name is the RECIPIENT committee, not the donor
             // We already store this in committee_name field, so don't overwrite contributor_name
@@ -558,6 +562,8 @@ Deno.serve(async (req) => {
               memo_text: c.memo_text || null,
               transaction_type: c.receipt_type || null,
               contribution_uid: contributionUid,
+              entity_type: entityType,
+              entity_type_desc: entityTypeDesc,
             })
 
             // Track for sponsors
@@ -844,7 +850,59 @@ Deno.serve(async (req) => {
   }
 })
 
-function categorizeContributor(employer: string | null, occupation: string | null, contributorName: string | null = null): string {
+// Primary classification using FEC entity_type, with heuristic fallback
+function classifyFromEntityType(
+  entityType: string | null, 
+  employer: string | null, 
+  occupation: string | null, 
+  contributorName: string | null = null
+): string {
+  // FEC entity_type codes:
+  // IND = Individual
+  // COM = Committee (PAC, party, etc.)
+  // ORG = Organization  
+  // CAN = Candidate
+  // PAC = Political Action Committee
+  // PTY = Party Organization
+  // CCM = Candidate Committee
+  
+  if (entityType) {
+    const et = entityType.toUpperCase()
+    if (et === 'IND') return 'individual'
+    if (et === 'COM' || et === 'PAC' || et === 'PTY' || et === 'CCM') return 'pac'
+    if (et === 'ORG') {
+      // Organization - check if it's a union or corporate
+      return classifyOrganization(employer, occupation, contributorName)
+    }
+    if (et === 'CAN') return 'individual' // Treat candidate contributions as individual
+  }
+  
+  // Fallback to heuristic classification
+  return categorizeContributorHeuristic(employer, occupation, contributorName)
+}
+
+// Classify ORG entity types into union, corporate, or organization
+function classifyOrganization(employer: string | null, occupation: string | null, contributorName: string | null): string {
+  const name = (contributorName || '').toLowerCase()
+  const emp = (employer || '').toLowerCase()
+  
+  const isUnion = name.includes('union') || name.includes('brotherhood') || 
+      name.includes('afl-cio') || name.includes('teamsters') || name.includes('seiu') || 
+      name.includes('afscme') || name.includes('ufcw') || name.includes('ibew') ||
+      emp.includes('union') || emp.includes('workers') || emp.includes('labor')
+  
+  if (isUnion) return 'union'
+  
+  const isCorporate = name.includes('llc') || name.includes(' inc') || name.includes('corp') ||
+      name.includes('company') || name.includes('holdings') || name.includes('partners llp')
+  
+  if (isCorporate) return 'corporate'
+  
+  return 'organization'
+}
+
+// Heuristic fallback when entity_type is not available
+function categorizeContributorHeuristic(employer: string | null, occupation: string | null, contributorName: string | null = null): string {
   const emp = (employer || '').toLowerCase()
   const occ = (occupation || '').toLowerCase()
   const name = (contributorName || '').toLowerCase()
