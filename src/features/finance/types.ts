@@ -11,6 +11,8 @@ export interface Contribution {
   cycle: number;
   industry: string | null;
   contributorState: string | null;
+  contributorEmployer: string | null;
+  contributorOccupation: string | null;
 }
 
 export interface Lobbying {
