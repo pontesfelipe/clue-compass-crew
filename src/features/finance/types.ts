@@ -13,6 +13,8 @@ export interface Contribution {
   contributorState: string | null;
   contributorEmployer: string | null;
   contributorOccupation: string | null;
+  entityType: string | null;
+  entityTypeDesc: string | null;
 }
 
 export interface Lobbying {

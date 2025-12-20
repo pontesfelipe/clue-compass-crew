@@ -52,7 +52,16 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
                   .join(" at ")}
               </p>
             )}
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {contribution.entityType && (
+                <Badge 
+                  variant="outline" 
+                  className="text-xs bg-primary/10 text-primary border-primary/30"
+                >
+                  {contribution.entityType}
+                  {contribution.entityTypeDesc && ` - ${contribution.entityTypeDesc}`}
+                </Badge>
+              )}
               <Badge 
                 variant="outline" 
                 className={cn("text-xs", typeColors[contribution.contributorType])}
