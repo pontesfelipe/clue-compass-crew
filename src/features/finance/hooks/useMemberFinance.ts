@@ -43,6 +43,8 @@ export function useMemberFinance(memberId: string) {
         contributorState: c.contributor_state || null,
         contributorEmployer: c.contributor_employer || null,
         contributorOccupation: c.contributor_occupation || null,
+        entityType: c.entity_type || null,
+        entityTypeDesc: c.entity_type_desc || null,
       }));
 
       const lobbying: Lobbying[] = (lobbyingRes.data || []).map((l) => ({
