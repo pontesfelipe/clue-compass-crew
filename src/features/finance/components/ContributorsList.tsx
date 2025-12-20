@@ -45,6 +45,13 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
                 </Badge>
               )}
             </div>
+            {(contribution.contributorEmployer || contribution.contributorOccupation) && (
+              <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                {[contribution.contributorOccupation, contribution.contributorEmployer]
+                  .filter(Boolean)
+                  .join(" at ")}
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-1">
               <Badge 
                 variant="outline" 

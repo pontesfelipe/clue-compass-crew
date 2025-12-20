@@ -40,7 +40,9 @@ export function useMemberFinance(memberId: string) {
         amount: Number(c.amount),
         cycle: c.cycle,
         industry: c.industry,
-        contributorState: (c as any).contributor_state || null,
+        contributorState: c.contributor_state || null,
+        contributorEmployer: c.contributor_employer || null,
+        contributorOccupation: c.contributor_occupation || null,
       }));
 
       const lobbying: Lobbying[] = (lobbyingRes.data || []).map((l) => ({
