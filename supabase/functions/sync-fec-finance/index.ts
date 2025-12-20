@@ -527,14 +527,12 @@ Deno.serve(async (req) => {
             const amount = c.contribution_receipt_amount || 0
             if (amount <= 0) continue
 
-            let contributorName = c.contributor_name || 'Unknown'
+            // Keep the actual contributor name from FEC (donor's name for individuals)
+            const contributorName = c.contributor_name || 'Unknown'
             const contributorType = categorizeContributor(c.contributor_employer, c.contributor_occupation, contributorName)
-
-            if (c.committee && c.committee.name) {
-              contributorName = c.committee.name
-            } else if (c.contributor_aggregate_ytd > 200 && contributorType === 'pac') {
-              contributorName = c.contributor_name || 'Unknown PAC'
-            }
+            
+            // Note: c.committee.name is the RECIPIENT committee, not the donor
+            // We already store this in committee_name field, so don't overwrite contributor_name
 
             const industry = inferIndustry(c.contributor_employer, c.contributor_occupation)
             const contributorState = c.contributor_state || null
