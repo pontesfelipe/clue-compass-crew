@@ -50,43 +50,53 @@ export function MemberAISummary({ memberId, memberName }: MemberAISummaryProps) 
   const generateSummary = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-member-summary`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ memberId }),
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("generate-member-summary", {
+        body: { memberId },
+      });
 
-      const data = await response.json();
+      if (error) {
+        const status = (error as any)?.context?.status as number | undefined;
+        const rawBody = (error as any)?.context?.body;
+        const parsedBody = (() => {
+          try {
+            return typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+          } catch {
+            return null;
+          }
+        })();
 
-      if (!response.ok) {
-        if (response.status === 429 && data.nextAvailable) {
-          const nextDate = new Date(data.nextAvailable);
-          nextDate.setMonth(nextDate.getMonth() + 1);
+        if (status === 429) {
+          const serverDate = parsedBody?.nextAvailable ? new Date(parsedBody.nextAvailable) : null;
+          const nextDate = serverDate ? new Date(serverDate) : null;
+
+          // Back-compat: some responses return the last generated date.
+          if (nextDate && nextDate < new Date()) {
+            nextDate.setMonth(nextDate.getMonth() + 1);
+          }
+
+          await fetchExistingSummary();
+
           toast({
             title: "Summary limit reached",
-            description: `You can generate a new summary after ${nextDate.toLocaleDateString()}`,
+            description: nextDate
+              ? `You can generate a new summary after ${nextDate.toLocaleDateString()}`
+              : "A summary was already generated recently. Please try again later.",
             variant: "destructive",
           });
-        } else {
-          throw new Error(data.error || 'Failed to generate summary');
+          return;
         }
-        return;
+
+        throw new Error(parsedBody?.error || error.message || "Failed to generate summary");
       }
 
-      setSummary(data.summary);
+      setSummary(data?.summary ?? null);
       setGeneratedAt(new Date());
       toast({
         title: "Summary generated",
         description: "AI analysis complete",
       });
     } catch (err) {
-      console.error('Error generating summary:', err);
+      console.error("Error generating summary:", err);
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : "Failed to generate summary",
