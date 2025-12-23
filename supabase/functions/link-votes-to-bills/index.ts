@@ -55,8 +55,16 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const body = await req.json().catch(() => ({}))
-    const batchSize = body.batch_size || 100
+    let body: Record<string, any> = {}
+    try {
+      const text = await req.text()
+      if (text) {
+        body = JSON.parse(text)
+      }
+    } catch {
+      // Ignore parse errors, use defaults
+    }
+    const batchSize = body.batch_size || 500
     const forceRelink = body.force || false
 
     console.log(`Starting vote-to-bill linking (batch: ${batchSize}, force: ${forceRelink})...`)
