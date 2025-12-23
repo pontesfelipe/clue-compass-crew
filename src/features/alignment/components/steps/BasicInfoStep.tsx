@@ -51,12 +51,14 @@ export function BasicInfoStep({ data, onUpdate }: BasicInfoStepProps) {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Required to show your senators and representative
+            Required to show your senators and representative. Your senators will be automatically added to your tracked members.
           </p>
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="zip">Zip Code (optional)</Label>
+          <Label htmlFor="zip">
+            Zip Code <span className="text-muted-foreground text-xs">(optional)</span>
+          </Label>
           <Input
             id="zip"
             type="text"

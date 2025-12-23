@@ -26,6 +26,7 @@ import AdminDataInspectorPage from "./pages/AdminDataInspectorPage";
 import MyProfilePage from "./pages/MyProfilePage";
 import MyMatchesPage from "./pages/MyMatchesPage";
 import TrackedMembersPage from "./pages/TrackedMembersPage";
+import TrackedBillsPage from "./pages/TrackedBillsPage";
 import CongressNewsPage from "./pages/CongressNewsPage";
 import GovernorsPage from "./pages/GovernorsPage";
 import GovernorPage from "./pages/GovernorPage";
@@ -64,6 +65,7 @@ const App = () => {
             <Route path="/my-profile" element={<MyProfilePage />} />
             <Route path="/my-matches" element={<MyMatchesPage />} />
             <Route path="/tracked-members" element={<TrackedMembersPage />} />
+            <Route path="/tracked-bills" element={<TrackedBillsPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/governors" element={<GovernorsPage />} />
