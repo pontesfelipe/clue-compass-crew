@@ -157,21 +157,26 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
     console.log(`Loaded ${memberMap.size} members for mapping`)
 
     const billTypes = ['hr', 's', 'hjres', 'sjres', 'hconres', 'sconres', 'hres', 'sres']
-    const congresses = [118, 119]
-    
+
+    // Prioritize the current Congress first so votes can be linked to bills promptly.
+    // In delta mode, we intentionally ignore the previous cursor and start fresh from the current Congress.
+    const congresses = [119, 118]
+
     const limit = 50
 
-    // Resume from cursor if available
-    let startCongressIndex = lastCursor ? congresses.indexOf(lastCursor.congress) : 0
+    const resumeCursor = mode === 'full' ? lastCursor : null
+
+    // Resume from cursor if available (full mode only)
+    let startCongressIndex = resumeCursor ? congresses.indexOf(resumeCursor.congress) : 0
     if (startCongressIndex === -1) startCongressIndex = 0
-    
-    let startTypeIndex = lastCursor ? billTypes.indexOf(lastCursor.billType) : 0
+
+    let startTypeIndex = resumeCursor ? billTypes.indexOf(resumeCursor.billType) : 0
     if (startTypeIndex === -1) startTypeIndex = 0
 
-    let currentCursor: SyncCursor = lastCursor || {
+    let currentCursor: SyncCursor = resumeCursor || {
       congress: congresses[0],
       billType: billTypes[0],
-      offset: 0
+      offset: 0,
     }
 
     outerLoop:
