@@ -115,30 +115,51 @@ export function getStateFromZip(zipCode: string): string | null {
   return ZIP_TO_STATE[prefix] || null;
 }
 
+// Map state abbreviation to full name
+const STATE_ABBR_TO_NAME: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "District of Columbia", PR: "Puerto Rico", VI: "Virgin Islands", GU: "Guam",
+  AS: "American Samoa", MP: "Northern Mariana Islands"
+};
+
 export function useAutoTrackMembers() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (state: string) => {
+    mutationFn: async (stateAbbr: string) => {
       if (!user) throw new Error("Not authenticated");
-      if (!state) return { tracked: 0 };
+      if (!stateAbbr) return { tracked: 0 };
 
-      // Get senators from the user's state (always 2 per state)
+      // Convert abbreviation to full state name
+      const stateName = STATE_ABBR_TO_NAME[stateAbbr];
+      if (!stateName) {
+        console.error("Unknown state abbreviation:", stateAbbr);
+        return { tracked: 0 };
+      }
+
+      // Get ALL members from the user's state (senators AND representatives)
       const { data: members, error: membersError } = await supabase
         .from("members")
         .select("id, full_name, chamber")
-        .eq("state", state)
+        .eq("state", stateName)
         .eq("in_office", true);
 
       if (membersError) throw membersError;
 
       if (!members || members.length === 0) {
+        console.log("No members found for state:", stateName);
         return { tracked: 0 };
       }
-
-      // Filter to only senators (since we can't determine house district from zip alone)
-      const senators = members.filter(m => m.chamber === "senate");
 
       // Get already tracked members
       const { data: existing } = await supabase
@@ -149,10 +170,10 @@ export function useAutoTrackMembers() {
       const existingIds = new Set((existing || []).map(e => e.member_id));
 
       // Insert only members not already tracked
-      const toTrack = senators.filter(m => !existingIds.has(m.id));
+      const toTrack = members.filter(m => !existingIds.has(m.id));
 
       if (toTrack.length === 0) {
-        return { tracked: 0, message: "Your senators are already being tracked" };
+        return { tracked: 0, message: "Your representatives are already being tracked" };
       }
 
       const { error: insertError } = await supabase
@@ -164,22 +185,36 @@ export function useAutoTrackMembers() {
 
       if (insertError) throw insertError;
 
+      const senatorCount = toTrack.filter(m => m.chamber === "senate").length;
+      const repCount = toTrack.filter(m => m.chamber === "house").length;
+
       return { 
         tracked: toTrack.length, 
+        senators: senatorCount,
+        representatives: repCount,
         members: toTrack.map(m => m.full_name)
       };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["tracked-members"] });
       if (data.tracked > 0) {
+        const parts = [];
+        if (data.senators && data.senators > 0) parts.push(`${data.senators} senator${data.senators > 1 ? 's' : ''}`);
+        if (data.representatives && data.representatives > 0) parts.push(`${data.representatives} representative${data.representatives > 1 ? 's' : ''}`);
+        
         toast({ 
-          title: `Tracking ${data.tracked} senator${data.tracked > 1 ? 's' : ''}`, 
-          description: data.members?.join(", ") || "Your state representatives have been added to your tracked members."
+          title: `Now tracking ${parts.join(" and ")}`, 
+          description: "Your state's Congress members have been added to your tracked list."
         });
       }
     },
     onError: (error: Error) => {
       console.error("Auto-track error:", error);
+      toast({
+        title: "Error tracking members",
+        description: "Could not automatically track your representatives.",
+        variant: "destructive"
+      });
     },
   });
 }
