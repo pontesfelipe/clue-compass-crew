@@ -414,12 +414,12 @@ export default function MemberPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-12">
           <StatsCard
             icon={FileText}
-            value={scores?.billsSponsored ?? 0}
+            value={member.sponsoredBills?.length ?? scores?.billsSponsored ?? 0}
             label="Bills Sponsored"
           />
           <StatsCard
             icon={Users}
-            value={scores?.billsCosponsored ?? 0}
+            value={member.cosponsoredBills?.length ?? scores?.billsCosponsored ?? 0}
             label="Bills Co-sponsored"
           />
           <StatsCard
