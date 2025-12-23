@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { useMemberTracking } from "@/hooks/useMemberTracking";
+import { useAlignmentProfile } from "@/features/alignment/hooks/useAlignmentProfile";
+import { useAutoTrackMembers } from "@/hooks/useAutoTrackMembers";
 import { NotificationSettingsDialog } from "@/components/NotificationSettingsDialog";
 import { TrackedMemberActivity } from "@/components/TrackedMemberActivity";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,14 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Helmet } from "react-helmet";
-import { 
-  ArrowLeft, 
-  Bell, 
-  BellOff, 
-  Bookmark, 
-  Users, 
+import {
+  ArrowLeft,
+  Bell,
+  BellOff,
+  Bookmark,
+  Users,
   ExternalLink,
   Settings,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +41,11 @@ const partyNames: Record<Party, string> = {
 
 export default function TrackedMembersPage() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { trackedMembers, isLoading: trackingLoading, untrackMember, isTrackingPending } = useMemberTracking();
+  const { data: profile } = useAlignmentProfile();
+  const autoTrackMembers = useAutoTrackMembers();
+  const hasAutoFixed = useRef(false);
 
   const trackedMemberIds = trackedMembers.map((t) => t.member_id);
 
@@ -48,6 +54,18 @@ export default function TrackedMembersPage() {
       navigate("/auth?redirect=/tracked-members");
     }
   }, [isAuthenticated, authLoading, navigate]);
+
+  // One-time automatic cleanup: if the previous bug tracked an entire state,
+  // re-run auto-tracking based on the saved ZIP to reset to just your 2 senators + 1 representative.
+  useEffect(() => {
+    if (hasAutoFixed.current) return;
+    if (authLoading || trackingLoading || !isAuthenticated) return;
+    if (!profile?.zip_code || !profile?.state) return;
+    if (trackedMembers.length <= 3) return;
+
+    hasAutoFixed.current = true;
+    autoTrackMembers.mutate({ stateAbbr: profile.state, zipCode: profile.zip_code });
+  }, [authLoading, trackingLoading, isAuthenticated, trackedMembers.length, profile?.zip_code, profile?.state, autoTrackMembers]);
 
   if (authLoading || trackingLoading) {
     return (
@@ -173,11 +191,12 @@ export default function TrackedMembersPage() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <Link 
+                        <Link
                           to={`/member/${member.id}`}
-                          className="font-serif font-semibold text-foreground hover:text-primary transition-colors line-clamp-1"
+                          className="font-serif font-semibold text-foreground hover:text-primary transition-colors inline-flex items-center gap-1.5 line-clamp-1"
                         >
                           {member.full_name}
+                          <Star className="h-4 w-4 text-primary fill-primary" aria-label="Tracked member" />
                         </Link>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           <Badge
