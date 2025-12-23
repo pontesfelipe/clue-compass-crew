@@ -36,6 +36,69 @@ function extractXmlValue(xml: string, tag: string): string | null {
   return match ? match[1].trim() : null
 }
 
+// Parse bill reference from vote description like "HR 2670", "HRES 583", "S 123", etc.
+function parseBillReference(description: string | null): { billType: string; billNumber: number } | null {
+  if (!description) return null
+  
+  const patterns = [
+    /\b(HR|H\.R\.?)\s*(\d+)/i,
+    /\b(HRES|H\.?\s*RES\.?)\s*(\d+)/i,
+    /\b(HJRES|H\.?\s*J\.?\s*RES\.?)\s*(\d+)/i,
+    /\b(HCONRES|H\.?\s*CON\.?\s*RES\.?)\s*(\d+)/i,
+    /\b(S|S\.)\s+(\d+)/i,
+    /\b(SRES|S\.?\s*RES\.?)\s*(\d+)/i,
+    /\b(SJRES|S\.?\s*J\.?\s*RES\.?)\s*(\d+)/i,
+    /\b(SCONRES|S\.?\s*CON\.?\s*RES\.?)\s*(\d+)/i,
+  ]
+  
+  const typeMapping: { [key: string]: string } = {
+    'hr': 'hr', 'h.r.': 'hr', 'h.r': 'hr',
+    'hres': 'hres', 'h.res.': 'hres', 'h.res': 'hres', 'h res': 'hres',
+    'hjres': 'hjres', 'h.j.res.': 'hjres', 'h j res': 'hjres',
+    'hconres': 'hconres', 'h.con.res.': 'hconres', 'h con res': 'hconres',
+    's': 's', 's.': 's',
+    'sres': 'sres', 's.res.': 'sres', 's.res': 'sres', 's res': 'sres',
+    'sjres': 'sjres', 's.j.res.': 'sjres', 's j res': 'sjres',
+    'sconres': 'sconres', 's.con.res.': 'sconres', 's con res': 'sconres',
+  }
+  
+  for (const pattern of patterns) {
+    const match = description.match(pattern)
+    if (match) {
+      const rawType = match[1].toLowerCase().replace(/\s+/g, '').replace(/\./g, '')
+      const billType = typeMapping[rawType] || rawType
+      const billNumber = parseInt(match[2])
+      return { billType, billNumber }
+    }
+  }
+  
+  return null
+}
+
+// Find bill ID from parsed reference
+async function findBillId(supabase: any, ref: { billType: string; billNumber: number }, congress: number): Promise<string | null> {
+  const { data } = await supabase
+    .from('bills')
+    .select('id')
+    .eq('bill_type', ref.billType)
+    .eq('bill_number', ref.billNumber)
+    .eq('congress', congress)
+    .single()
+  
+  if (data) return data.id
+  
+  // Try previous congress
+  const { data: altData } = await supabase
+    .from('bills')
+    .select('id')
+    .eq('bill_type', ref.billType)
+    .eq('bill_number', ref.billNumber)
+    .eq('congress', congress - 1)
+    .single()
+  
+  return altData?.id || null
+}
+
 function parseClerkDate(dateStr: string): string | null {
   if (!dateStr) return null
   const months: { [key: string]: string } = {
@@ -302,15 +365,25 @@ async function syncHouseVotes(supabase: any, memberMap: Map<string, { id: string
       const voteDate = parseClerkDate(extractXmlValue(xmlText, 'action-date') || '')
       if (!voteDate) continue
 
+      const description = extractXmlValue(xmlText, 'vote-desc')
+      
+      // Try to link to a bill
+      const billRef = parseBillReference(description)
+      let billId: string | null = null
+      if (billRef) {
+        billId = await findBillId(supabase, billRef, congress)
+      }
+
       const voteRecord = {
         congress, chamber: 'house' as const, session, roll_number: rollNumber, vote_date: voteDate,
         question: extractXmlValue(xmlText, 'vote-question'),
-        description: extractXmlValue(xmlText, 'vote-desc'),
+        description,
         result: extractXmlValue(xmlText, 'vote-result'),
         total_yea: parseInt(extractXmlValue(xmlText, 'yea-total') || '0'),
         total_nay: parseInt(extractXmlValue(xmlText, 'nay-total') || '0'),
         total_present: parseInt(extractXmlValue(xmlText, 'present-total') || '0'),
         total_not_voting: parseInt(extractXmlValue(xmlText, 'not-voting-total') || '0'),
+        bill_id: billId,
         raw: { source: 'house_clerk', xmlUrl }
       }
 
@@ -402,15 +475,26 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
       const voteDate = parseSenateDate(extractXmlValue(xmlText, 'vote_date') || '')
       if (!voteDate) continue
 
+      const description = extractXmlValue(xmlText, 'vote_title')
+      const question = extractXmlValue(xmlText, 'vote_question_text') || extractXmlValue(xmlText, 'question')
+      
+      // Try to link to a bill
+      const billRef = parseBillReference(description) || parseBillReference(question)
+      let billId: string | null = null
+      if (billRef) {
+        billId = await findBillId(supabase, billRef, congress)
+      }
+
       const voteRecord = {
         congress, chamber: 'senate' as const, session, roll_number: rollNumber, vote_date: voteDate,
-        question: extractXmlValue(xmlText, 'vote_question_text') || extractXmlValue(xmlText, 'question'),
-        description: extractXmlValue(xmlText, 'vote_title'),
+        question,
+        description,
         result: extractXmlValue(xmlText, 'vote_result_text') || extractXmlValue(xmlText, 'vote_result'),
         total_yea: parseInt(extractXmlValue(xmlText, 'yeas') || '0'),
         total_nay: parseInt(extractXmlValue(xmlText, 'nays') || '0'),
         total_present: parseInt(extractXmlValue(xmlText, 'present') || '0'),
         total_not_voting: parseInt(extractXmlValue(xmlText, 'absent') || '0'),
+        bill_id: billId,
         raw: { source: 'senate_gov', xmlUrl }
       }
 
