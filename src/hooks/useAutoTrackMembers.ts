@@ -3,7 +3,53 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 
-// Map zip code prefix to state (simplified - first 3 digits)
+// Map state abbreviation to full name
+const STATE_ABBR_TO_NAME: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "District of Columbia", PR: "Puerto Rico", VI: "Virgin Islands", GU: "Guam",
+  AS: "American Samoa", MP: "Northern Mariana Islands"
+};
+
+/**
+ * Zip code to congressional district mapping.
+ * This is a simplified static mapping for common zip codes.
+ * For production, use the Census Bureau API or a commercial geocoding service.
+ */
+const ZIP_TO_DISTRICT: Record<string, { state: string; district: string }> = {
+  // Texas District 10 (Michael McCaul) - Cedar Park / Leander / Austin suburbs
+  "78613": { state: "TX", district: "10" },
+  "78641": { state: "TX", district: "10" },
+  "78717": { state: "TX", district: "10" },
+  "78681": { state: "TX", district: "10" },
+  "78664": { state: "TX", district: "10" },
+  "78634": { state: "TX", district: "10" },
+  "78626": { state: "TX", district: "10" },
+  "78628": { state: "TX", district: "10" },
+  "78633": { state: "TX", district: "10" },
+  "78660": { state: "TX", district: "10" },
+  // Texas District 30 (Jasmine Crockett) - Dallas
+  "75201": { state: "TX", district: "30" },
+  "75202": { state: "TX", district: "30" },
+  "75203": { state: "TX", district: "30" },
+  "75204": { state: "TX", district: "30" },
+  "75210": { state: "TX", district: "30" },
+  "75215": { state: "TX", district: "30" },
+  "75216": { state: "TX", district: "30" },
+  "75223": { state: "TX", district: "30" },
+  "75226": { state: "TX", district: "30" },
+  "75227": { state: "TX", district: "30" },
+};
+
+// Map zip code prefix to state (first 3 digits)
 const ZIP_TO_STATE: Record<string, string> = {
   "005": "NY", "006": "PR", "007": "PR", "008": "VI", "009": "PR",
   "010": "MA", "011": "MA", "012": "MA", "013": "MA", "014": "MA", "015": "MA", "016": "MA", "017": "MA", "018": "MA", "019": "MA",
@@ -115,62 +161,77 @@ export function getStateFromZip(zipCode: string): string | null {
   return ZIP_TO_STATE[prefix] || null;
 }
 
-// Map state abbreviation to full name
-const STATE_ABBR_TO_NAME: Record<string, string> = {
-  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
-  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
-  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
-  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
-  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
-  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
-  DC: "District of Columbia", PR: "Puerto Rico", VI: "Virgin Islands", GU: "Guam",
-  AS: "American Samoa", MP: "Northern Mariana Islands"
-};
+export function getDistrictFromZip(zipCode: string): { state: string; district: string } | null {
+  const clean = zipCode.replace(/\D/g, "").substring(0, 5);
+  return ZIP_TO_DISTRICT[clean] || null;
+}
+
+interface AutoTrackParams {
+  stateAbbr: string;
+  zipCode?: string;
+}
 
 export function useAutoTrackMembers() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (stateAbbr: string) => {
+    mutationFn: async ({ stateAbbr, zipCode }: AutoTrackParams) => {
       if (!user) throw new Error("Not authenticated");
       if (!stateAbbr) return { tracked: 0 };
 
-      // Convert abbreviation to full state name
       const stateName = STATE_ABBR_TO_NAME[stateAbbr];
       if (!stateName) {
         console.error("Unknown state abbreviation:", stateAbbr);
         return { tracked: 0 };
       }
 
-      // Get ALL members from the user's state (senators AND representatives)
-      const { data: members, error: membersError } = await supabase
+      // 1) Always track the 2 senators
+      const { data: senators, error: senatorsError } = await supabase
         .from("members")
-        .select("id, full_name, chamber")
+        .select("id, full_name, chamber, district")
         .eq("state", stateName)
-        .eq("in_office", true);
+        .eq("chamber", "senate")
+        .eq("in_office", true) as { data: { id: string; full_name: string; chamber: "house" | "senate"; district: string | null }[] | null; error: any };
 
-      if (membersError) throw membersError;
+      if (senatorsError) throw senatorsError;
 
-      if (!members || members.length === 0) {
+      // 2) Track specific representative based on zip code → district
+      let representative: { id: string; full_name: string; chamber: "house" | "senate"; district: string | null } | null = null;
+      
+      if (zipCode) {
+        const districtInfo = getDistrictFromZip(zipCode);
+        if (districtInfo) {
+          const { data: rep } = await supabase
+            .from("members")
+            .select("id, full_name, chamber, district")
+            .eq("state", stateName)
+            .eq("chamber", "house")
+            .eq("district", districtInfo.district)
+            .eq("in_office", true)
+            .maybeSingle() as { data: { id: string; full_name: string; chamber: "house" | "senate"; district: string | null } | null };
+          
+          if (rep) representative = rep;
+        }
+      }
+
+      // Combine unique members to track
+      const membersToConsider = [...(senators || [])];
+      if (representative) membersToConsider.push(representative);
+
+      if (membersToConsider.length === 0) {
         console.log("No members found for state:", stateName);
         return { tracked: 0 };
       }
 
-      // Get already tracked members
+      // Get already tracked
       const { data: existing } = await supabase
         .from("member_tracking")
         .select("member_id")
         .eq("user_id", user.id);
 
       const existingIds = new Set((existing || []).map(e => e.member_id));
-
-      // Insert only members not already tracked
-      const toTrack = members.filter(m => !existingIds.has(m.id));
+      const toTrack = membersToConsider.filter(m => !existingIds.has(m.id));
 
       if (toTrack.length === 0) {
         return { tracked: 0, message: "Your representatives are already being tracked" };
@@ -199,12 +260,12 @@ export function useAutoTrackMembers() {
       queryClient.invalidateQueries({ queryKey: ["tracked-members"] });
       if (data.tracked > 0) {
         const parts = [];
-        if (data.senators && data.senators > 0) parts.push(`${data.senators} senator${data.senators > 1 ? 's' : ''}`);
-        if (data.representatives && data.representatives > 0) parts.push(`${data.representatives} representative${data.representatives > 1 ? 's' : ''}`);
+        if (data.senators && data.senators > 0) parts.push(`${data.senators} senator${data.senators > 1 ? "s" : ""}`);
+        if (data.representatives && data.representatives > 0) parts.push(`${data.representatives} representative`);
         
         toast({ 
           title: `Now tracking ${parts.join(" and ")}`, 
-          description: "Your state's Congress members have been added to your tracked list."
+          description: data.members?.join(", ")
         });
       }
     },

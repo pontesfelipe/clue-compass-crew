@@ -23,7 +23,6 @@ import { useAutoTrackMembers } from "@/hooks/useAutoTrackMembers";
 interface WizardData {
   state: string;
   zip_code: string;
-  age_range: string;
   selectedIssues: string[];
   priorities: Record<string, number>;
   answers: Record<string, number>;
@@ -37,7 +36,6 @@ export function ProfileWizard() {
   const [wizardData, setWizardData] = useState<WizardData>({
     state: "",
     zip_code: "",
-    age_range: "",
     selectedIssues: [],
     priorities: {},
     answers: {},
@@ -66,7 +64,6 @@ export function ProfileWizard() {
         ...prev,
         state: profile.state || "",
         zip_code: profile.zip_code || "",
-        age_range: profile.age_range || "",
         selectedIssues: profile.priorities.map((p) => p.issue_id),
         priorities: Object.fromEntries(
           profile.priorities.map((p) => [p.issue_id, p.priority_level])
@@ -85,7 +82,7 @@ export function ProfileWizard() {
   const canProceed = () => {
     switch (currentStep) {
       case 0:
-        return wizardData.state.length > 0;
+        return wizardData.state.length > 0 && wizardData.zip_code.length >= 5;
       case 1:
         return wizardData.selectedIssues.length >= 1 && wizardData.selectedIssues.length <= 5;
       case 2:
@@ -104,7 +101,6 @@ export function ProfileWizard() {
         await saveBasicInfo.mutateAsync({
           state: wizardData.state,
           zip_code: wizardData.zip_code || undefined,
-          age_range: wizardData.age_range || undefined,
         });
         
         await savePriorities.mutateAsync(
@@ -123,9 +119,9 @@ export function ProfileWizard() {
         
         await completeProfile.mutateAsync();
         
-        // Auto-track senators from user's state
+        // Auto-track senators + representative from user's zip code
         if (wizardData.state) {
-          autoTrackMembers.mutate(wizardData.state);
+          autoTrackMembers.mutate({ stateAbbr: wizardData.state, zipCode: wizardData.zip_code });
         }
         
         toast({ title: "Profile complete!", description: "View your alignment scores on member pages." });

@@ -17,7 +17,6 @@ interface ReviewStepProps {
   data: {
     state: string;
     zip_code: string;
-    age_range: string;
     selectedIssues: string[];
     priorities: Record<string, number>;
     answers: Record<string, number>;
