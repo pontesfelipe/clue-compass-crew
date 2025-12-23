@@ -43,19 +43,19 @@ export default function VotesPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch policy areas from bills that have votes
+  // Fetch all policy areas from bills (since most votes aren't linked yet, show all available)
   const { data: policyAreas } = useQuery({
     queryKey: ["vote-policy-areas"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("votes")
-        .select("bills!inner(policy_area)")
-        .not("bills.policy_area", "is", null);
+        .from("bills")
+        .select("policy_area")
+        .not("policy_area", "is", null);
 
       if (error) throw error;
       
       const areas = data
-        .map((v: any) => v.bills?.policy_area)
+        .map((b: any) => b.policy_area)
         .filter(Boolean);
       return [...new Set(areas)].sort() as string[];
     },
