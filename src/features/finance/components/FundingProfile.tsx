@@ -127,7 +127,8 @@ function StackedBar({
 export function FundingProfile({ memberId }: FundingProfileProps) {
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
+  // Fetch funding metrics
+  const { data: metricsData, isLoading: metricsLoading } = useQuery({
     queryKey: ["funding-metrics", memberId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -142,6 +143,24 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
     enabled: !!memberId,
   });
 
+  // Fetch contributions as fallback when no funding_metrics exist
+  const { data: contributionsData, isLoading: contributionsLoading } = useQuery({
+    queryKey: ["member-contributions-summary", memberId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("member_contributions")
+        .select("cycle, amount, contributor_type, contributor_state, industry")
+        .eq("member_id", memberId);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!memberId && (!metricsData || metricsData.length === 0),
+  });
+
+  const isLoading = metricsLoading || contributionsLoading;
+  const data = metricsData;
+
   if (isLoading) {
     return (
       <Card>
@@ -155,6 +174,114 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show contribution-based summary if no funding_metrics but contributions exist
+  if ((!data || data.length === 0) && contributionsData && contributionsData.length > 0) {
+    // Calculate summary from contributions
+    const cycles = [...new Set(contributionsData.map(c => c.cycle))].sort((a, b) => b - a);
+    const currentCycle = selectedCycle ?? cycles[0];
+    const cycleContributions = contributionsData.filter(c => c.cycle === currentCycle);
+    
+    const totalRaised = cycleContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const individualCount = cycleContributions.filter(c => c.contributor_type === 'individual').length;
+    const pacCount = cycleContributions.filter(c => c.contributor_type === 'committee' || c.contributor_type === 'pac').length;
+    const totalCount = individualCount + pacCount;
+    const pctIndividuals = totalCount > 0 ? (individualCount / totalCount) * 100 : 0;
+    const pctPacs = totalCount > 0 ? (pacCount / totalCount) * 100 : 0;
+    
+    // Get top industries
+    const industryTotals: Record<string, number> = {};
+    cycleContributions.forEach(c => {
+      if (c.industry) {
+        industryTotals[c.industry] = (industryTotals[c.industry] || 0) + Number(c.amount || 0);
+      }
+    });
+    const topIndustries = Object.entries(industryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                Funding Profile (FEC Data)
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Campaign finance data from the Federal Election Commission
+              </CardDescription>
+            </div>
+            
+            {/* Cycle Selector */}
+            {cycles.length > 1 && (
+              <div className="flex gap-1">
+                {cycles.map((cycle) => (
+                  <Badge
+                    key={cycle}
+                    variant={cycle === currentCycle ? "default" : "outline"}
+                    className="cursor-pointer transition-colors"
+                    onClick={() => setSelectedCycle(cycle)}
+                  >
+                    {cycle}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          {/* Total Raised */}
+          <div className="text-center p-4 bg-muted/50 rounded-xl">
+            <p className="text-sm text-muted-foreground mb-1">Total Raised ({currentCycle} Cycle)</p>
+            <p className="text-3xl font-bold">{formatCurrency(totalRaised)}</p>
+          </div>
+
+          {/* Funding Sources */}
+          {totalCount > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Funding Sources (by count)</span>
+              </div>
+              <StackedBar
+                leftLabel="Individuals"
+                rightLabel="PACs/Committees"
+                leftValue={pctIndividuals}
+                rightValue={pctPacs}
+                leftColor="bg-emerald-500"
+                rightColor="bg-amber-500"
+              />
+            </div>
+          )}
+
+          {/* Top Industries */}
+          {topIndustries.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Top Industries</span>
+              </div>
+              <div className="space-y-2">
+                {topIndustries.map(([industry, amount]) => (
+                  <div key={industry} className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">{industry}</span>
+                    <span className="font-medium">{formatCurrency(amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground text-center">
+            Based on {cycleContributions.length} contribution records
+          </p>
         </CardContent>
       </Card>
     );
