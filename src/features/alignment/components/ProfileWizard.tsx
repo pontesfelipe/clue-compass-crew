@@ -18,6 +18,7 @@ import {
 } from "../hooks/useAlignmentProfile";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useAutoTrackMembers } from "@/hooks/useAutoTrackMembers";
 
 interface WizardData {
   state: string;
@@ -52,6 +53,7 @@ export function ProfileWizard() {
   const savePriorities = useSavePriorities();
   const saveAnswers = useSaveAnswers();
   const completeProfile = useCompleteProfile();
+  const autoTrackMembers = useAutoTrackMembers();
   
   const isLoading = issuesLoading || profileLoading;
   const isSaving = saveBasicInfo.isPending || savePriorities.isPending || 
@@ -120,6 +122,11 @@ export function ProfileWizard() {
         );
         
         await completeProfile.mutateAsync();
+        
+        // Auto-track senators from user's state
+        if (wizardData.state) {
+          autoTrackMembers.mutate(wizardData.state);
+        }
         
         toast({ title: "Profile complete!", description: "View your alignment scores on member pages." });
         navigate("/map");

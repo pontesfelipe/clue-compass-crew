@@ -15,10 +15,15 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  User
+  User,
+  Bookmark,
+  BookmarkCheck,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBill, formatBillNumber } from "@/hooks/useBill";
+import { useBillTracking } from "@/hooks/useBillTracking";
+import { useAuth } from "@/hooks/useAuth";
 
 type Party = "D" | "R" | "I" | "L";
 
@@ -47,7 +52,11 @@ function formatDate(dateStr: string | null): string {
 
 export default function BillPage() {
   const { billId } = useParams<{ billId: string }>();
+  const { user } = useAuth();
+  const { isTracking, trackBill, untrackBill, isTrackingPending } = useBillTracking();
   const { data: bill, isLoading, error } = useBill(billId || "");
+
+  const isTracked = billId ? isTracking(billId) : false;
 
   if (isLoading) {
     return (
@@ -140,14 +149,33 @@ export default function BillPage() {
             </p>
           )}
 
-          {bill.url && (
-            <Button variant="civic-outline" size="sm" className="mt-6" asChild>
-              <a href={bill.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                View on Congress.gov
-              </a>
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-3 mt-6">
+            {user && billId && (
+              <Button
+                variant={isTracked ? "secondary" : "civic"}
+                size="sm"
+                onClick={() => isTracked ? untrackBill(billId) : trackBill(billId)}
+                disabled={isTrackingPending}
+              >
+                {isTrackingPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : isTracked ? (
+                  <BookmarkCheck className="mr-2 h-4 w-4" />
+                ) : (
+                  <Bookmark className="mr-2 h-4 w-4" />
+                )}
+                {isTracked ? "Tracking" : "Track Bill"}
+              </Button>
+            )}
+            {bill.url && (
+              <Button variant="civic-outline" size="sm" asChild>
+                <a href={bill.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View on Congress.gov
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">

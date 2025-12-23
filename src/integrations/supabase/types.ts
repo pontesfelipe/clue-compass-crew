@@ -163,6 +163,35 @@ export type Database = {
           },
         ]
       }
+      bill_tracking: {
+        Row: {
+          bill_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          bill_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          bill_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_tracking_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bills: {
         Row: {
           bill_impact: string | null
