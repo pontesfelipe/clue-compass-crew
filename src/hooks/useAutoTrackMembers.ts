@@ -122,8 +122,37 @@ export function useAutoTrackMembers() {
         .select("member_id")
         .eq("user_id", user.id);
 
-      const existingIds = new Set((existing || []).map(e => e.member_id));
-      const toTrack = membersToConsider.filter(m => !existingIds.has(m.id));
+      const existingIdsArray = (existing || []).map((e) => e.member_id);
+      const existingIds = new Set(existingIdsArray);
+
+      // If a ZIP was provided, clean up any previously auto-tracked "wrong" members from the same state
+      // (keeps tracking in other states intact).
+      if (zipCode && existingIdsArray.length > 0) {
+        const { data: inStateExisting } = await supabase
+          .from("members")
+          .select("id")
+          .in("id", existingIdsArray)
+          .eq("state", stateName);
+
+        const desiredIds = new Set(membersToConsider.map((m) => m.id));
+        const toUntrack = (inStateExisting || [])
+          .map((r) => r.id as string)
+          .filter((id) => !desiredIds.has(id));
+
+        if (toUntrack.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("member_tracking")
+            .delete()
+            .eq("user_id", user.id)
+            .in("member_id", toUntrack);
+
+          if (deleteError) throw deleteError;
+
+          toUntrack.forEach((id) => existingIds.delete(id));
+        }
+      }
+
+      const toTrack = membersToConsider.filter((m) => !existingIds.has(m.id));
 
       if (toTrack.length === 0) {
         return { tracked: 0, message: "Your representatives are already being tracked" };
@@ -131,10 +160,12 @@ export function useAutoTrackMembers() {
 
       const { error: insertError } = await supabase
         .from("member_tracking")
-        .insert(toTrack.map(m => ({
-          user_id: user.id,
-          member_id: m.id,
-        })));
+        .insert(
+          toTrack.map((m) => ({
+            user_id: user.id,
+            member_id: m.id,
+          }))
+        );
 
       if (insertError) throw insertError;
 

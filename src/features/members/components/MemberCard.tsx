@@ -89,7 +89,10 @@ export function MemberCard({
             <h3 className="font-serif font-semibold text-foreground group-hover:text-primary transition-colors truncate pr-8 flex items-center gap-1.5">
               {name}
               {isMyRep && (
-                <Star className="h-4 w-4 text-amber-500 fill-amber-500 flex-shrink-0" aria-label="Your representative" />
+                <Star
+                  className="h-4 w-4 text-primary fill-primary flex-shrink-0"
+                  aria-label="Tracked member"
+                />
               )}
             </h3>
             <p className="text-sm text-muted-foreground">
