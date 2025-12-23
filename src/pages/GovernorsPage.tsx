@@ -52,11 +52,17 @@ export default function GovernorsPage() {
           <div className="max-w-6xl mx-auto">
             {/* Header */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground mb-2">
-                U.S. Governors
-              </h1>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-foreground">
+                  U.S. Governors
+                </h1>
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  Work in Progress
+                </Badge>
+              </div>
               <p className="text-muted-foreground">
-                All 50 state governors with contact information and party affiliation
+                All 50 state governors with contact information and party affiliation.
+                More features coming soon, including governance scores and detailed profiles.
               </p>
             </div>
 

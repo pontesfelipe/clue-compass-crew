@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
@@ -25,18 +25,47 @@ interface PartyVoteData {
 
 export default function VotesPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [chamberFilter, setChamberFilter] = useState<string>("all");
   const [resultFilter, setResultFilter] = useState<string>("all");
+  const [policyAreaFilter, setPolicyAreaFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
 
-  const { data: votes, isLoading } = useQuery({
-    queryKey: ["all-votes-with-party"],
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch policy areas from bills that have votes
+  const { data: policyAreas } = useQuery({
+    queryKey: ["vote-policy-areas"],
     queryFn: async () => {
-      // First fetch votes
-      const { data: votesData, error: votesError } = await supabase
+      const { data, error } = await supabase
+        .from("votes")
+        .select("bills!inner(policy_area)")
+        .not("bills.policy_area", "is", null);
+
+      if (error) throw error;
+      
+      const areas = data
+        .map((v: any) => v.bills?.policy_area)
+        .filter(Boolean);
+      return [...new Set(areas)].sort() as string[];
+    },
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["votes-paginated", debouncedSearch, chamberFilter, resultFilter, policyAreaFilter, dateFrom, dateTo, currentPage],
+    queryFn: async () => {
+      // Build query with server-side filters
+      let query = supabase
         .from("votes")
         .select(`
           *,
@@ -45,17 +74,53 @@ export default function VotesPage() {
             title,
             short_title,
             bill_type,
-            bill_number
+            bill_number,
+            policy_area
           )
-        `)
-        .order("vote_date", { ascending: false });
+        `, { count: "exact" });
+
+      // Chamber filter
+      if (chamberFilter !== "all") {
+        query = query.eq("chamber", chamberFilter as "house" | "senate");
+      }
+
+      // Result filter
+      if (resultFilter === "passed") {
+        query = query.ilike("result", "%passed%");
+      } else if (resultFilter === "failed") {
+        query = query.ilike("result", "%failed%");
+      }
+
+      // Date filters
+      if (dateFrom) {
+        query = query.gte("vote_date", dateFrom);
+      }
+      if (dateTo) {
+        query = query.lte("vote_date", dateTo);
+      }
+
+      // Policy area filter - filter by related bill's policy area
+      if (policyAreaFilter !== "all") {
+        query = query.eq("bills.policy_area", policyAreaFilter);
+      }
+
+      // Search filter - search in question and description
+      if (debouncedSearch) {
+        query = query.or(`question.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`);
+      }
+
+      // Order and paginate
+      const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+      const { data: votesData, error: votesError, count } = await query
+        .order("vote_date", { ascending: false })
+        .range(offset, offset + ITEMS_PER_PAGE - 1);
 
       if (votesError) throw votesError;
 
-      // Then fetch party breakdown for all votes
+      // Fetch party breakdown for visible votes
       const voteIds = votesData?.map(v => v.id) || [];
       
-      if (voteIds.length === 0) return [];
+      if (voteIds.length === 0) return { votes: [], totalCount: 0 };
 
       const { data: memberVotes, error: mvError } = await supabase
         .from("member_votes")
@@ -90,7 +155,7 @@ export default function VotesPage() {
       }
 
       // Attach party data to votes
-      return votesData?.map(vote => ({
+      const votes = votesData?.map(vote => ({
         ...vote,
         partyBreakdown: Object.entries(partyDataByVote[vote.id] || {})
           .map(([party, data]) => ({ party: party as "D" | "R" | "I" | "L", ...data }))
@@ -99,57 +164,26 @@ export default function VotesPage() {
             return (order[a.party] ?? 4) - (order[b.party] ?? 4);
           })
       })) || [];
+
+      return { votes, totalCount: count || 0 };
     },
   });
 
-  const filteredVotes = useMemo(() => {
-    if (!votes) return [];
-
-    return votes.filter((vote) => {
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesQuestion = vote.question?.toLowerCase().includes(query);
-        const matchesDescription = vote.description?.toLowerCase().includes(query);
-        const matchesBill = vote.bills?.short_title?.toLowerCase().includes(query) || 
-                           vote.bills?.title?.toLowerCase().includes(query);
-        if (!matchesQuestion && !matchesDescription && !matchesBill) return false;
-      }
-
-      // Chamber filter
-      if (chamberFilter !== "all" && vote.chamber !== chamberFilter) return false;
-
-      // Result filter
-      if (resultFilter !== "all") {
-        const result = vote.result?.toLowerCase() || "";
-        if (resultFilter === "passed" && !result.includes("passed")) return false;
-        if (resultFilter === "failed" && !result.includes("failed")) return false;
-      }
-
-      // Date filters
-      if (dateFrom && vote.vote_date < dateFrom) return false;
-      if (dateTo && vote.vote_date > dateTo) return false;
-
-      return true;
-    });
-  }, [votes, searchQuery, chamberFilter, resultFilter, dateFrom, dateTo]);
-
-  const totalPages = Math.ceil(filteredVotes.length / ITEMS_PER_PAGE);
-  const paginatedVotes = filteredVotes.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const votes = data?.votes || [];
+  const totalCount = data?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   const resetFilters = () => {
     setSearchQuery("");
     setChamberFilter("all");
     setResultFilter("all");
+    setPolicyAreaFilter("all");
     setDateFrom("");
     setDateTo("");
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchQuery || chamberFilter !== "all" || resultFilter !== "all" || dateFrom || dateTo;
+  const hasActiveFilters = searchQuery || chamberFilter !== "all" || resultFilter !== "all" || policyAreaFilter !== "all" || dateFrom || dateTo;
 
   return (
     <>
@@ -237,7 +271,27 @@ export default function VotesPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Reset Button */}
+                {/* Policy Area Filter */}
+                <Select
+                  value={policyAreaFilter}
+                  onValueChange={(value) => {
+                    setPolicyAreaFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Policy Area" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Policy Areas</SelectItem>
+                    {policyAreas?.map((area) => (
+                      <SelectItem key={area} value={area}>
+                        {area}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 {hasActiveFilters && (
                   <Button variant="outline" onClick={resetFilters} className="w-full">
                     Reset Filters
@@ -279,7 +333,7 @@ export default function VotesPage() {
           {/* Results Count */}
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {filteredVotes.length} vote{filteredVotes.length !== 1 ? "s" : ""} found
+              {totalCount} vote{totalCount !== 1 ? "s" : ""} found
             </p>
             {totalPages > 1 && (
               <p className="text-sm text-muted-foreground">
@@ -304,7 +358,7 @@ export default function VotesPage() {
                 </Card>
               ))}
             </div>
-          ) : paginatedVotes.length === 0 ? (
+          ) : votes.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Vote className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -321,7 +375,7 @@ export default function VotesPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {paginatedVotes.map((vote) => {
+              {votes.map((vote) => {
                 const isPassed = vote.result?.toLowerCase().includes("passed");
                 const isFailed = vote.result?.toLowerCase().includes("failed");
 
