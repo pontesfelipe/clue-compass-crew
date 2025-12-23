@@ -7,9 +7,10 @@ import { Link } from "react-router-dom";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Scale, Check } from "lucide-react";
+import { Scale, Check, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useComparison } from "@/contexts/ComparisonContext";
+import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { partyColors, partyNames, partyBgColors } from "../types";
 import type { Party } from "@/types/domain";
 
@@ -33,7 +34,9 @@ export function MemberCard({
   imageUrl 
 }: MemberCardProps) {
   const { addMember, removeMember, isMemberSelected, canAddMore } = useComparison();
+  const { isTracking } = useMemberTracking();
   const isSelected = isMemberSelected(id);
+  const isMyRep = isTracking(id);
 
   const handleCompareClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -83,8 +86,11 @@ export function MemberCard({
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-serif font-semibold text-foreground group-hover:text-primary transition-colors truncate pr-8">
+            <h3 className="font-serif font-semibold text-foreground group-hover:text-primary transition-colors truncate pr-8 flex items-center gap-1.5">
               {name}
+              {isMyRep && (
+                <Star className="h-4 w-4 text-amber-500 fill-amber-500 flex-shrink-0" aria-label="Your representative" />
+              )}
             </h3>
             <p className="text-sm text-muted-foreground">
               {state} · {chamber}
