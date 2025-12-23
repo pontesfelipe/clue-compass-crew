@@ -159,14 +159,15 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
     const billTypes = ['hr', 's', 'hjres', 'sjres', 'hconres', 'sconres', 'hres', 'sres']
 
     // Prioritize the current Congress first so votes can be linked to bills promptly.
-    // In delta mode, we intentionally ignore the previous cursor and start fresh from the current Congress.
+    // We still resume from the saved cursor so long backfills can progress over multiple runs.
     const congresses = [119, 118]
 
     const limit = 50
 
-    const resumeCursor = mode === 'full' ? lastCursor : null
+    // Resume from cursor if available (both delta + full). If you need a true reset,
+    // clear the sync_state cursor for the bills dataset.
+    const resumeCursor = lastCursor
 
-    // Resume from cursor if available (full mode only)
     let startCongressIndex = resumeCursor ? congresses.indexOf(resumeCursor.congress) : 0
     if (startCongressIndex === -1) startCongressIndex = 0
 
@@ -183,11 +184,14 @@ async function syncBillsBackground(supabase: any, congressApiKey: string, mode: 
     for (let ci = startCongressIndex; ci < congresses.length; ci++) {
       const congress = congresses[ci]
       
-      for (let ti = (ci === startCongressIndex ? startTypeIndex : 0); ti < billTypes.length; ti++) {
-        const billType = billTypes[ti]
-        
-        let offset = (ci === startCongressIndex && ti === startTypeIndex && lastCursor) ? lastCursor.offset : 0
-        let hasMore = true
+        for (let ti = (ci === startCongressIndex ? startTypeIndex : 0); ti < billTypes.length; ti++) {
+          const billType = billTypes[ti]
+
+          const offsetStart = (ci === startCongressIndex && ti === startTypeIndex && resumeCursor)
+            ? resumeCursor.offset
+            : 0
+          let offset = offsetStart
+          let hasMore = true
         
         while (hasMore) {
           // TIMEBOX CHECK: Stop if time budget is near expiry

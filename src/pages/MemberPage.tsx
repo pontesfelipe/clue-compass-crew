@@ -7,11 +7,11 @@ import { StatsCard } from "@/components/StatsCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  ArrowLeft, 
-  FileText, 
-  Vote, 
-  Users, 
+import {
+  ArrowLeft,
+  FileText,
+  Vote,
+  Users,
   Calendar,
   CalendarClock,
   Hash,
@@ -23,7 +23,8 @@ import {
   AlertCircle,
   Twitter,
   Phone,
-  MapPin
+  MapPin,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
@@ -42,7 +43,9 @@ import { MemberActivity } from "@/features/members/components/MemberActivity";
 import { AlignmentWidget } from "@/features/alignment";
 import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { useAuth } from "@/hooks/useAuth";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 type Party = "D" | "R" | "I";
 
@@ -146,9 +149,13 @@ export default function MemberPage() {
   const { addMember, removeMember, isMemberSelected, canAddMore } = useComparison();
   const { user } = useAuth();
   const { isTracking, trackMember, untrackMember, isTrackingPending } = useMemberTracking();
+  const queryClient = useQueryClient();
+  const [isBackfillPending, setIsBackfillPending] = useState(false);
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [selectedVotePosition, setSelectedVotePosition] = useState<string | undefined>();
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+
+  const canBackfill = useMemo(() => Boolean(user && member?.id), [user, member?.id]);
 
   if (isLoading) {
     return (
@@ -529,19 +536,71 @@ export default function MemberPage() {
 
           {/* Sponsored Bills */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
-            <h2 className="font-serif text-xl font-semibold text-foreground mb-6">
-              Sponsored Bills
-            </h2>
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <h2 className="font-serif text-xl font-semibold text-foreground">
+                Sponsored Bills
+              </h2>
+              <Button
+                variant="civic-outline"
+                size="sm"
+                disabled={!canBackfill || isBackfillPending}
+                onClick={async () => {
+                  if (!user) {
+                    toast({
+                      title: "Sign in required",
+                      description: "Please sign in to refresh sponsored bills.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  setIsBackfillPending(true);
+                  const t = toast({ title: "Refreshing sponsored bills…", description: "This can take a few seconds." });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke(
+                      "backfill-member-sponsored-bills",
+                      { body: { memberId: member.id, limit: 25 } },
+                    );
+
+                    if (error) throw error;
+
+                    toast({
+                      title: "Refresh complete",
+                      description: `Added ${data?.sponsorshipsUpserted ?? 0} sponsored bill links.`,
+                    });
+
+                    await queryClient.invalidateQueries({ queryKey: ["member", member.id] });
+                  } catch (e: any) {
+                    toast({
+                      title: "Refresh failed",
+                      description: e?.message ? String(e.message) : "Please try again.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsBackfillPending(false);
+                    try {
+                      (t as any)?.dismiss?.();
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }}
+              >
+                <RefreshCw className={cn("mr-2 h-4 w-4", isBackfillPending && "animate-spin")} />
+                Refresh
+              </Button>
+            </div>
             <div className="space-y-4">
               {member.sponsoredBills && member.sponsoredBills.length > 0 ? (
                 member.sponsoredBills.map((bill: any, index: number) => {
                   const status = getBillStatus(bill);
                   return (
-                    <button 
+                    <button
                       key={bill.id}
                       onClick={() => setSelectedBillId(bill.id)}
                       className="w-full text-left block p-4 rounded-lg bg-muted/50 opacity-0 animate-slide-up hover:bg-muted transition-colors cursor-pointer"
-                      style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
+                      style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
@@ -552,12 +611,12 @@ export default function MemberPage() {
                             {formatBillNumber(bill)}
                           </p>
                         </div>
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={cn(
                             "text-xs whitespace-nowrap flex-shrink-0",
                             status === "Enacted" && "bg-score-excellent/10 text-score-excellent border-score-excellent/30",
-                            status === "Passed" && "bg-score-good/10 text-score-good border-score-good/30"
+                            status === "Passed" && "bg-score-good/10 text-score-good border-score-good/30",
                           )}
                         >
                           {status}
