@@ -70,16 +70,35 @@ export function usePolicyAreas() {
   return useQuery({
     queryKey: ["policy-areas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bills")
-        .select("policy_area")
-        .not("policy_area", "is", null);
+      // Use a direct distinct query to get all unique policy areas without the 1000 row limit issue
+      const allPolicyAreas: string[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("bills")
+          .select("policy_area")
+          .not("policy_area", "is", null)
+          .range(offset, offset + batchSize - 1);
 
-      // Get unique policy areas
-      const uniqueAreas = [...new Set(data.map((b) => b.policy_area))].filter(Boolean).sort();
-      return uniqueAreas as string[];
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          data.forEach((b) => {
+            if (b.policy_area && !allPolicyAreas.includes(b.policy_area)) {
+              allPolicyAreas.push(b.policy_area);
+            }
+          });
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return allPolicyAreas.sort();
     },
   });
 }

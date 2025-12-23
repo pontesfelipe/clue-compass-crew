@@ -452,6 +452,13 @@ export default function VotesPage() {
                           <CompactPartyBreakdown partyData={vote.partyBreakdown} />
                         )}
 
+                        {/* Policy Area Tag */}
+                        {vote.bills?.policy_area && (
+                          <Badge variant="secondary" className="w-fit text-xs">
+                            {vote.bills.policy_area}
+                          </Badge>
+                        )}
+
                         {/* Related Bill */}
                         {vote.bills && (
                           <p className="text-sm text-muted-foreground">
