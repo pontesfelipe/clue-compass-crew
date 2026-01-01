@@ -143,6 +143,22 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
     enabled: !!memberId,
   });
 
+  // Fetch member state for geographic calculations
+  const { data: memberData } = useQuery({
+    queryKey: ["member-state", memberId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select("state")
+        .eq("id", memberId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!memberId,
+  });
+
   // Fetch contributions as fallback when no funding_metrics exist
   const { data: contributionsData, isLoading: contributionsLoading } = useQuery({
     queryKey: ["member-contributions-summary", memberId],
@@ -179,6 +195,21 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
     );
   }
 
+  // State abbreviation map for geographic matching
+  const stateAbbreviations: Record<string, string> = {
+    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+    'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+    'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+    'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+    'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+    'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+    'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+    'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+    'District of Columbia': 'DC'
+  };
+
   // Show contribution-based summary if no funding_metrics but contributions exist
   if ((!data || data.length === 0) && contributionsData && contributionsData.length > 0) {
     // Calculate summary from contributions
@@ -187,11 +218,41 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
     const cycleContributions = contributionsData.filter(c => c.cycle === currentCycle);
     
     const totalRaised = cycleContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const individualCount = cycleContributions.filter(c => c.contributor_type === 'individual').length;
-    const pacCount = cycleContributions.filter(c => c.contributor_type === 'committee' || c.contributor_type === 'pac').length;
-    const totalCount = individualCount + pacCount;
-    const pctIndividuals = totalCount > 0 ? (individualCount / totalCount) * 100 : 0;
-    const pctPacs = totalCount > 0 ? (pacCount / totalCount) * 100 : 0;
+    
+    // Calculate funding sources BY AMOUNT (like the full metrics view)
+    const individualAmount = cycleContributions
+      .filter(c => c.contributor_type === 'individual')
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const pacAmount = cycleContributions
+      .filter(c => c.contributor_type === 'committee' || c.contributor_type === 'pac')
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const pctIndividuals = totalRaised > 0 ? (individualAmount / totalRaised) * 100 : 0;
+    const pctPacs = totalRaised > 0 ? (pacAmount / totalRaised) * 100 : 0;
+    
+    // Calculate geographic distribution
+    const memberStateAbbr = memberData?.state ? (stateAbbreviations[memberData.state] || memberData.state) : null;
+    const inStateAmount = cycleContributions
+      .filter(c => c.contributor_state && memberStateAbbr && c.contributor_state.toUpperCase() === memberStateAbbr.toUpperCase())
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const outOfStateAmount = cycleContributions
+      .filter(c => c.contributor_state && memberStateAbbr && c.contributor_state.toUpperCase() !== memberStateAbbr.toUpperCase())
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const geoTotal = inStateAmount + outOfStateAmount;
+    const pctInState = geoTotal > 0 ? (inStateAmount / geoTotal) * 100 : 50;
+    const pctOutOfState = geoTotal > 0 ? (outOfStateAmount / geoTotal) * 100 : 50;
+    
+    // Estimate small donors (contributions under $200)
+    const smallDonorAmount = cycleContributions
+      .filter(c => c.contributor_type === 'individual' && Number(c.amount || 0) < 200)
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const pctSmallDonors = individualAmount > 0 ? (smallDonorAmount / individualAmount) * 100 : 0;
+    
+    // Calculate estimated scores (same formulas as sync-fec-funding)
+    const grassrootsScore = Math.round(
+      (pctIndividuals * 0.5) + (pctSmallDonors * 0.3) + (pctInState * 0.2)
+    );
+    const pacDependenceScore = Math.round(pctPacs);
+    const localMoneyScore = Math.round(pctInState);
     
     // Get top industries
     const industryTotals: Record<string, number> = {};
@@ -243,12 +304,12 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
             <p className="text-3xl font-bold">{formatCurrency(totalRaised)}</p>
           </div>
 
-          {/* Funding Sources */}
-          {totalCount > 0 && (
+          {/* Funding Sources - by amount */}
+          {totalRaised > 0 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Funding Sources (by count)</span>
+                <span className="text-sm font-medium">Funding Sources</span>
               </div>
               <StackedBar
                 leftLabel="Individuals"
@@ -260,6 +321,56 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
               />
             </div>
           )}
+
+          {/* Geographic Distribution */}
+          {geoTotal > 0 && memberStateAbbr && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Geographic Distribution</span>
+              </div>
+              <StackedBar
+                leftLabel="In-State"
+                rightLabel="Out-of-State"
+                leftValue={pctInState}
+                rightValue={pctOutOfState}
+                leftColor="bg-civic-blue"
+                rightColor="bg-civic-slate"
+              />
+            </div>
+          )}
+
+          {/* Small Donors Badge */}
+          {pctSmallDonors > 0 && (
+            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+              <Leaf className="h-4 w-4 text-emerald-500" />
+              <span className="text-sm">
+                Estimated Small Donors: <span className="font-semibold">{pctSmallDonors.toFixed(0)}%</span>
+              </span>
+            </div>
+          )}
+
+          {/* Estimated Score Cards */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ScoreGauge
+              label="Grassroots Support"
+              score={grassrootsScore}
+              tooltip="Higher = more money from individuals, small donors, and in-state contributors. Estimated from contribution records."
+              color="success"
+            />
+            <ScoreGauge
+              label="PAC Dependence"
+              score={pacDependenceScore}
+              tooltip="Higher = larger share of money from PACs and committees. Estimated from contribution records."
+              color="warning"
+            />
+            <ScoreGauge
+              label="Local Money"
+              score={localMoneyScore}
+              tooltip="Higher = more donations from within the politician's own state. Estimated from contribution records."
+              color="primary"
+            />
+          </div>
 
           {/* Top Industries */}
           {topIndustries.length > 0 && (
@@ -280,7 +391,7 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
           )}
 
           <p className="text-xs text-muted-foreground text-center">
-            Based on {cycleContributions.length} contribution records
+            Estimated from {cycleContributions.length} contribution records
           </p>
         </CardContent>
       </Card>
