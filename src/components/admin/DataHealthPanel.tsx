@@ -19,9 +19,14 @@ import {
   Loader2,
   Clock,
   AlertCircle,
-  Check
+  Check,
+  Zap,
+  Activity,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface SyncHealthItem {
   job_id: string;
@@ -57,9 +62,34 @@ interface DataGaps {
   bills_classified: number;
 }
 
+interface JobRun {
+  id: string;
+  job_id: string;
+  job_type: string;
+  provider: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  records_fetched: number | null;
+  records_upserted: number | null;
+  api_calls: number | null;
+  wait_time_ms: number | null;
+  error: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+interface ApiErrorSummary {
+  job_id: string;
+  error_count: number;
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
 export function DataHealthPanel() {
   const { toast } = useToast();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [showRecentRuns, setShowRecentRuns] = useState(false);
+  const [showApiErrors, setShowApiErrors] = useState(false);
 
   // Fetch sync health
   const { data: syncHealth, isLoading: loadingSyncHealth, refetch: refetchSyncHealth } = useQuery({
@@ -158,10 +188,63 @@ export function DataHealthPanel() {
     staleTime: 60000,
   });
 
+  // Fetch recent job runs
+  const { data: recentJobRuns, isLoading: loadingJobRuns, refetch: refetchJobRuns } = useQuery({
+    queryKey: ["admin-recent-job-runs"],
+    queryFn: async (): Promise<JobRun[]> => {
+      const { data, error } = await supabase
+        .from("sync_job_runs")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(25);
+      
+      if (error) throw error;
+      return (data || []) as JobRun[];
+    },
+    staleTime: 30000,
+  });
+
+  // Calculate API error summary from recent job runs
+  const apiErrorSummary: ApiErrorSummary[] = recentJobRuns
+    ? Object.values(
+        recentJobRuns
+          .filter(run => run.error)
+          .reduce((acc, run) => {
+            if (!acc[run.job_id]) {
+              acc[run.job_id] = {
+                job_id: run.job_id,
+                error_count: 0,
+                last_error: run.error,
+                last_error_at: run.started_at,
+              };
+            }
+            acc[run.job_id].error_count++;
+            if (run.started_at && (!acc[run.job_id].last_error_at || run.started_at > acc[run.job_id].last_error_at)) {
+              acc[run.job_id].last_error = run.error;
+              acc[run.job_id].last_error_at = run.started_at;
+            }
+            return acc;
+          }, {} as Record<string, ApiErrorSummary>)
+      )
+    : [];
+
+  // Calculate API call stats from recent runs
+  const apiStats = recentJobRuns
+    ? {
+        totalCalls: recentJobRuns.reduce((sum, run) => sum + (run.api_calls || 0), 0),
+        totalWaitTime: recentJobRuns.reduce((sum, run) => sum + (run.wait_time_ms || 0), 0),
+        totalRecordsFetched: recentJobRuns.reduce((sum, run) => sum + (run.records_fetched || 0), 0),
+        totalRecordsUpserted: recentJobRuns.reduce((sum, run) => sum + (run.records_upserted || 0), 0),
+        errorCount: recentJobRuns.filter(run => run.error).length,
+        successCount: recentJobRuns.filter(run => run.status === 'complete' && !run.error).length,
+      }
+    : null;
+
   const handleRefresh = () => {
     refetchSyncHealth();
     refetchAnomalies();
     refetchGaps();
+    refetchJobRuns();
   };
 
   const handleResolveAnomaly = async (anomalyId: string) => {
@@ -192,7 +275,7 @@ export function DataHealthPanel() {
     }
   };
 
-  const isLoading = loadingSyncHealth || loadingAnomalies || loadingGaps;
+  const isLoading = loadingSyncHealth || loadingAnomalies || loadingGaps || loadingJobRuns;
 
   // Calculate overall health score
   const healthyJobs = syncHealth?.filter(j => j.health_status === "healthy").length || 0;
