@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatCurrency, contributorTypeLabels, type Contribution } from "../types";
 import { useFeatureToggles } from "@/hooks/useFeatureToggles";
 import { DonorDisclaimer } from "@/components/DonorDisclaimer";
-import { Eye, EyeOff, Users, Building2, AlertTriangle } from "lucide-react";
+import { Eye, EyeOff, Users, Building2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 interface ContributorsListProps {
   contributions: Contribution[];
@@ -95,14 +104,76 @@ function maskLocation(contribution: Contribution): string | null {
   return null;
 }
 
-const INITIAL_DISPLAY_COUNT = 10;
+const ITEMS_PER_PAGE = 10;
+
+function PaginationControls({ 
+  currentPage, 
+  totalPages, 
+  onPageChange 
+}: { 
+  currentPage: number; 
+  totalPages: number; 
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const getVisiblePages = () => {
+    const pages: (number | 'ellipsis')[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('ellipsis');
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) pages.push('ellipsis');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  return (
+    <Pagination className="mt-3">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious 
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+          />
+        </PaginationItem>
+        {getVisiblePages().map((page, idx) => (
+          <PaginationItem key={idx}>
+            {page === 'ellipsis' ? (
+              <PaginationEllipsis />
+            ) : (
+              <PaginationLink
+                onClick={() => onPageChange(page)}
+                isActive={currentPage === page}
+                className="cursor-pointer"
+              >
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext 
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 export function ContributorsList({ contributions }: ContributorsListProps) {
   const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const [localShowNames, setLocalShowNames] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
-  const [showAllOrgs, setShowAllOrgs] = useState(false);
-  const [showAllIndividuals, setShowAllIndividuals] = useState(false);
+  const [orgsPage, setOrgsPage] = useState(1);
+  const [individualsPage, setIndividualsPage] = useState(1);
   
   // Feature flag controls global availability; user can opt-in per session
   const showDonorIdentitiesEnabled = !togglesLoading && isFeatureEnabled("show_donor_identities");
@@ -119,9 +190,22 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
     );
   }
 
-  const organizationContributions = getOrganizationContributions(contributions);
-  const individualContributions = getIndividualContributions(contributions);
-  const aggregatedTypes = aggregateByType(contributions);
+  const organizationContributions = useMemo(() => getOrganizationContributions(contributions), [contributions]);
+  const individualContributions = useMemo(() => getIndividualContributions(contributions), [contributions]);
+  const aggregatedTypes = useMemo(() => aggregateByType(contributions), [contributions]);
+
+  const orgsTotalPages = Math.ceil(organizationContributions.length / ITEMS_PER_PAGE);
+  const individualsTotalPages = Math.ceil(individualContributions.length / ITEMS_PER_PAGE);
+
+  const paginatedOrgs = useMemo(() => {
+    const start = (orgsPage - 1) * ITEMS_PER_PAGE;
+    return organizationContributions.slice(start, start + ITEMS_PER_PAGE);
+  }, [organizationContributions, orgsPage]);
+
+  const paginatedIndividuals = useMemo(() => {
+    const start = (individualsPage - 1) * ITEMS_PER_PAGE;
+    return individualContributions.slice(start, start + ITEMS_PER_PAGE);
+  }, [individualContributions, individualsPage]);
 
   const handleToggleNames = () => {
     if (!localShowNames) {
@@ -179,7 +263,7 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
             </h4>
           </div>
           <div className="space-y-2">
-            {(showAllOrgs ? organizationContributions : organizationContributions.slice(0, INITIAL_DISPLAY_COUNT)).map((contribution, index) => (
+            {paginatedOrgs.map((contribution, index) => (
               <div
                 key={contribution.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
@@ -219,16 +303,11 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
               </div>
             ))}
           </div>
-          {organizationContributions.length > INITIAL_DISPLAY_COUNT && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllOrgs(!showAllOrgs)}
-              className="w-full text-xs"
-            >
-              {showAllOrgs ? `Show Less` : `Show All ${organizationContributions.length} Organizations`}
-            </Button>
-          )}
+          <PaginationControls 
+            currentPage={orgsPage} 
+            totalPages={orgsTotalPages} 
+            onPageChange={setOrgsPage} 
+          />
         </div>
       )}
 
@@ -265,11 +344,11 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
           {showIndividualNames && <DonorDisclaimer variant="full" />}
 
           <div className="space-y-2">
-            {(showAllIndividuals ? individualContributions : individualContributions.slice(0, INITIAL_DISPLAY_COUNT)).map((contribution, index) => (
+            {paginatedIndividuals.map((contribution, index) => (
               <div
                 key={contribution.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
-                style={{ animationDelay: `${(index + organizationContributions.length) * 50}ms`, animationFillMode: 'forwards' }}
+                style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'forwards' }}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -325,16 +404,11 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
               </div>
             ))}
           </div>
-          {individualContributions.length > INITIAL_DISPLAY_COUNT && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllIndividuals(!showAllIndividuals)}
-              className="w-full text-xs"
-            >
-              {showAllIndividuals ? `Show Less` : `Show All ${individualContributions.length} Donors`}
-            </Button>
-          )}
+          <PaginationControls 
+            currentPage={individualsPage} 
+            totalPages={individualsTotalPages} 
+            onPageChange={setIndividualsPage} 
+          />
 
           {!showDonorIdentitiesEnabled && (
             <p className="text-xs text-muted-foreground text-center py-2">
