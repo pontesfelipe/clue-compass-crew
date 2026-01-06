@@ -95,10 +95,14 @@ function maskLocation(contribution: Contribution): string | null {
   return null;
 }
 
+const INITIAL_DISPLAY_COUNT = 10;
+
 export function ContributorsList({ contributions }: ContributorsListProps) {
   const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const [localShowNames, setLocalShowNames] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
+  const [showAllOrgs, setShowAllOrgs] = useState(false);
+  const [showAllIndividuals, setShowAllIndividuals] = useState(false);
   
   // Feature flag controls global availability; user can opt-in per session
   const showDonorIdentitiesEnabled = !togglesLoading && isFeatureEnabled("show_donor_identities");
@@ -168,12 +172,14 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
       {/* PAC/Organization contributions - always show names */}
       {organizationContributions.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            PACs & Organizations
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              PACs & Organizations ({organizationContributions.length})
+            </h4>
+          </div>
           <div className="space-y-2">
-            {organizationContributions.slice(0, 10).map((contribution, index) => (
+            {(showAllOrgs ? organizationContributions : organizationContributions.slice(0, INITIAL_DISPLAY_COUNT)).map((contribution, index) => (
               <div
                 key={contribution.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
@@ -213,6 +219,16 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
               </div>
             ))}
           </div>
+          {organizationContributions.length > INITIAL_DISPLAY_COUNT && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAllOrgs(!showAllOrgs)}
+              className="w-full text-xs"
+            >
+              {showAllOrgs ? `Show Less` : `Show All ${organizationContributions.length} Organizations`}
+            </Button>
+          )}
         </div>
       )}
 
@@ -249,7 +265,7 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
           {showIndividualNames && <DonorDisclaimer variant="full" />}
 
           <div className="space-y-2">
-            {individualContributions.slice(0, 10).map((contribution, index) => (
+            {(showAllIndividuals ? individualContributions : individualContributions.slice(0, INITIAL_DISPLAY_COUNT)).map((contribution, index) => (
               <div
                 key={contribution.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50 opacity-0 animate-slide-up"
@@ -309,6 +325,16 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
               </div>
             ))}
           </div>
+          {individualContributions.length > INITIAL_DISPLAY_COUNT && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAllIndividuals(!showAllIndividuals)}
+              className="w-full text-xs"
+            >
+              {showAllIndividuals ? `Show Less` : `Show All ${individualContributions.length} Donors`}
+            </Button>
+          )}
 
           {!showDonorIdentitiesEnabled && (
             <p className="text-xs text-muted-foreground text-center py-2">
