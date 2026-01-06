@@ -75,7 +75,7 @@ function getIndividualContributions(contributions: Contribution[]) {
   return contributions.filter(c => c.contributorType === "individual");
 }
 
-// Anonymize individual contribution for display
+// Anonymize individual contribution for display (state shown separately as badge)
 function anonymizeContribution(contribution: Contribution): string {
   const parts: string[] = [];
   
@@ -85,10 +85,9 @@ function anonymizeContribution(contribution: Contribution): string {
   if (contribution.contributorEmployer) {
     parts.push(`at ${contribution.contributorEmployer}`);
   }
-  if (contribution.contributorState) {
-    parts.push(`(${contribution.contributorState})`);
-  }
   
+  // Return "Individual Donor" if no occupation/employer info available
+  // State is displayed separately as a badge, so we don't include it here
   if (parts.length === 0) {
     return "Individual Donor";
   }
