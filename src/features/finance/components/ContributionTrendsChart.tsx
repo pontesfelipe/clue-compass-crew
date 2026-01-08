@@ -16,10 +16,11 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { Contribution } from "../types";
+import type { Contribution, Sponsor } from "../types";
 
 interface ContributionTrendsChartProps {
   contributions: Contribution[];
+  sponsors?: Sponsor[];
 }
 
 const chartConfig = {
@@ -28,16 +29,17 @@ const chartConfig = {
     color: "hsl(210, 70%, 50%)", // Blue
   },
   organization: {
-    label: "Organizations",
+    label: "PACs & Organizations",
     color: "hsl(160, 60%, 45%)", // Teal/Green
   },
 } satisfies ChartConfig;
 
-export function ContributionTrendsChart({ contributions }: ContributionTrendsChartProps) {
+export function ContributionTrendsChart({ contributions, sponsors = [] }: ContributionTrendsChartProps) {
   const chartData = useMemo(() => {
     // Group contributions by cycle and type
     const cycleMap = new Map<number, { individual: number; organization: number }>();
 
+    // Process contributions
     for (const c of contributions) {
       const cycle = c.cycle;
       if (!cycleMap.has(cycle)) {
@@ -48,8 +50,19 @@ export function ContributionTrendsChart({ contributions }: ContributionTrendsCha
       if (c.contributorType === "individual") {
         data.individual += c.amount;
       } else {
+        // PAC, organization, corporate, union all go to organization bucket
         data.organization += c.amount;
       }
+    }
+
+    // Process sponsors (PACs, trade associations, etc.) - add to organization bucket
+    for (const s of sponsors) {
+      const cycle = s.cycle;
+      if (!cycleMap.has(cycle)) {
+        cycleMap.set(cycle, { individual: 0, organization: 0 });
+      }
+      const data = cycleMap.get(cycle)!;
+      data.organization += s.totalSupport;
     }
 
     // Convert to array and sort by cycle
@@ -61,7 +74,7 @@ export function ContributionTrendsChart({ contributions }: ContributionTrendsCha
         total: data.individual + data.organization,
       }))
       .sort((a, b) => parseInt(a.cycle) - parseInt(b.cycle));
-  }, [contributions]);
+  }, [contributions, sponsors]);
 
   if (chartData.length === 0) {
     return (
