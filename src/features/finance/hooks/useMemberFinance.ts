@@ -12,20 +12,17 @@ export function useMemberFinance(memberId: string) {
           .from("member_contributions")
           .select("*")
           .eq("member_id", memberId)
-          .order("amount", { ascending: false })
-          .limit(10),
+          .order("amount", { ascending: false }),
         supabase
           .from("member_lobbying")
           .select("*")
           .eq("member_id", memberId)
-          .order("total_spent", { ascending: false })
-          .limit(10),
+          .order("total_spent", { ascending: false }),
         supabase
           .from("member_sponsors")
           .select("*")
           .eq("member_id", memberId)
-          .order("total_support", { ascending: false })
-          .limit(10),
+          .order("total_support", { ascending: false }),
       ]);
 
       if (contributionsRes.error) throw contributionsRes.error;
