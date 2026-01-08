@@ -1,20 +1,20 @@
 import { useMemo } from "react";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
+  LabelList,
 } from "recharts";
 import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { Contribution, Sponsor } from "../types";
 
@@ -66,7 +66,7 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
     }
 
     // Convert to array and sort by cycle
-    return Array.from(cycleMap.entries())
+    const sorted = Array.from(cycleMap.entries())
       .map(([cycle, data]) => ({
         cycle: cycle.toString(),
         individual: data.individual,
@@ -74,6 +74,17 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
         total: data.individual + data.organization,
       }))
       .sort((a, b) => parseInt(a.cycle) - parseInt(b.cycle));
+
+    // Calculate YoY growth
+    return sorted.map((item, index) => {
+      if (index === 0) {
+        return { ...item, growth: null, growthPct: null };
+      }
+      const prevTotal = sorted[index - 1].total;
+      const growth = item.total - prevTotal;
+      const growthPct = prevTotal > 0 ? ((growth / prevTotal) * 100) : null;
+      return { ...item, growth, growthPct };
+    });
   }, [contributions, sponsors]);
 
   if (chartData.length === 0) {
@@ -90,16 +101,43 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
     return `$${value}`;
   };
 
+  const formatGrowth = (pct: number | null) => {
+    if (pct === null) return null;
+    const sign = pct >= 0 ? "+" : "";
+    return `${sign}${pct.toFixed(0)}%`;
+  };
+
+  // Calculate overall growth if we have multiple cycles
+  const overallGrowth = chartData.length >= 2 
+    ? chartData[chartData.length - 1].growthPct 
+    : null;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <TrendingUp className="h-4 w-4" />
-        <h4 className="text-sm font-medium">Contributions by Election Cycle</h4>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <TrendingUp className="h-4 w-4" />
+          <h4 className="text-sm font-medium">Contributions by Election Cycle</h4>
+        </div>
+        {overallGrowth !== null && (
+          <div className={`flex items-center gap-1 text-sm font-medium ${
+            overallGrowth > 0 ? "text-green-600" : overallGrowth < 0 ? "text-red-600" : "text-muted-foreground"
+          }`}>
+            {overallGrowth > 0 ? (
+              <TrendingUp className="h-4 w-4" />
+            ) : overallGrowth < 0 ? (
+              <TrendingDown className="h-4 w-4" />
+            ) : (
+              <Minus className="h-4 w-4" />
+            )}
+            <span>{formatGrowth(overallGrowth)} vs prev cycle</span>
+          </div>
+        )}
       </div>
       
       <ChartContainer config={chartConfig} className="h-[280px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="cycle"
@@ -123,6 +161,10 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
                 const indPct = total > 0 ? ((individual / total) * 100).toFixed(1) : "0";
                 const orgPct = total > 0 ? ((organization / total) * 100).toFixed(1) : "0";
                 
+                // Find growth data
+                const cycleData = chartData.find(d => d.cycle === label);
+                const growthPct = cycleData?.growthPct;
+                
                 return (
                   <div className="rounded-lg border bg-background p-3 shadow-md">
                     <p className="font-medium mb-2">Cycle {label}</p>
@@ -137,7 +179,7 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2">
                           <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(160, 60%, 45%)" }} />
-                          <span className="text-muted-foreground">Organizations</span>
+                          <span className="text-muted-foreground">PACs & Orgs</span>
                         </div>
                         <span className="font-medium">{formatCurrency(organization)} <span className="text-muted-foreground">({orgPct}%)</span></span>
                       </div>
@@ -145,6 +187,17 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
                         <span className="text-muted-foreground">Total</span>
                         <span className="font-semibold">{formatCurrency(total)}</span>
                       </div>
+                      {growthPct !== null && (
+                        <div className={`flex items-center justify-between pt-1 ${
+                          growthPct > 0 ? "text-green-600" : growthPct < 0 ? "text-red-600" : "text-muted-foreground"
+                        }`}>
+                          <span className="text-muted-foreground">vs Prev Cycle</span>
+                          <span className="font-medium flex items-center gap-1">
+                            {growthPct > 0 ? <TrendingUp className="h-3 w-3" /> : growthPct < 0 ? <TrendingDown className="h-3 w-3" /> : null}
+                            {formatGrowth(growthPct)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -169,8 +222,20 @@ export function ContributionTrendsChart({ contributions, sponsors = [] }: Contri
               stackId="a"
               fill="var(--color-organization)"
               radius={[4, 4, 0, 0]}
-              name="Organizations"
-            />
+              name="PACs & Organizations"
+            >
+              <LabelList
+                dataKey="growthPct"
+                position="top"
+                formatter={(value: number | null) => {
+                  if (value === null) return "";
+                  const sign = value >= 0 ? "+" : "";
+                  return `${sign}${value.toFixed(0)}%`;
+                }}
+                className="fill-foreground text-xs font-medium"
+                style={{ fontSize: 11 }}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartContainer>
