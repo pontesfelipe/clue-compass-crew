@@ -102,14 +102,40 @@ export function ContributionTrendsChart({ contributions }: ContributionTrendsCha
               width={60}
             />
             <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value, name) => (
-                    <span className="font-medium">{formatCurrency(value as number)}</span>
-                  )}
-                  labelFormatter={(label) => `Cycle ${label}`}
-                />
-              }
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const individual = payload.find(p => p.dataKey === "individual")?.value as number || 0;
+                const organization = payload.find(p => p.dataKey === "organization")?.value as number || 0;
+                const total = individual + organization;
+                const indPct = total > 0 ? ((individual / total) * 100).toFixed(1) : "0";
+                const orgPct = total > 0 ? ((organization / total) * 100).toFixed(1) : "0";
+                
+                return (
+                  <div className="rounded-lg border bg-background p-3 shadow-md">
+                    <p className="font-medium mb-2">Cycle {label}</p>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(210, 70%, 50%)" }} />
+                          <span className="text-muted-foreground">Individuals</span>
+                        </div>
+                        <span className="font-medium">{formatCurrency(individual)} <span className="text-muted-foreground">({indPct}%)</span></span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(160, 60%, 45%)" }} />
+                          <span className="text-muted-foreground">Organizations</span>
+                        </div>
+                        <span className="font-medium">{formatCurrency(organization)} <span className="text-muted-foreground">({orgPct}%)</span></span>
+                      </div>
+                      <div className="border-t pt-1.5 mt-1.5 flex justify-between">
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="font-semibold">{formatCurrency(total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
             />
             <Legend
               verticalAlign="top"
