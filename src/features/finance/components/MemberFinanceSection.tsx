@@ -1,6 +1,8 @@
+import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Building, Building2, Users, TrendingUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DollarSign, Building, Building2, Users, TrendingUp, Calendar } from "lucide-react";
 import { useMemberFinance } from "../hooks/useMemberFinance";
 import { FinanceOverview } from "./FinanceOverview";
 import { ContributorsList } from "./ContributorsList";
@@ -14,6 +16,44 @@ interface MemberFinanceSectionProps {
 
 export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
   const { data: finance, isLoading } = useMemberFinance(memberId);
+  const [selectedYear, setSelectedYear] = useState<string>("all");
+
+  // Get all available years from the data
+  const availableYears = useMemo(() => {
+    if (!finance) return [];
+    const yearSet = new Set<number>();
+    finance.contributions.forEach((c) => yearSet.add(c.cycle));
+    finance.lobbying.forEach((l) => yearSet.add(l.cycle));
+    finance.sponsors.forEach((s) => yearSet.add(s.cycle));
+    return Array.from(yearSet).sort((a, b) => b - a); // Most recent first
+  }, [finance]);
+
+  // Set default to latest year when data loads
+  useMemo(() => {
+    if (availableYears.length > 0 && selectedYear === "all") {
+      setSelectedYear(availableYears[0].toString());
+    }
+  }, [availableYears]);
+
+  // Filter data by selected year
+  const filteredFinance = useMemo(() => {
+    if (!finance) return null;
+    if (selectedYear === "all") return finance;
+    
+    const year = parseInt(selectedYear);
+    return {
+      ...finance,
+      contributions: finance.contributions.filter((c) => c.cycle === year),
+      lobbying: finance.lobbying.filter((l) => l.cycle === year),
+      sponsors: finance.sponsors.filter((s) => s.cycle === year),
+      totalContributions: finance.contributions
+        .filter((c) => c.cycle === year)
+        .reduce((sum, c) => sum + c.amount, 0),
+      totalLobbying: finance.lobbying
+        .filter((l) => l.cycle === year)
+        .reduce((sum, l) => sum + l.totalSpent, 0),
+    };
+  }, [finance, selectedYear]);
 
   if (isLoading) {
     return (
@@ -34,7 +74,7 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
     );
   }
 
-  if (!finance) {
+  if (!finance || !filteredFinance) {
     return null;
   }
 
@@ -45,16 +85,34 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-civic-md">
-      <div className="flex items-center gap-2 mb-6">
-        <DollarSign className="h-5 w-5 text-muted-foreground" />
-        <h2 className="font-serif text-xl font-semibold text-foreground">
-          Financial Relationships
-        </h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-muted-foreground" />
+          <h2 className="font-serif text-xl font-semibold text-foreground">
+            Financial Relationships
+          </h2>
+        </div>
+        {hasData && availableYears.length > 0 && (
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-[140px]">
+              <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Select year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {availableYears.map((year) => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {hasData ? (
         <>
-          <FinanceOverview finance={finance} />
+          <FinanceOverview finance={filteredFinance} />
 
           <Tabs defaultValue="trends" className="mt-6">
             <TabsList className="grid w-full grid-cols-4">
@@ -81,15 +139,15 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
             </TabsContent>
 
             <TabsContent value="donors" className="mt-4">
-              <ContributorsList contributions={finance.contributions} />
+              <ContributorsList contributions={filteredFinance.contributions} />
             </TabsContent>
 
             <TabsContent value="lobbying" className="mt-4">
-              <LobbyingList lobbying={finance.lobbying} />
+              <LobbyingList lobbying={filteredFinance.lobbying} />
             </TabsContent>
 
             <TabsContent value="sponsors" className="mt-4">
-              <SponsorsList sponsors={finance.sponsors} />
+              <SponsorsList sponsors={filteredFinance.sponsors} />
             </TabsContent>
           </Tabs>
         </>

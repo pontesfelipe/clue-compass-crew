@@ -6,23 +6,26 @@ export function useMemberFinance(memberId: string) {
   return useQuery({
     queryKey: ["member-finance", memberId],
     queryFn: async (): Promise<MemberFinance> => {
-      // Fetch all finance data in parallel
+      // Fetch all finance data in parallel - no limit to get ALL records
       const [contributionsRes, lobbyingRes, sponsorsRes] = await Promise.all([
         supabase
           .from("member_contributions")
           .select("*")
           .eq("member_id", memberId)
-          .order("amount", { ascending: false }),
+          .order("amount", { ascending: false })
+          .limit(10000),
         supabase
           .from("member_lobbying")
           .select("*")
           .eq("member_id", memberId)
-          .order("total_spent", { ascending: false }),
+          .order("total_spent", { ascending: false })
+          .limit(10000),
         supabase
           .from("member_sponsors")
           .select("*")
           .eq("member_id", memberId)
-          .order("total_support", { ascending: false }),
+          .order("total_support", { ascending: false })
+          .limit(10000),
       ]);
 
       if (contributionsRes.error) throw contributionsRes.error;
