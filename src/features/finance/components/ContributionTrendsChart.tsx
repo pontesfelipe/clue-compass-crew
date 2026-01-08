@@ -25,11 +25,11 @@ interface ContributionTrendsChartProps {
 const chartConfig = {
   individual: {
     label: "Individuals",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(210, 70%, 50%)", // Blue
   },
   organization: {
     label: "Organizations",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(160, 60%, 45%)", // Teal/Green
   },
 } satisfies ChartConfig;
 
@@ -138,11 +138,11 @@ export function ContributionTrendsChart({ contributions }: ContributionTrendsCha
 
       <div className="flex justify-center gap-6 text-sm">
         <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: "hsl(var(--chart-1))" }} />
+          <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: "hsl(210, 70%, 50%)" }} />
           <span className="text-muted-foreground">Individuals</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: "hsl(var(--chart-2))" }} />
+          <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: "hsl(160, 60%, 45%)" }} />
           <span className="text-muted-foreground">PACs & Organizations</span>
         </div>
       </div>
