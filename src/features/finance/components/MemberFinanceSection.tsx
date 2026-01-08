@@ -1,11 +1,12 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Building, Building2, Users } from "lucide-react";
+import { DollarSign, Building, Building2, Users, TrendingUp } from "lucide-react";
 import { useMemberFinance } from "../hooks/useMemberFinance";
 import { FinanceOverview } from "./FinanceOverview";
 import { ContributorsList } from "./ContributorsList";
 import { LobbyingList } from "./LobbyingList";
 import { SponsorsList } from "./SponsorsList";
+import { ContributionTrendsChart } from "./ContributionTrendsChart";
 
 interface MemberFinanceSectionProps {
   memberId: string;
@@ -55,8 +56,12 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
         <>
           <FinanceOverview finance={finance} />
 
-          <Tabs defaultValue="donors" className="mt-6">
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs defaultValue="trends" className="mt-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="trends" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">Trends</span>
+              </TabsTrigger>
               <TabsTrigger value="donors" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 <span className="hidden sm:inline">Donors</span>
@@ -70,6 +75,10 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
                 <span className="hidden sm:inline">Sponsors</span>
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="trends" className="mt-4">
+              <ContributionTrendsChart contributions={finance.contributions} />
+            </TabsContent>
 
             <TabsContent value="donors" className="mt-4">
               <ContributorsList contributions={finance.contributions} />
