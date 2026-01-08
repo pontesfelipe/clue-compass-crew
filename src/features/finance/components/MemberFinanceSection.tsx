@@ -77,7 +77,7 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
             </TabsList>
 
             <TabsContent value="trends" className="mt-4">
-              <ContributionTrendsChart contributions={finance.contributions} />
+              <ContributionTrendsChart contributions={finance.contributions} sponsors={finance.sponsors} />
             </TabsContent>
 
             <TabsContent value="donors" className="mt-4">
