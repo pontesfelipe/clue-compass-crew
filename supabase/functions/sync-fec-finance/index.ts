@@ -142,14 +142,14 @@ async function updateWatermark(supabase: any, cursor: any, recordsTotal: number)
 }
 
 // Helper: Acquire job lock
-async function acquireLock(supabase: any): Promise<boolean> {
+async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<boolean> {
   const now = new Date()
   const lockUntil = new Date(now.getTime() + MAX_DURATION_SECONDS * 1000)
 
   const { data: progress } = await supabase
     .from('sync_progress')
     .select('status, lock_until')
-    .eq('id', JOB_ID)
+    .eq('id', lockId)
     .single()
 
   if (progress) {
@@ -157,21 +157,21 @@ async function acquireLock(supabase: any): Promise<boolean> {
     const isLocked = !!(existingLock && existingLock > now)
 
     if (isLocked) {
-      console.log(`Job ${JOB_ID} is locked until ${existingLock!.toISOString()}`)
+      console.log(`Job ${lockId} is locked until ${existingLock!.toISOString()}`)
       return false
     }
 
     // If a previous run crashed, status may remain "running" even though the lock expired.
     // Treat that as stale and allow a new run to start.
     if (progress.status === 'running') {
-      console.warn(`Job ${JOB_ID} was 'running' but lock expired; restarting`) 
+      console.warn(`Job ${lockId} was 'running' but lock expired; restarting`)
     }
   }
 
   await supabase
     .from('sync_progress')
     .upsert({
-      id: JOB_ID,
+      id: lockId,
       status: 'running',
       lock_until: lockUntil.toISOString(),
       last_run_at: now.toISOString(),
@@ -181,7 +181,13 @@ async function acquireLock(supabase: any): Promise<boolean> {
 }
 
 // Helper: Release job lock
-async function releaseLock(supabase: any, status: string, successCount: number, failureCount: number) {
+async function releaseLock(
+  supabase: any,
+  status: string,
+  successCount: number,
+  failureCount: number,
+  lockId: string = JOB_ID
+) {
   await supabase
     .from('sync_progress')
     .update({
@@ -191,7 +197,7 @@ async function releaseLock(supabase: any, status: string, successCount: number, 
       last_failure_count: failureCount,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', JOB_ID)
+    .eq('id', lockId)
 }
 
 // Generate contribution UID for idempotent upserts
@@ -230,8 +236,13 @@ Deno.serve(async (req) => {
       )
     }
 
+    const requestUrl = new URL(req.url)
+    const memberIdFilter = requestUrl.searchParams.get('member_id')
+    const isSingleMemberRun = !!memberIdFilter
+    const lockId = memberIdFilter ? `${JOB_ID}:${memberIdFilter}` : JOB_ID
+
     // Try to acquire lock
-    if (!await acquireLock(supabase)) {
+    if (!await acquireLock(supabase, lockId)) {
       return new Response(
         JSON.stringify({ success: false, message: 'Job is locked or already running' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -243,38 +254,67 @@ Deno.serve(async (req) => {
     let offset = lastCursor?.memberOffset || 0
     let limit = BATCH_SIZE
 
-    // Parse request options
-    try {
-      const body = await req.json()
-      if (body.reset) offset = 0
-      if (typeof body.offset === 'number' && Number.isFinite(body.offset)) {
-        offset = Math.max(0, Math.floor(body.offset))
+    if (isSingleMemberRun) {
+      offset = 0
+      limit = 1
+    }
+
+    // Parse request options (batch runs only)
+    if (!isSingleMemberRun) {
+      try {
+        const body = await req.json()
+        if (body.reset) offset = 0
+        if (typeof body.offset === 'number' && Number.isFinite(body.offset)) {
+          offset = Math.max(0, Math.floor(body.offset))
+        }
+        if (body.limit) limit = Math.min(body.limit, 50)
+      } catch {
+        // Use defaults
       }
-      if (body.limit) limit = Math.min(body.limit, 50)
-    } catch {
-      // Use defaults
     }
 
     console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`)
 
     // Get members to sync - include fec_candidate_id to avoid re-searching
-    const { data: members, count: totalMembers } = await supabase
+    let membersQuery = supabase
       .from('members')
-      .select('id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids', { count: 'exact' })
-      .eq('in_office', true)
-      .order('last_name')
-      .range(offset, offset + limit - 1)
+      .select(
+        'id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids',
+        { count: 'exact' }
+      )
+
+    if (isSingleMemberRun && memberIdFilter) {
+      membersQuery = membersQuery.eq('id', memberIdFilter)
+    } else {
+      membersQuery = membersQuery
+        .eq('in_office', true)
+        .order('last_name')
+        .range(offset, offset + limit - 1)
+    }
+
+    const { data: members, count: totalMembers } = await membersQuery
 
     if (!members || members.length === 0) {
+      if (isSingleMemberRun) {
+        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        return new Response(
+          JSON.stringify({ success: false, message: 'No matching member found for requested member_id' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       console.log('All members processed. Resetting offset.')
-      await releaseLock(supabase, 'complete', 0, 0)
+      await releaseLock(supabase, 'complete', 0, 0, lockId)
       await updateWatermark(supabase, { memberOffset: 0 }, 0)
-      
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'All members processed. Will restart on next run.',
-        totalMembers,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'All members processed. Will restart on next run.',
+          totalMembers,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     console.log(`Processing ${members.length} members (${offset + 1} to ${offset + members.length} of ${totalMembers})`)
@@ -502,18 +542,34 @@ Deno.serve(async (req) => {
             if (!candidateCommitteeId) continue
 
             // Fetch INDIVIDUAL contributions with pagination to get ALL donors
-            let lastIndex: string | null = null
+            let lastIndexes: Record<string, string> | null = null
+            let lastIndexesToken: string | null = null
             let hasMore = true
-            const MAX_PAGES = 20 // Safety limit: 20 pages × 100 = 2000 max contributions per committee/cycle
+            const MAX_PAGES = isSingleMemberRun ? 200 : 20 // Single-member runs can go deeper
             let pageCount = 0
 
             while (hasMore && pageCount < MAX_PAGES && !rateLimited) {
-              let contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&contributor_type=individual&sort=-contribution_receipt_amount&per_page=100`
-              if (lastIndex) {
-                contributionsUrl += `&last_index=${lastIndex}`
+              const url = new URL(`${FEC_API_BASE}/schedules/schedule_a/`)
+              url.searchParams.set('api_key', FEC_API_KEY)
+              url.searchParams.set('committee_id', candidateCommitteeId)
+              url.searchParams.set('two_year_transaction_period', String(cycle))
+              url.searchParams.set('contributor_type', 'individual')
+              url.searchParams.set('sort', '-contribution_receipt_amount')
+              url.searchParams.set('per_page', '100')
+
+              // IMPORTANT: FEC pagination can require multiple last_* params, not just last_index
+              if (lastIndexes) {
+                for (const [k, v] of Object.entries(lastIndexes)) {
+                  if (v) url.searchParams.set(k, v)
+                }
               }
 
-              const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
+              const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(
+                url.toString(),
+                {},
+                PROVIDER,
+                HTTP_CONFIG
+              )
               apiCalls++
               totalWaitMs += contributionsMetrics.totalWaitMs
               pageCount++
@@ -536,10 +592,27 @@ Deno.serve(async (req) => {
                 committeeId = candidateCommitteeId
                 committeeName = committee.name || ''
                 contributionsResults = contributionsResults.concat(results)
-                
-                // Check if there are more pages
-                if (pagination.last_indexes?.last_index) {
-                  lastIndex = pagination.last_indexes.last_index
+
+                const rawLastIndexes = pagination.last_indexes
+                if (rawLastIndexes && typeof rawLastIndexes === 'object') {
+                  const normalized: Record<string, string> = {}
+                  for (const [k, v] of Object.entries(rawLastIndexes)) {
+                    if (v !== null && v !== undefined && String(v).length > 0) {
+                      normalized[k] = String(v)
+                    }
+                  }
+
+                  if (Object.keys(normalized).length === 0) {
+                    hasMore = false
+                  } else {
+                    const token = JSON.stringify(normalized)
+                    if (token === lastIndexesToken) {
+                      hasMore = false
+                    } else {
+                      lastIndexes = normalized
+                      lastIndexesToken = token
+                    }
+                  }
                 } else {
                   hasMore = false
                 }
@@ -547,6 +620,14 @@ Deno.serve(async (req) => {
                 hasMore = false
               }
             }
+
+            if (contributionsResults.length > 0) {
+              console.log(
+                `Found ${contributionsResults.length} individual contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`
+              )
+              break // Found data for this cycle, move to processing
+            }
+          }
 
             if (contributionsResults.length > 0) {
               console.log(`Found ${contributionsResults.length} individual contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`)
@@ -803,7 +884,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', JOB_ID)
 
-    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount)
+    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount, lockId)
 
     // Log job run
     await supabase.from('sync_job_runs').insert({
@@ -854,8 +935,8 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    await releaseLock(supabase, 'error', 0, 1)
-    
+    await releaseLock(supabase, 'error', 0, 1, lockId)
+
     // Log failed job run
     await supabase.from('sync_job_runs').insert({
       job_id: `fec-finance-${Date.now()}`,
