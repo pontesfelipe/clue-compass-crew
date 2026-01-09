@@ -13,7 +13,11 @@ const DATASET = 'contributions'
 const JOB_ID = "fec-finance"
 const MAX_DURATION_SECONDS = 240
 const BATCH_SIZE = 15
-const CYCLES_TO_TRY = [2024, 2022, 2020] // Try multiple cycles if current has no data
+const CURRENT_CYCLE = (() => {
+  const y = new Date().getFullYear()
+  return y % 2 === 0 ? y : y + 1
+})()
+const CYCLES_TO_TRY = [CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6]
 const HTTP_CONFIG: HttpClientConfig = {
   maxRetries: 5,
   baseDelayMs: 1000,
