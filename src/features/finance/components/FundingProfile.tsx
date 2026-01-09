@@ -159,7 +159,7 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
     enabled: !!memberId,
   });
 
-  // Fetch contributions as fallback when no funding_metrics exist
+  // Always fetch contributions - used as fallback when no funding_metrics exist
   const { data: contributionsData, isLoading: contributionsLoading } = useQuery({
     queryKey: ["member-contributions-summary", memberId],
     queryFn: async () => {
@@ -171,10 +171,12 @@ export function FundingProfile({ memberId }: FundingProfileProps) {
       if (error) throw error;
       return data;
     },
-    enabled: !!memberId && (!metricsData || metricsData.length === 0),
+    enabled: !!memberId,
   });
 
-  const isLoading = metricsLoading || contributionsLoading;
+  // Only show loading if metrics are loading, or if contributions are loading when no metrics exist
+  const hasMetrics = metricsData && metricsData.length > 0;
+  const isLoading = metricsLoading || (!hasMetrics && contributionsLoading);
   const data = metricsData;
 
   if (isLoading) {
