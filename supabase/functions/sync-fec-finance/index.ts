@@ -480,27 +480,32 @@ Deno.serve(async (req) => {
           ...committees.filter((c: any) => c.committee_type !== 'P'),
         ].filter(Boolean)
 
-        let committeeId = committeeCandidates[0].committee_id
-        let committeeName = committeeCandidates[0].name || ''
-        let contributionsResults: any[] = []
-        let usedCycle = CYCLES_TO_TRY[0] // Track which cycle we found data in
+        const defaultCommitteeId = committeeCandidates[0].committee_id
+        const defaultCommitteeName = committeeCandidates[0].name || ''
 
-        // Try each cycle until we find contributions
-        cycleLoop: for (const cycle of CYCLES_TO_TRY) {
-          for (const committee of committeeCandidates.slice(0, 10)) {
+        // Process ALL cycles to get complete historical data
+        let rateLimited = false
+        for (const cycle of CYCLES_TO_TRY) {
+          if (rateLimited) break
+
+          let committeeId = defaultCommitteeId
+          let committeeName = defaultCommitteeName
+          let contributionsResults: any[] = []
+
+          // Try each committee for this cycle
+          for (const committee of committeeCandidates.slice(0, 5)) {
             const candidateCommitteeId = committee.committee_id
             if (!candidateCommitteeId) continue
 
             // Fetch INDIVIDUAL contributions only (contributor_type=individual) to get real donor names
-            // This filters out PAC-to-PAC transfers and joint fundraising committee transfers
             const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&contributor_type=individual&sort=-contribution_receipt_amount&per_page=100`
             const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
             apiCalls++
             totalWaitMs += contributionsMetrics.totalWaitMs
 
             if (contributionsResponse?.status === 429) {
-              // Let outer loop handle release/watermark updates
-              break cycleLoop
+              rateLimited = true
+              break
             }
 
             if (!contributionsResponse?.ok) continue
@@ -512,224 +517,214 @@ Deno.serve(async (req) => {
               committeeId = candidateCommitteeId
               committeeName = committee.name || ''
               contributionsResults = results
-              usedCycle = cycle
               console.log(`Found ${results.length} individual contributions for ${member.full_name} in cycle ${cycle}`)
-              break cycleLoop
+              break // Found data for this cycle, move to processing
             }
           }
-        }
 
-        const allContributions: any[] = []
-        const sponsors: any[] = []
-        const industryTotals = new Map<string, { total: number; count: number }>()
-        const contributorAggregates = new Map<string, any>()
+          if (rateLimited) break
 
-        if (contributionsResults.length > 0) {
-          for (const c of contributionsResults) {
-            const amount = c.contribution_receipt_amount || 0
-            if (amount <= 0) continue
+          const allContributions: any[] = []
+          const sponsors: any[] = []
+          const industryTotals = new Map<string, { total: number; count: number }>()
+          const contributorAggregates = new Map<string, any>()
 
-            // Keep the actual contributor name from FEC (donor's name for individuals)
-            const contributorName = c.contributor_name || 'Unknown'
-            
-            // Use FEC entity_type for classification, fallback to heuristic
-            const entityType = c.entity_type || null
-            const entityTypeDesc = c.entity_type_desc || null
-            const contributorType = classifyFromEntityType(entityType, c.contributor_employer, c.contributor_occupation, contributorName)
-            
-            // Note: c.committee.name is the RECIPIENT committee, not the donor
-            // We already store this in committee_name field, so don't overwrite contributor_name
+          if (contributionsResults.length > 0) {
+            for (const c of contributionsResults) {
+              const amount = c.contribution_receipt_amount || 0
+              if (amount <= 0) continue
 
-            const industry = inferIndustry(c.contributor_employer, c.contributor_occupation)
-            const contributorState = c.contributor_state || null
-            const receiptDate = c.receipt_date || null
+              const contributorName = c.contributor_name || 'Unknown'
+              const entityType = c.entity_type || null
+              const entityTypeDesc = c.entity_type_desc || null
+              const contributorType = classifyFromEntityType(entityType, c.contributor_employer, c.contributor_occupation, contributorName)
+              const industry = inferIndustry(c.contributor_employer, c.contributor_occupation)
+              const contributorState = c.contributor_state || null
+              const receiptDate = c.receipt_date || null
+              const contributionUid = generateContributionUid(c, member.id)
 
-            const contributionUid = generateContributionUid(c, member.id)
-
-            allContributions.push({
-              member_id: member.id,
-              contributor_name: contributorName,
-              contributor_type: contributorType,
-              amount: amount,
-              cycle: usedCycle,
-              industry: industry,
-              contributor_state: contributorState,
-              receipt_date: receiptDate,
-              contributor_city: c.contributor_city || null,
-              contributor_zip: c.contributor_zip || null,
-              contributor_employer: c.contributor_employer || null,
-              contributor_occupation: c.contributor_occupation || null,
-              committee_id: committeeId,
-              committee_name: committeeName,
-              memo_text: c.memo_text || null,
-              transaction_type: c.receipt_type || null,
-              contribution_uid: contributionUid,
-              entity_type: entityType,
-              entity_type_desc: entityTypeDesc,
-            })
-
-            // Track for sponsors
-            const existing = contributorAggregates.get(contributorName)
-            if (existing) {
-              existing.amount += amount
-            } else {
-              contributorAggregates.set(contributorName, {
-                name: contributorName,
-                type: contributorType,
+              allContributions.push({
+                member_id: member.id,
+                contributor_name: contributorName,
+                contributor_type: contributorType,
                 amount: amount,
+                cycle: cycle,
                 industry: industry,
+                contributor_state: contributorState,
+                receipt_date: receiptDate,
+                contributor_city: c.contributor_city || null,
+                contributor_zip: c.contributor_zip || null,
+                contributor_employer: c.contributor_employer || null,
+                contributor_occupation: c.contributor_occupation || null,
+                committee_id: committeeId,
+                committee_name: committeeName,
+                memo_text: c.memo_text || null,
+                transaction_type: c.receipt_type || null,
+                contribution_uid: contributionUid,
+                entity_type: entityType,
+                entity_type_desc: entityTypeDesc,
               })
+
+              // Track for sponsors
+              const existing = contributorAggregates.get(contributorName)
+              if (existing) {
+                existing.amount += amount
+              } else {
+                contributorAggregates.set(contributorName, {
+                  name: contributorName,
+                  type: contributorType,
+                  amount: amount,
+                  industry: industry,
+                })
+              }
+
+              // Track industry totals
+              if (industry) {
+                const existingIndustry = industryTotals.get(industry) || { total: 0, count: 0 }
+                industryTotals.set(industry, {
+                  total: existingIndustry.total + amount,
+                  count: existingIndustry.count + 1,
+                })
+              }
             }
 
-            // Track industry totals
-            if (industry) {
-              const existingIndustry = industryTotals.get(industry) || { total: 0, count: 0 }
-              industryTotals.set(industry, {
-                total: existingIndustry.total + amount,
-                count: existingIndustry.count + 1,
-              })
+            // Identify sponsors from aggregates
+            for (const [name, data] of contributorAggregates) {
+              if (data.amount >= SPONSOR_THRESHOLD && (data.type === 'pac' || data.type === 'corporate' || data.type === 'union')) {
+                let sponsorType = 'corporation'
+                if (data.type === 'union') sponsorType = 'union'
+                else if (data.type === 'pac') sponsorType = 'trade_association'
+                else if (data.type === 'corporate') sponsorType = 'corporation'
+
+                sponsors.push({
+                  member_id: member.id,
+                  sponsor_name: name,
+                  sponsor_type: sponsorType,
+                  relationship_type: 'donor',
+                  total_support: data.amount,
+                  cycle: cycle,
+                })
+              }
+            }
+
+            if (allContributions.length > 0) {
+              await supabase
+                .from('member_contributions')
+                .delete()
+                .eq('member_id', member.id)
+                .eq('cycle', cycle)
+
+              const { error: insertError } = await supabase
+                .from('member_contributions')
+                .insert(allContributions)
+
+              if (insertError) {
+                console.error(`Error inserting contributions for ${member.full_name} cycle ${cycle}:`, insertError)
+              } else {
+                console.log(`Inserted ${allContributions.length} contributions for ${member.full_name} cycle ${cycle}`)
+              }
             }
           }
 
-          // Identify sponsors from aggregates
-          // Valid sponsor_type: 'corporation', 'nonprofit', 'trade_association', 'union'
-          // Valid relationship_type: 'donor', 'endorsement', 'pac_support'
-          for (const [name, data] of contributorAggregates) {
-            if (data.amount >= SPONSOR_THRESHOLD && (data.type === 'pac' || data.type === 'corporate' || data.type === 'union')) {
-              // Map contributor type to valid sponsor_type
-              let sponsorType = 'corporation' // default
-              if (data.type === 'union') sponsorType = 'union'
-              else if (data.type === 'pac') sponsorType = 'trade_association'
-              else if (data.type === 'corporate') sponsorType = 'corporation'
+          // Fetch totals for additional sponsor data
+          const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${cycle}`
+          const { response: totalsResponse, metrics: totalsMetrics } = await fetchWithRetry(totalsUrl, {}, PROVIDER, HTTP_CONFIG)
+          apiCalls++
+          totalWaitMs += totalsMetrics.totalWaitMs
 
-              sponsors.push({
-                member_id: member.id,
-                sponsor_name: name,
-                sponsor_type: sponsorType,
-                relationship_type: 'donor',
-                total_support: data.amount,
-                cycle: usedCycle,
-              })
+          if (totalsResponse?.status === 429) {
+            rateLimited = true
+            break
+          }
+
+          if (totalsResponse?.ok) {
+            const totalsData = await totalsResponse.json()
+            const totals = totalsData.results?.[0]
+
+            if (totals) {
+              const pacAmount = totals.other_political_committee_contributions || 0
+              const existingPacTotal = sponsors
+                .filter(s => s.sponsor_type === 'trade_association')
+                .reduce((sum, s) => sum + s.total_support, 0)
+              
+              if (pacAmount > existingPacTotal && pacAmount > 0) {
+                sponsors.push({
+                  member_id: member.id,
+                  sponsor_name: 'Other PAC Contributions',
+                  sponsor_type: 'trade_association',
+                  relationship_type: 'pac_support',
+                  total_support: pacAmount - existingPacTotal,
+                  cycle: cycle,
+                })
+              }
+
+              const partyAmount = totals.party_committee_contributions || 0
+              if (partyAmount > 0) {
+                sponsors.push({
+                  member_id: member.id,
+                  sponsor_name: `${member.party === 'D' ? 'Democratic' : member.party === 'R' ? 'Republican' : 'Independent'} Party Committee`,
+                  sponsor_type: 'nonprofit',
+                  relationship_type: 'pac_support',
+                  total_support: partyAmount,
+                  cycle: cycle,
+                })
+
+                industryTotals.set('Party Committee Support', { 
+                  total: partyAmount, 
+                  count: 1 
+                })
+              }
             }
           }
 
-          if (allContributions.length > 0) {
+          // Insert sponsors for this cycle
+          if (sponsors.length > 0) {
             await supabase
-              .from('member_contributions')
+              .from('member_sponsors')
               .delete()
               .eq('member_id', member.id)
-              .eq('cycle', usedCycle)
+              .eq('cycle', cycle)
 
-            const { error: insertError } = await supabase
-              .from('member_contributions')
-              .insert(allContributions)
-
-            if (insertError) {
-              console.error(`Error inserting contributions for ${member.full_name}:`, insertError)
+            const { error: insertSponsorsError } = await supabase
+              .from('member_sponsors')
+              .insert(sponsors)
+            
+            if (insertSponsorsError) {
+              console.error(`Error inserting sponsors for ${member.full_name} cycle ${cycle}:`, insertSponsorsError)
             } else {
-              console.log(`Inserted ${allContributions.length} contributions for ${member.full_name}`)
+              console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name} cycle ${cycle}`)
             }
           }
-        }
 
-        // Fetch totals for additional sponsor data
-        const totalsUrl = `${FEC_API_BASE}/candidate/${candidateId}/totals/?api_key=${FEC_API_KEY}&cycle=${usedCycle}`
-        const { response: totalsResponse, metrics: totalsMetrics } = await fetchWithRetry(totalsUrl, {}, PROVIDER, HTTP_CONFIG)
-        apiCalls++
-        totalWaitMs += totalsMetrics.totalWaitMs
-
-        if (totalsResponse?.ok) {
-          const totalsData = await totalsResponse.json()
-          const totals = totalsData.results?.[0]
-
-          if (totals) {
-            const pacAmount = totals.other_political_committee_contributions || 0
-            const existingPacTotal = sponsors
-              .filter(s => s.sponsor_type === 'trade_association')
-              .reduce((sum, s) => sum + s.total_support, 0)
-            
-            if (pacAmount > existingPacTotal && pacAmount > 0) {
-              sponsors.push({
+          // Insert industry lobbying data for this cycle
+          if (industryTotals.size > 0) {
+            const lobbyingRecords = Array.from(industryTotals.entries())
+              .filter(([_, data]) => data.total >= 1000)
+              .map(([industry, data]) => ({
                 member_id: member.id,
-                sponsor_name: 'Other PAC Contributions',
-                sponsor_type: 'trade_association', // PAC -> trade_association
-                relationship_type: 'pac_support',
-                total_support: pacAmount - existingPacTotal,
-                cycle: usedCycle,
-              })
-            }
+                industry: industry,
+                total_spent: data.total,
+                client_count: data.count,
+                cycle: cycle,
+              }))
 
-            const partyAmount = totals.party_committee_contributions || 0
-            if (partyAmount > 0) {
-              sponsors.push({
-                member_id: member.id,
-                sponsor_name: `${member.party === 'D' ? 'Democratic' : member.party === 'R' ? 'Republican' : 'Independent'} Party Committee`,
-                sponsor_type: 'nonprofit', // Party -> nonprofit
-                relationship_type: 'pac_support',
-                total_support: partyAmount,
-                cycle: usedCycle,
-              })
+            if (lobbyingRecords.length > 0) {
+              await supabase
+                .from('member_lobbying')
+                .delete()
+                .eq('member_id', member.id)
+                .eq('cycle', cycle)
 
-              industryTotals.set('Party Committee Support', { 
-                total: partyAmount, 
-                count: 1 
-              })
+              await supabase
+                .from('member_lobbying')
+                .insert(lobbyingRecords)
+              
+              console.log(`Inserted ${lobbyingRecords.length} industry records for ${member.full_name} cycle ${cycle}`)
             }
           }
-        }
+        } // End of cycle loop
 
-        // Insert sponsors
-        if (sponsors.length > 0) {
-          const { error: deleteSponsorsError } = await supabase
-            .from('member_sponsors')
-            .delete()
-            .eq('member_id', member.id)
-            .eq('cycle', usedCycle)
-          
-          if (deleteSponsorsError) {
-            console.error(`Error deleting sponsors for ${member.full_name}:`, deleteSponsorsError)
-          }
-
-          const { error: insertSponsorsError } = await supabase
-            .from('member_sponsors')
-            .insert(sponsors)
-          
-          if (insertSponsorsError) {
-            console.error(`Error inserting sponsors for ${member.full_name}:`, insertSponsorsError)
-            console.log('Sponsor data:', JSON.stringify(sponsors[0]))
-          } else {
-            console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name}`)
-          }
-        }
-
-        // Insert industry lobbying data
-        if (industryTotals.size > 0) {
-          const lobbyingRecords = Array.from(industryTotals.entries())
-            .filter(([_, data]) => data.total >= 1000)
-            .map(([industry, data]) => ({
-              member_id: member.id,
-              industry: industry,
-              total_spent: data.total,
-              client_count: data.count,
-              cycle: usedCycle,
-            }))
-
-          if (lobbyingRecords.length > 0) {
-            await supabase
-              .from('member_lobbying')
-              .delete()
-              .eq('member_id', member.id)
-              .eq('cycle', usedCycle)
-
-            await supabase
-              .from('member_lobbying')
-              .insert(lobbyingRecords)
-            
-            console.log(`Inserted ${lobbyingRecords.length} industry records for ${member.full_name}`)
-          }
-        }
-
-        // Mark successful sync attempt for this member (even if contributions were 0)
+        // Mark successful sync attempt for this member
         await supabase
           .from('members')
           .update({ fec_last_synced_at: new Date().toISOString() })
