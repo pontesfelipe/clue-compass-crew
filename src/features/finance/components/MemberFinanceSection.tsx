@@ -16,7 +16,7 @@ interface MemberFinanceSectionProps {
 
 export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
   const { data: finance, isLoading } = useMemberFinance(memberId);
-  const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
 
   // Get all available years from the data
   const availableYears = useMemo(() => {
@@ -28,19 +28,19 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
     return Array.from(yearSet).sort((a, b) => b - a); // Most recent first
   }, [finance]);
 
-  // Set default to latest year when data loads
-  useMemo(() => {
-    if (availableYears.length > 0 && selectedYear === "all") {
-      setSelectedYear(availableYears[0].toString());
-    }
-  }, [availableYears]);
+  // Derive effective selected year - default to latest available year
+  const effectiveYear = useMemo(() => {
+    if (selectedYear !== null) return selectedYear;
+    if (availableYears.length > 0) return availableYears[0].toString();
+    return "all";
+  }, [selectedYear, availableYears]);
 
   // Filter data by selected year
   const filteredFinance = useMemo(() => {
     if (!finance) return null;
-    if (selectedYear === "all") return finance;
+    if (effectiveYear === "all") return finance;
     
-    const year = parseInt(selectedYear);
+    const year = parseInt(effectiveYear);
     return {
       ...finance,
       contributions: finance.contributions.filter((c) => c.cycle === year),
@@ -53,7 +53,7 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
         .filter((l) => l.cycle === year)
         .reduce((sum, l) => sum + l.totalSpent, 0),
     };
-  }, [finance, selectedYear]);
+  }, [finance, effectiveYear]);
 
   if (isLoading) {
     return (
@@ -93,7 +93,7 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
           </h2>
         </div>
         {hasData && availableYears.length > 0 && (
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <Select value={effectiveYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-[140px]">
               <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
               <SelectValue placeholder="Select year" />
