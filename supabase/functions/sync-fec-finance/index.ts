@@ -496,32 +496,60 @@ Deno.serve(async (req) => {
           let committeeName = defaultCommitteeName
           let contributionsResults: any[] = []
 
-          // Try each committee for this cycle
+          // Try each committee for this cycle - paginate to get ALL contributions
           for (const committee of committeeCandidates.slice(0, 5)) {
             const candidateCommitteeId = committee.committee_id
             if (!candidateCommitteeId) continue
 
-            // Fetch INDIVIDUAL contributions only (contributor_type=individual) to get real donor names
-            const contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&contributor_type=individual&sort=-contribution_receipt_amount&per_page=100`
-            const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
-            apiCalls++
-            totalWaitMs += contributionsMetrics.totalWaitMs
+            // Fetch INDIVIDUAL contributions with pagination to get ALL donors
+            let lastIndex: string | null = null
+            let hasMore = true
+            const MAX_PAGES = 20 // Safety limit: 20 pages × 100 = 2000 max contributions per committee/cycle
+            let pageCount = 0
 
-            if (contributionsResponse?.status === 429) {
-              rateLimited = true
-              break
+            while (hasMore && pageCount < MAX_PAGES && !rateLimited) {
+              let contributionsUrl = `${FEC_API_BASE}/schedules/schedule_a/?api_key=${FEC_API_KEY}&committee_id=${candidateCommitteeId}&two_year_transaction_period=${cycle}&contributor_type=individual&sort=-contribution_receipt_amount&per_page=100`
+              if (lastIndex) {
+                contributionsUrl += `&last_index=${lastIndex}`
+              }
+
+              const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(contributionsUrl, {}, PROVIDER, HTTP_CONFIG)
+              apiCalls++
+              totalWaitMs += contributionsMetrics.totalWaitMs
+              pageCount++
+
+              if (contributionsResponse?.status === 429) {
+                rateLimited = true
+                break
+              }
+
+              if (!contributionsResponse?.ok) {
+                hasMore = false
+                break
+              }
+
+              const contributionsData = await contributionsResponse.json()
+              const results = contributionsData.results || []
+              const pagination = contributionsData.pagination || {}
+
+              if (results.length > 0) {
+                committeeId = candidateCommitteeId
+                committeeName = committee.name || ''
+                contributionsResults = contributionsResults.concat(results)
+                
+                // Check if there are more pages
+                if (pagination.last_indexes?.last_index) {
+                  lastIndex = pagination.last_indexes.last_index
+                } else {
+                  hasMore = false
+                }
+              } else {
+                hasMore = false
+              }
             }
 
-            if (!contributionsResponse?.ok) continue
-
-            const contributionsData = await contributionsResponse.json()
-            const results = contributionsData.results || []
-
-            if (results.length > 0) {
-              committeeId = candidateCommitteeId
-              committeeName = committee.name || ''
-              contributionsResults = results
-              console.log(`Found ${results.length} individual contributions for ${member.full_name} in cycle ${cycle}`)
+            if (contributionsResults.length > 0) {
+              console.log(`Found ${contributionsResults.length} individual contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`)
               break // Found data for this cycle, move to processing
             }
           }
