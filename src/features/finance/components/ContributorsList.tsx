@@ -178,17 +178,7 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
   const showDonorIdentitiesEnabled = !togglesLoading && isFeatureEnabled("show_donor_identities");
   const showIndividualNames = showDonorIdentitiesEnabled && localShowNames;
 
-  if (contributions.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">No contribution data available.</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Data will be synced from public records.
-        </p>
-      </div>
-    );
-  }
-
+  // All hooks must be called before any early returns
   const organizationContributions = useMemo(() => getOrganizationContributions(contributions), [contributions]);
   const individualContributions = useMemo(() => getIndividualContributions(contributions), [contributions]);
   const aggregatedTypes = useMemo(() => aggregateByType(contributions), [contributions]);
@@ -205,6 +195,18 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
     const start = (individualsPage - 1) * ITEMS_PER_PAGE;
     return individualContributions.slice(start, start + ITEMS_PER_PAGE);
   }, [individualContributions, individualsPage]);
+
+  // Early return AFTER all hooks
+  if (contributions.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">No contribution data available.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Data will be synced from public records.
+        </p>
+      </div>
+    );
+  }
 
   const handleToggleNames = () => {
     if (!localShowNames) {
