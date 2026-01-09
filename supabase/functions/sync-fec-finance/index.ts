@@ -629,12 +629,6 @@ Deno.serve(async (req) => {
             }
           }
 
-            if (contributionsResults.length > 0) {
-              console.log(`Found ${contributionsResults.length} individual contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`)
-              break // Found data for this cycle, move to processing
-            }
-          }
-
           if (rateLimited) break
 
           const allContributions: any[] = []
@@ -935,7 +929,8 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    await releaseLock(supabase, 'error', 0, 1, lockId)
+    // Try to release lock - use JOB_ID as fallback since lockId may not be available in catch
+    await releaseLock(supabase, 'error', 0, 1, JOB_ID)
 
     // Log failed job run
     await supabase.from('sync_job_runs').insert({
