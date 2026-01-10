@@ -542,28 +542,22 @@ Deno.serve(async (req) => {
             const candidateCommitteeId = committee.committee_id
             if (!candidateCommitteeId) continue
 
-            // Fetch INDIVIDUAL contributions with pagination to get ALL donors
-            let lastIndexes: Record<string, string> | null = null
-            let lastIndexesToken: string | null = null
+            // Fetch itemized contributions with pagination to get ALL donors (FEC returns max 100 per page)
+            // NOTE: We use page-based pagination because last_indexes is not always returned reliably.
             let hasMore = true
             const MAX_PAGES = isSingleMemberRun ? 200 : 20 // Single-member runs can go deeper
             let pageCount = 0
+            let page = 1
+            let totalPages: number | null = null
 
             while (hasMore && pageCount < MAX_PAGES && !rateLimited) {
               const url = new URL(`${FEC_API_BASE}/schedules/schedule_a/`)
               url.searchParams.set('api_key', FEC_API_KEY)
               url.searchParams.set('committee_id', candidateCommitteeId)
               url.searchParams.set('two_year_transaction_period', String(cycle))
-              url.searchParams.set('contributor_type', 'individual')
               url.searchParams.set('sort', '-contribution_receipt_amount')
               url.searchParams.set('per_page', '100')
-
-              // IMPORTANT: FEC pagination can require multiple last_* params, not just last_index
-              if (lastIndexes) {
-                for (const [k, v] of Object.entries(lastIndexes)) {
-                  if (v) url.searchParams.set(k, v)
-                }
-              }
+              url.searchParams.set('page', String(page))
 
               const { response: contributionsResponse, metrics: contributionsMetrics } = await fetchWithRetry(
                 url.toString(),
@@ -593,34 +587,20 @@ Deno.serve(async (req) => {
                 committeeId = candidateCommitteeId
                 committeeName = committee.name || ''
                 contributionsResults = contributionsResults.concat(results)
-                
-                // Capture total count from first response
-                if (totalContributionsAvailable === null && pagination.count) {
+
+                // Capture total count/pages from first response (if provided)
+                if (totalContributionsAvailable === null && typeof pagination.count === 'number') {
                   totalContributionsAvailable = pagination.count
                 }
+                if (totalPages === null && typeof pagination.pages === 'number') {
+                  totalPages = pagination.pages
+                }
 
-                const rawLastIndexes = pagination.last_indexes
-                if (rawLastIndexes && typeof rawLastIndexes === 'object') {
-                  const normalized: Record<string, string> = {}
-                  for (const [k, v] of Object.entries(rawLastIndexes)) {
-                    if (v !== null && v !== undefined && String(v).length > 0) {
-                      normalized[k] = String(v)
-                    }
-                  }
-
-                  if (Object.keys(normalized).length === 0) {
-                    hasMore = false
-                  } else {
-                    const token = JSON.stringify(normalized)
-                    if (token === lastIndexesToken) {
-                      hasMore = false
-                    } else {
-                      lastIndexes = normalized
-                      lastIndexesToken = token
-                    }
-                  }
-                } else {
+                const reachedEnd = totalPages !== null ? page >= totalPages : results.length < 100
+                if (reachedEnd) {
                   hasMore = false
+                } else {
+                  page += 1
                 }
               } else {
                 hasMore = false
@@ -629,7 +609,7 @@ Deno.serve(async (req) => {
 
             if (contributionsResults.length > 0) {
               console.log(
-                `Found ${contributionsResults.length} individual contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`
+                `Found ${contributionsResults.length} itemized contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`
               )
               break // Found data for this cycle, move to processing
             }
