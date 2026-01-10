@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Contribution, Lobbying, Sponsor, MemberFinance } from "../types";
+import type { Contribution, Lobbying, Sponsor, MemberFinance, ContributionCompleteness } from "../types";
 
 export function useMemberFinance(memberId: string) {
   return useQuery({
     queryKey: ["member-finance", memberId],
     queryFn: async (): Promise<MemberFinance> => {
       // Fetch all finance data in parallel - no limit to get ALL records
-      const [contributionsRes, lobbyingRes, sponsorsRes] = await Promise.all([
+      const [contributionsRes, lobbyingRes, sponsorsRes, metricsRes] = await Promise.all([
         supabase
           .from("member_contributions")
           .select("*")
@@ -26,11 +26,17 @@ export function useMemberFinance(memberId: string) {
           .eq("member_id", memberId)
           .order("total_support", { ascending: false })
           .limit(10000),
+        supabase
+          .from("funding_metrics")
+          .select("cycle, contributions_fetched, contributions_total")
+          .eq("member_id", memberId)
+          .order("cycle", { ascending: false }),
       ]);
 
       if (contributionsRes.error) throw contributionsRes.error;
       if (lobbyingRes.error) throw lobbyingRes.error;
       if (sponsorsRes.error) throw sponsorsRes.error;
+      // Don't throw on metrics error - it's optional data
 
       const contributions: Contribution[] = (contributionsRes.data || []).map((c) => ({
         id: c.id,
@@ -66,6 +72,15 @@ export function useMemberFinance(memberId: string) {
         cycle: s.cycle,
       }));
 
+      // Parse contribution completeness from funding_metrics
+      const contributionCompleteness: ContributionCompleteness[] = (metricsRes.data || [])
+        .filter((m: any) => m.contributions_fetched !== null && m.contributions_fetched > 0)
+        .map((m: any) => ({
+          cycle: m.cycle,
+          fetched: m.contributions_fetched || 0,
+          total: m.contributions_total,
+        }));
+
       // Calculate totals
       const totalContributions = contributions.reduce((sum, c) => sum + c.amount, 0);
       const totalLobbying = lobbying.reduce((sum, l) => sum + l.totalSpent, 0);
@@ -93,6 +108,7 @@ export function useMemberFinance(memberId: string) {
         totalContributions,
         totalLobbying,
         topIndustries,
+        contributionCompleteness,
       };
     },
     enabled: !!memberId,

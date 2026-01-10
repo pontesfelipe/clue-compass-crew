@@ -535,6 +535,7 @@ Deno.serve(async (req) => {
           let committeeId = defaultCommitteeId
           let committeeName = defaultCommitteeName
           let contributionsResults: any[] = []
+          let totalContributionsAvailable: number | null = null // Track FEC total count
 
           // Try each committee for this cycle - paginate to get ALL contributions
           for (const committee of committeeCandidates.slice(0, 5)) {
@@ -592,6 +593,11 @@ Deno.serve(async (req) => {
                 committeeId = candidateCommitteeId
                 committeeName = committee.name || ''
                 contributionsResults = contributionsResults.concat(results)
+                
+                // Capture total count from first response
+                if (totalContributionsAvailable === null && pagination.count) {
+                  totalContributionsAvailable = pagination.count
+                }
 
                 const rawLastIndexes = pagination.last_indexes
                 if (rawLastIndexes && typeof rawLastIndexes === 'object') {
@@ -729,6 +735,25 @@ Deno.serve(async (req) => {
                 console.error(`Error inserting contributions for ${member.full_name} cycle ${cycle}:`, insertError)
               } else {
                 console.log(`Inserted ${allContributions.length} contributions for ${member.full_name} cycle ${cycle}`)
+                
+                // Update funding_metrics with contribution completeness data
+                const { error: metricsError } = await supabase
+                  .from('funding_metrics')
+                  .upsert({
+                    member_id: member.id,
+                    cycle: cycle,
+                    contributions_fetched: allContributions.length,
+                    contributions_total: totalContributionsAvailable,
+                  }, {
+                    onConflict: 'member_id,cycle',
+                    ignoreDuplicates: false,
+                  })
+                
+                if (metricsError) {
+                  console.error(`Error updating contribution completeness for ${member.full_name} cycle ${cycle}:`, metricsError)
+                } else {
+                  console.log(`Updated contribution completeness: ${allContributions.length}/${totalContributionsAvailable || 'unknown'} for ${member.full_name} cycle ${cycle}`)
+                }
               }
             }
           }
