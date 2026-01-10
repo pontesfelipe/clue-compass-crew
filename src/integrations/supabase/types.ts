@@ -327,6 +327,8 @@ export type Database = {
       funding_metrics: {
         Row: {
           computed_at: string
+          contributions_fetched: number | null
+          contributions_total: number | null
           created_at: string | null
           cycle: number
           grassroots_support_score: number | null
@@ -344,6 +346,8 @@ export type Database = {
         }
         Insert: {
           computed_at?: string
+          contributions_fetched?: number | null
+          contributions_total?: number | null
           created_at?: string | null
           cycle: number
           grassroots_support_score?: number | null
@@ -361,6 +365,8 @@ export type Database = {
         }
         Update: {
           computed_at?: string
+          contributions_fetched?: number | null
+          contributions_total?: number | null
           created_at?: string | null
           cycle?: number
           grassroots_support_score?: number | null

@@ -36,6 +36,12 @@ export interface Sponsor {
   cycle: number;
 }
 
+export interface ContributionCompleteness {
+  cycle: number;
+  fetched: number;
+  total: number | null;
+}
+
 export interface MemberFinance {
   contributions: Contribution[];
   lobbying: Lobbying[];
@@ -43,6 +49,7 @@ export interface MemberFinance {
   totalContributions: number;
   totalLobbying: number;
   topIndustries: { industry: string; amount: number }[];
+  contributionCompleteness: ContributionCompleteness[];
 }
 
 export const contributorTypeLabels: Record<Contribution["contributorType"], string> = {

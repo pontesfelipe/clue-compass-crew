@@ -46,6 +46,7 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
       contributions: finance.contributions.filter((c) => c.cycle === year),
       lobbying: finance.lobbying.filter((l) => l.cycle === year),
       sponsors: finance.sponsors.filter((s) => s.cycle === year),
+      contributionCompleteness: finance.contributionCompleteness.filter((c) => c.cycle === year),
       totalContributions: finance.contributions
         .filter((c) => c.cycle === year)
         .reduce((sum, c) => sum + c.amount, 0),
@@ -139,7 +140,10 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
             </TabsContent>
 
             <TabsContent value="donors" className="mt-4">
-              <ContributorsList contributions={filteredFinance.contributions} />
+              <ContributorsList 
+                contributions={filteredFinance.contributions} 
+                completeness={filteredFinance.contributionCompleteness}
+              />
             </TabsContent>
 
             <TabsContent value="lobbying" className="mt-4">

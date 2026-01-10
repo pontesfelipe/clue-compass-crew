@@ -2,10 +2,11 @@ import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatCurrency, contributorTypeLabels, type Contribution } from "../types";
+import { formatCurrency, contributorTypeLabels, type Contribution, type ContributionCompleteness } from "../types";
 import { useFeatureToggles } from "@/hooks/useFeatureToggles";
 import { DonorDisclaimer } from "@/components/DonorDisclaimer";
-import { Eye, EyeOff, Users, Building2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, EyeOff, Users, Building2, AlertTriangle, Database, CheckCircle2, AlertCircle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +24,16 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ContributorsListProps {
   contributions: Contribution[];
+  completeness?: ContributionCompleteness[];
 }
 
 const typeColors: Record<Contribution["contributorType"], string> = {
@@ -167,7 +175,7 @@ function PaginationControls({
   );
 }
 
-export function ContributorsList({ contributions }: ContributorsListProps) {
+export function ContributorsList({ contributions, completeness = [] }: ContributorsListProps) {
   const { isFeatureEnabled, isLoading: togglesLoading } = useFeatureToggles();
   const [localShowNames, setLocalShowNames] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -182,6 +190,24 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
   const organizationContributions = useMemo(() => getOrganizationContributions(contributions), [contributions]);
   const individualContributions = useMemo(() => getIndividualContributions(contributions), [contributions]);
   const aggregatedTypes = useMemo(() => aggregateByType(contributions), [contributions]);
+
+  // Calculate overall completeness stats
+  const completenessStats = useMemo(() => {
+    if (completeness.length === 0) return null;
+    
+    const totalFetched = completeness.reduce((sum, c) => sum + c.fetched, 0);
+    const totalAvailable = completeness.reduce((sum, c) => sum + (c.total || c.fetched), 0);
+    const percentage = totalAvailable > 0 ? Math.round((totalFetched / totalAvailable) * 100) : 100;
+    const isComplete = totalFetched >= totalAvailable || percentage >= 95;
+    
+    return {
+      fetched: totalFetched,
+      total: totalAvailable,
+      percentage,
+      isComplete,
+      byCycle: completeness,
+    };
+  }, [completeness]);
 
   const orgsTotalPages = Math.ceil(organizationContributions.length / ITEMS_PER_PAGE);
   const individualsTotalPages = Math.ceil(individualContributions.length / ITEMS_PER_PAGE);
@@ -223,6 +249,67 @@ export function ContributorsList({ contributions }: ContributorsListProps) {
 
   return (
     <div className="space-y-4">
+      {/* Data Completeness Indicator */}
+      {completenessStats && (
+        <TooltipProvider>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+            <Database className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">
+                  FEC Data Coverage
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {completenessStats.isComplete ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                  )}
+                  <span className={cn(
+                    "text-xs font-semibold",
+                    completenessStats.isComplete ? "text-green-600" : "text-amber-600"
+                  )}>
+                    {completenessStats.percentage}%
+                  </span>
+                </div>
+              </div>
+              <Progress 
+                value={completenessStats.percentage} 
+                className="h-1.5"
+              />
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-xs text-muted-foreground">
+                  {completenessStats.fetched.toLocaleString()} of {completenessStats.total.toLocaleString()} itemized contributions
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                      Details
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <div className="space-y-1.5">
+                      <p className="font-medium text-xs">Contributions by Cycle</p>
+                      {completenessStats.byCycle.map((c) => (
+                        <div key={c.cycle} className="flex justify-between text-xs gap-4">
+                          <span>{c.cycle}:</span>
+                          <span className="font-medium">
+                            {c.fetched.toLocaleString()}/{c.total?.toLocaleString() || '?'}
+                          </span>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground pt-1 border-t">
+                        Only itemized contributions (&gt;$200) are reported to FEC.
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        </TooltipProvider>
+      )}
+
       {/* Summary section - always visible */}
       <div className="space-y-2 pb-4 border-b border-border">
         <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
