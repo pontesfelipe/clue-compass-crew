@@ -38,11 +38,12 @@ export function useScoringPreferences() {
 
       if (!data) return DEFAULT_PREFERENCES;
 
+      // Database stores weights as decimals (0-1), convert to percentages (0-100) for UI
       return {
-        productivityWeight: Number(data.productivity_weight) || 25,
-        attendanceWeight: Number(data.attendance_weight) || 25,
-        bipartisanshipWeight: Number(data.bipartisanship_weight) || 25,
-        issueAlignmentWeight: Number(data.issue_alignment_weight) || 25,
+        productivityWeight: Math.round((Number(data.productivity_weight) || 0.25) * 100),
+        attendanceWeight: Math.round((Number(data.attendance_weight) || 0.25) * 100),
+        bipartisanshipWeight: Math.round((Number(data.bipartisanship_weight) || 0.25) * 100),
+        issueAlignmentWeight: Math.round((Number(data.issue_alignment_weight) || 0.25) * 100),
         priorityIssues: data.priority_issues || [],
       } as ScoringPreferences;
     },
@@ -62,13 +63,14 @@ export function useScoringPreferences() {
 
       if (existing) {
         // Update existing
+        // Convert percentages (0-100) to decimals (0-1) for database
         const { error } = await supabase
           .from("user_scoring_preferences")
           .update({
-            productivity_weight: newPreferences.productivityWeight,
-            attendance_weight: newPreferences.attendanceWeight,
-            bipartisanship_weight: newPreferences.bipartisanshipWeight,
-            issue_alignment_weight: newPreferences.issueAlignmentWeight,
+            productivity_weight: newPreferences.productivityWeight / 100,
+            attendance_weight: newPreferences.attendanceWeight / 100,
+            bipartisanship_weight: newPreferences.bipartisanshipWeight / 100,
+            issue_alignment_weight: newPreferences.issueAlignmentWeight / 100,
             priority_issues: newPreferences.priorityIssues,
             updated_at: new Date().toISOString(),
           })
@@ -77,14 +79,15 @@ export function useScoringPreferences() {
         if (error) throw error;
       } else {
         // Insert new
+        // Convert percentages (0-100) to decimals (0-1) for database
         const { error } = await supabase
           .from("user_scoring_preferences")
           .insert({
             user_id: user.id,
-            productivity_weight: newPreferences.productivityWeight,
-            attendance_weight: newPreferences.attendanceWeight,
-            bipartisanship_weight: newPreferences.bipartisanshipWeight,
-            issue_alignment_weight: newPreferences.issueAlignmentWeight,
+            productivity_weight: newPreferences.productivityWeight / 100,
+            attendance_weight: newPreferences.attendanceWeight / 100,
+            bipartisanship_weight: newPreferences.bipartisanshipWeight / 100,
+            issue_alignment_weight: newPreferences.issueAlignmentWeight / 100,
             priority_issues: newPreferences.priorityIssues,
           });
 
