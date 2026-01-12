@@ -297,6 +297,48 @@ export type Database = {
         }
         Relationships: []
       }
+      data_quality_metrics: {
+        Row: {
+          category: string | null
+          checked_at: string | null
+          created_at: string | null
+          current_value: number
+          id: string
+          metric_description: string | null
+          metric_name: string
+          status: string | null
+          threshold_critical: number | null
+          threshold_warning: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          checked_at?: string | null
+          created_at?: string | null
+          current_value: number
+          id?: string
+          metric_description?: string | null
+          metric_name: string
+          status?: string | null
+          threshold_critical?: number | null
+          threshold_warning?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          checked_at?: string | null
+          created_at?: string | null
+          current_value?: number
+          id?: string
+          metric_description?: string | null
+          metric_name?: string
+          status?: string | null
+          threshold_critical?: number | null
+          threshold_warning?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       feature_toggles: {
         Row: {
           created_at: string
@@ -715,6 +757,65 @@ export type Database = {
           },
         ]
       }
+      member_data_completeness: {
+        Row: {
+          basic_info_complete: boolean | null
+          bills_data_complete: boolean | null
+          committee_data_complete: boolean | null
+          completeness_percentage: number | null
+          contact_info_complete: boolean | null
+          created_at: string | null
+          finance_data_complete: boolean | null
+          id: string
+          last_validated_at: string | null
+          member_id: string
+          missing_fields: string[] | null
+          score_data_valid: boolean | null
+          updated_at: string | null
+          vote_data_complete: boolean | null
+        }
+        Insert: {
+          basic_info_complete?: boolean | null
+          bills_data_complete?: boolean | null
+          committee_data_complete?: boolean | null
+          completeness_percentage?: number | null
+          contact_info_complete?: boolean | null
+          created_at?: string | null
+          finance_data_complete?: boolean | null
+          id?: string
+          last_validated_at?: string | null
+          member_id: string
+          missing_fields?: string[] | null
+          score_data_valid?: boolean | null
+          updated_at?: string | null
+          vote_data_complete?: boolean | null
+        }
+        Update: {
+          basic_info_complete?: boolean | null
+          bills_data_complete?: boolean | null
+          committee_data_complete?: boolean | null
+          completeness_percentage?: number | null
+          contact_info_complete?: boolean | null
+          created_at?: string | null
+          finance_data_complete?: boolean | null
+          id?: string
+          last_validated_at?: string | null
+          member_id?: string
+          missing_fields?: string[] | null
+          score_data_valid?: boolean | null
+          updated_at?: string | null
+          vote_data_complete?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_data_completeness_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_lobbying: {
         Row: {
           client_count: number | null
@@ -765,14 +866,17 @@ export type Database = {
           bipartisan_bills: number | null
           bipartisanship_score: number | null
           calculated_at: string | null
+          data_points_used: number | null
           finance_influence_score: number | null
           governance_score: number | null
           id: string
+          is_provisional: boolean | null
           issue_alignment_score: number | null
           lobbying_alignment_score: number | null
           member_id: string
           overall_score: number | null
           productivity_score: number | null
+          provisional_reason: string | null
           transparency_score: number | null
           user_id: string | null
           votes_cast: number | null
@@ -786,14 +890,17 @@ export type Database = {
           bipartisan_bills?: number | null
           bipartisanship_score?: number | null
           calculated_at?: string | null
+          data_points_used?: number | null
           finance_influence_score?: number | null
           governance_score?: number | null
           id?: string
+          is_provisional?: boolean | null
           issue_alignment_score?: number | null
           lobbying_alignment_score?: number | null
           member_id: string
           overall_score?: number | null
           productivity_score?: number | null
+          provisional_reason?: string | null
           transparency_score?: number | null
           user_id?: string | null
           votes_cast?: number | null
@@ -807,14 +914,17 @@ export type Database = {
           bipartisan_bills?: number | null
           bipartisanship_score?: number | null
           calculated_at?: string | null
+          data_points_used?: number | null
           finance_influence_score?: number | null
           governance_score?: number | null
           id?: string
+          is_provisional?: boolean | null
           issue_alignment_score?: number | null
           lobbying_alignment_score?: number | null
           member_id?: string
           overall_score?: number | null
           productivity_score?: number | null
+          provisional_reason?: string | null
           transparency_score?: number | null
           user_id?: string | null
           votes_cast?: number | null
@@ -1101,6 +1211,62 @@ export type Database = {
           website_url?: string | null
         }
         Relationships: []
+      }
+      members_fec_mapping: {
+        Row: {
+          bioguide_id: string
+          created_at: string | null
+          fec_candidate_id: string | null
+          fec_committee_id: string | null
+          id: string
+          is_verified: boolean | null
+          match_confidence: number | null
+          match_method: string | null
+          member_id: string
+          updated_at: string | null
+          valid_cycles: number[] | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          bioguide_id: string
+          created_at?: string | null
+          fec_candidate_id?: string | null
+          fec_committee_id?: string | null
+          id?: string
+          is_verified?: boolean | null
+          match_confidence?: number | null
+          match_method?: string | null
+          member_id: string
+          updated_at?: string | null
+          valid_cycles?: number[] | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          bioguide_id?: string
+          created_at?: string | null
+          fec_candidate_id?: string | null
+          fec_committee_id?: string | null
+          id?: string
+          is_verified?: boolean | null
+          match_confidence?: number | null
+          match_method?: string | null
+          member_id?: string
+          updated_at?: string | null
+          valid_cycles?: number[] | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_fec_mapping_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_preferences: {
         Row: {
@@ -1415,6 +1581,7 @@ export type Database = {
           attempt_count: number | null
           created_at: string
           cursor: Json | null
+          dependencies: string[] | null
           frequency_minutes: number | null
           id: string
           is_enabled: boolean | null
@@ -1428,11 +1595,13 @@ export type Database = {
           scope: Json | null
           status: string | null
           updated_at: string
+          wait_for_dependencies: boolean | null
         }
         Insert: {
           attempt_count?: number | null
           created_at?: string
           cursor?: Json | null
+          dependencies?: string[] | null
           frequency_minutes?: number | null
           id: string
           is_enabled?: boolean | null
@@ -1446,11 +1615,13 @@ export type Database = {
           scope?: Json | null
           status?: string | null
           updated_at?: string
+          wait_for_dependencies?: boolean | null
         }
         Update: {
           attempt_count?: number | null
           created_at?: string
           cursor?: Json | null
+          dependencies?: string[] | null
           frequency_minutes?: number | null
           id?: string
           is_enabled?: boolean | null
@@ -1464,6 +1635,7 @@ export type Database = {
           scope?: Json | null
           status?: string | null
           updated_at?: string
+          wait_for_dependencies?: boolean | null
         }
         Relationships: []
       }
@@ -1871,6 +2043,20 @@ export type Database = {
           minutes_since_last_run: number | null
           status: string | null
           total_processed: number | null
+        }
+        Relationships: []
+      }
+      sync_job_dependencies: {
+        Row: {
+          dependencies: string[] | null
+          error_message: string | null
+          frequency_minutes: number | null
+          is_enabled: boolean | null
+          job_id: string | null
+          job_type: string | null
+          last_run_at: string | null
+          last_status: string | null
+          priority: number | null
         }
         Relationships: []
       }

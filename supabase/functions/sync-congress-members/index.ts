@@ -308,8 +308,9 @@ Deno.serve(async (req) => {
       console.log(`Processed ${inserted}/${memberRecords.length} members`)
     }
 
-    // Generate default scores for members without scores
-    console.log('Generating default scores for new members...')
+    // Generate baseline scores for members without scores
+    // These are provisional scores that will be recalculated once we have voting/bill data
+    console.log('Generating baseline scores for new members...')
     
     const { data: membersWithoutScores } = await supabase
       .from('members')
@@ -319,20 +320,30 @@ Deno.serve(async (req) => {
       )
 
     if (membersWithoutScores && membersWithoutScores.length > 0) {
+      // Generate baseline scores with is_provisional = true
+      // These will be recalculated by calculate-member-scores once data is available
       const scoreRecords = membersWithoutScores.map(m => ({
         member_id: m.id,
         user_id: null,
-        overall_score: Math.floor(Math.random() * 40) + 50,
-        productivity_score: Math.floor(Math.random() * 40) + 50,
-        attendance_score: Math.floor(Math.random() * 30) + 70,
-        bipartisanship_score: Math.floor(Math.random() * 40) + 40,
-        issue_alignment_score: Math.floor(Math.random() * 40) + 50,
-        votes_cast: Math.floor(Math.random() * 500) + 100,
-        votes_missed: Math.floor(Math.random() * 50),
-        bills_sponsored: Math.floor(Math.random() * 20),
-        bills_cosponsored: Math.floor(Math.random() * 100),
-        bills_enacted: Math.floor(Math.random() * 5),
-        bipartisan_bills: Math.floor(Math.random() * 10),
+        overall_score: 50.0,  // Baseline: 50th percentile
+        productivity_score: 50.0,
+        attendance_score: 50.0,
+        bipartisanship_score: 50.0,
+        issue_alignment_score: null,  // Cannot calculate without user context
+        transparency_score: null,
+        governance_score: null,
+        finance_influence_score: null,
+        lobbying_alignment_score: null,
+        votes_cast: 0,
+        votes_missed: 0,
+        bills_sponsored: 0,
+        bills_cosponsored: 0,
+        bills_enacted: 0,
+        bipartisan_bills: 0,
+        is_provisional: true,
+        provisional_reason: 'Insufficient data - member recently added',
+        data_points_used: 0,
+        calculated_at: new Date().toISOString(),
       }))
 
       const { error: scoresError } = await supabase
@@ -342,7 +353,7 @@ Deno.serve(async (req) => {
       if (scoresError) {
         console.error(`Scores insert error: ${JSON.stringify(scoresError)}`)
       } else {
-        console.log(`Created ${scoreRecords.length} score records`)
+        console.log(`Created ${scoreRecords.length} baseline score records`)
       }
     }
 

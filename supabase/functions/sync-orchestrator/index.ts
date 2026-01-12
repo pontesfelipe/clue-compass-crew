@@ -31,10 +31,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get all sync jobs and their current status
+    // Get all sync jobs and their current status (including dependencies)
     const { data: jobs } = await supabase
       .from("sync_jobs")
-      .select("*")
+      .select("*, dependencies, wait_for_dependencies")
       .eq("is_enabled", true)
       .order("priority", { ascending: false });
 
@@ -42,7 +42,12 @@ Deno.serve(async (req) => {
       .from("sync_progress")
       .select("*");
 
+    const { data: syncStateRecords } = await supabase
+      .from("sync_state")
+      .select("*");
+
     const progressMap = new Map(progressRecords?.map((p: any) => [p.id, p]) || []);
+    const syncStateMap = new Map(syncStateRecords?.map((s: any) => [`${s.provider}-${s.dataset}`, s]) || []);
     const now = new Date();
     const results: any[] = [];
 
@@ -97,9 +102,22 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Check dependencies before marking as due
+      const depCheck = await canRunJob(supabase, job, syncStateMap);
+
       // Check if job is due
       const frequencyMs = (job.frequency_minutes || 60) * 60 * 1000;
       const isDue = !lastRun || now.getTime() - lastRun.getTime() >= frequencyMs;
+
+      if (!depCheck.canRun) {
+        results.push({
+          job_id: job.id,
+          status: "blocked",
+          reason: depCheck.reason,
+          last_run: lastRun?.toISOString(),
+        });
+        continue;
+      }
 
       results.push({
         job_id: job.id,
@@ -141,6 +159,69 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// Check if a job can run based on its dependencies
+async function canRunJob(
+  supabase: any,
+  job: any,
+  syncStateMap: Map<string, any>
+): Promise<{ canRun: boolean; reason?: string }> {
+  // If job has no dependencies, can always run
+  const dependencies = job.dependencies || [];
+  if (dependencies.length === 0) {
+    return { canRun: true };
+  }
+
+  // If job doesn't wait for dependencies, can run
+  if (job.wait_for_dependencies === false) {
+    return { canRun: true };
+  }
+
+  // Check if all dependencies have run successfully recently
+  const checkInterval = new Date();
+  checkInterval.setMinutes(checkInterval.getMinutes() - (job.frequency_minutes || 60) * 2); // 2x the interval
+
+  for (const depName of dependencies) {
+    // Try to find the sync state for this dependency
+    let depState = null;
+    
+    // Check by progress ID first
+    const { data: depProgress } = await supabase
+      .from("sync_progress")
+      .select("last_run_at, status")
+      .eq("id", depName)
+      .maybeSingle();
+
+    if (depProgress) {
+      depState = {
+        last_sync_at: depProgress.last_run_at,
+        status: depProgress.status
+      };
+    }
+
+    if (!depState) {
+      // Dependency has never run - allow job to proceed (might be first run)
+      console.log(`Dependency '${depName}' has not run yet, allowing job to proceed`);
+      continue;
+    }
+
+    if (depState.status === 'error' || depState.status === 'failed') {
+      return {
+        canRun: false,
+        reason: `Dependency '${depName}' last sync failed`
+      };
+    }
+
+    if (depState.last_sync_at && new Date(depState.last_sync_at) < checkInterval) {
+      return {
+        canRun: false,
+        reason: `Dependency '${depName}' data is stale`
+      };
+    }
+  }
+
+  return { canRun: true };
+}
 
 async function runDataQualityChecks(supabase: any): Promise<any[]> {
   const anomalies: any[] = [];
