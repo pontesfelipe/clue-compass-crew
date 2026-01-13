@@ -24,6 +24,7 @@ import FAQPage from "./pages/FAQPage";
 import AuthPage from "./pages/AuthPage";
 import AdminPage from "./pages/AdminPage";
 import AdminDataInspectorPage from "./pages/AdminDataInspectorPage";
+import AdminFECCompletenessPage from "./pages/AdminFECCompletenessPage";
 import MyProfilePage from "./pages/MyProfilePage";
 import MyMatchesPage from "./pages/MyMatchesPage";
 import TrackedMembersPage from "./pages/TrackedMembersPage";
@@ -64,6 +65,7 @@ const App = () => {
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/data-inspector" element={<AdminDataInspectorPage />} />
+            <Route path="/admin/fec-completeness" element={<AdminFECCompletenessPage />} />
             <Route path="/my-profile" element={<MyProfilePage />} />
             <Route path="/my-matches" element={<MyMatchesPage />} />
             <Route path="/tracked-members" element={<TrackedMembersPage />} />
