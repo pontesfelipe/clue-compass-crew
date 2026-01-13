@@ -16,6 +16,16 @@ export default {
       gridTemplateColumns: {
         '14': 'repeat(14, minmax(0, 1fr))',
       },
+      fontSize: {
+        // Mobile-first responsive text sizes
+        'xs-mobile': ['0.75rem', { lineHeight: '1rem' }],     // 12px
+        'sm-mobile': ['0.875rem', { lineHeight: '1.25rem' }],  // 14px
+        'base-mobile': ['1rem', { lineHeight: '1.5rem' }],     // 16px
+        'lg-mobile': ['1.125rem', { lineHeight: '1.75rem' }],  // 18px
+        'xl-mobile': ['1.25rem', { lineHeight: '1.75rem' }],   // 20px
+        '2xl-mobile': ['1.5rem', { lineHeight: '2rem' }],      // 24px
+        '3xl-mobile': ['1.875rem', { lineHeight: '2.25rem' }], // 30px
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
