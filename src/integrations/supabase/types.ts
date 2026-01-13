@@ -158,6 +158,13 @@ export type Database = {
             foreignKeyName: "bill_sponsorships_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "bill_sponsorships_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -366,6 +373,105 @@ export type Database = {
         }
         Relationships: []
       }
+      fec_manual_mapping: {
+        Row: {
+          created_at: string | null
+          fec_candidate_id: string
+          member_id: string
+          notes: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fec_candidate_id: string
+          member_id: string
+          notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fec_candidate_id?: string
+          member_id?: string
+          notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fec_manual_mapping_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "fec_manual_mapping_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fec_sync_state: {
+        Row: {
+          contributions_count: number | null
+          created_at: string | null
+          cycle: number
+          is_complete: boolean | null
+          last_error: string | null
+          last_page_fetched: number | null
+          last_synced_at: string | null
+          member_id: string
+          retry_count: number | null
+          total_pages_estimated: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          contributions_count?: number | null
+          created_at?: string | null
+          cycle: number
+          is_complete?: boolean | null
+          last_error?: string | null
+          last_page_fetched?: number | null
+          last_synced_at?: string | null
+          member_id: string
+          retry_count?: number | null
+          total_pages_estimated?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          contributions_count?: number | null
+          created_at?: string | null
+          cycle?: number
+          is_complete?: boolean | null
+          last_error?: string | null
+          last_page_fetched?: number | null
+          last_synced_at?: string | null
+          member_id?: string
+          retry_count?: number | null
+          total_pages_estimated?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fec_sync_state_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "fec_sync_state_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funding_metrics: {
         Row: {
           computed_at: string
@@ -425,6 +531,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "funding_metrics_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
           {
             foreignKeyName: "funding_metrics_member_id_fkey"
             columns: ["member_id"]
@@ -669,6 +782,13 @@ export type Database = {
             foreignKeyName: "member_committees_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_committees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -752,6 +872,13 @@ export type Database = {
             foreignKeyName: "member_contributions_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_contributions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -811,6 +938,13 @@ export type Database = {
             foreignKeyName: "member_data_completeness_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: true
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_data_completeness_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -848,6 +982,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "member_lobbying_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
           {
             foreignKeyName: "member_lobbying_member_id_fkey"
             columns: ["member_id"]
@@ -935,6 +1076,13 @@ export type Database = {
             foreignKeyName: "member_scores_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_scores_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -975,6 +1123,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "member_sponsors_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
           {
             foreignKeyName: "member_sponsors_member_id_fkey"
             columns: ["member_id"]
@@ -1020,6 +1175,13 @@ export type Database = {
             foreignKeyName: "member_statements_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_statements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -1049,6 +1211,13 @@ export type Database = {
             foreignKeyName: "member_summaries_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: true
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_summaries_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -1074,6 +1243,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "member_tracking_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
           {
             foreignKeyName: "member_tracking_member_id_fkey"
             columns: ["member_id"]
@@ -1112,6 +1288,13 @@ export type Database = {
           weight?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "member_votes_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
           {
             foreignKeyName: "member_votes_member_id_fkey"
             columns: ["member_id"]
@@ -1263,6 +1446,13 @@ export type Database = {
             foreignKeyName: "members_fec_mapping_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: true
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "members_fec_mapping_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -1371,6 +1561,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "issues"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "politician_issue_positions_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "politician_issue_positions_politician_id_fkey"
@@ -1901,6 +2098,13 @@ export type Database = {
             foreignKeyName: "user_politician_alignment_politician_id_fkey"
             columns: ["politician_id"]
             isOneToOne: false
+            referencedRelation: "fec_sync_completeness"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "user_politician_alignment_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
@@ -2030,6 +2234,32 @@ export type Database = {
       }
     }
     Views: {
+      fec_sync_completeness: {
+        Row: {
+          chamber: Database["public"]["Enums"]["chamber_type"] | null
+          completeness_percent: number | null
+          cycle_2018_complete: boolean | null
+          cycle_2018_count: number | null
+          cycle_2020_complete: boolean | null
+          cycle_2020_count: number | null
+          cycle_2022_complete: boolean | null
+          cycle_2022_count: number | null
+          cycle_2024_complete: boolean | null
+          cycle_2024_count: number | null
+          cycle_2026_complete: boolean | null
+          cycle_2026_count: number | null
+          fec_candidate_id: string | null
+          fec_last_synced_at: string | null
+          full_name: string | null
+          has_fec_match: boolean | null
+          in_office: boolean | null
+          member_id: string | null
+          party: Database["public"]["Enums"]["party_type"] | null
+          state: string | null
+          total_contributions: number | null
+        }
+        Relationships: []
+      }
       sync_health: {
         Row: {
           frequency_minutes: number | null

@@ -11,18 +11,18 @@ const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY"
 const PROVIDER = 'fec'
 const DATASET = 'contributions'
 const JOB_ID = "fec-finance"
-const MAX_DURATION_SECONDS = 280 // Increased to allow more pagination
-const BATCH_SIZE = 10 // Fewer members per batch to allow deeper pagination per member
+const MAX_DURATION_SECONDS = 280 // Edge function timeout
+// Process ONE member per run to maximize pagination depth (50,000 contributions possible)
+const BATCH_SIZE = 1
 const CURRENT_CYCLE = (() => {
   const y = new Date().getFullYear()
   return y % 2 === 0 ? y : y + 1
 })()
-// FEC cycles are even years - include future cycle for Senators fundraising ahead
-// Go back further in history for complete data
-const CYCLES_TO_TRY = [CURRENT_CYCLE + 2, CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6, CURRENT_CYCLE - 8]
+// All cycles - will be filtered by cycle parameter
+const ALL_CYCLES = [CURRENT_CYCLE + 2, CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6, CURRENT_CYCLE - 8]
 const HTTP_CONFIG: HttpClientConfig = {
   maxRetries: 5,
-  baseDelayMs: 1000,
+  baseDelayMs: 1500, // Slightly higher to avoid rate limits
   maxConcurrency: 2,
 }
 
@@ -163,8 +163,6 @@ async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<bool
       return false
     }
 
-    // If a previous run crashed, status may remain "running" even though the lock expired.
-    // Treat that as stale and allow a new run to start.
     if (progress.status === 'running') {
       console.warn(`Job ${lockId} was 'running' but lock expired; restarting`)
     }
@@ -215,6 +213,46 @@ function generateContributionUid(c: any, memberId: string): string {
   return parts.join('|').replace(/[^a-zA-Z0-9|]/g, '').substring(0, 200)
 }
 
+// Update FEC sync state for resumable pagination
+async function updateSyncState(
+  supabase: any,
+  memberId: string,
+  cycle: number,
+  lastPage: number,
+  totalPages: number | null,
+  contributionsCount: number,
+  isComplete: boolean,
+  error: string | null = null
+) {
+  await supabase
+    .from('fec_sync_state')
+    .upsert({
+      member_id: memberId,
+      cycle: cycle,
+      last_page_fetched: lastPage,
+      total_pages_estimated: totalPages,
+      contributions_count: contributionsCount,
+      is_complete: isComplete,
+      last_synced_at: new Date().toISOString(),
+      last_error: error,
+      retry_count: error ? 1 : 0,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'member_id,cycle'
+    })
+}
+
+// Get sync state for a member+cycle
+async function getSyncState(supabase: any, memberId: string, cycle: number) {
+  const { data } = await supabase
+    .from('fec_sync_state')
+    .select('last_page_fetched, is_complete, contributions_count, total_pages_estimated, retry_count')
+    .eq('member_id', memberId)
+    .eq('cycle', cycle)
+    .single()
+  return data
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -240,8 +278,33 @@ Deno.serve(async (req) => {
 
     const requestUrl = new URL(req.url)
     const memberIdFilter = requestUrl.searchParams.get('member_id')
+    const cycleFilter = requestUrl.searchParams.get('cycle')
     const isSingleMemberRun = !!memberIdFilter
-    const lockId = memberIdFilter ? `${JOB_ID}:${memberIdFilter}` : JOB_ID
+    
+    // Determine which cycles to process
+    let cyclesToProcess: number[]
+    if (cycleFilter) {
+      const requestedCycle = parseInt(cycleFilter, 10)
+      if (isNaN(requestedCycle) || requestedCycle < 2010 || requestedCycle > CURRENT_CYCLE + 2) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'Invalid cycle parameter' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      cyclesToProcess = [requestedCycle]
+    } else if (isSingleMemberRun) {
+      // Single member: process all cycles
+      cyclesToProcess = ALL_CYCLES
+    } else {
+      // Batch mode: process current cycle only for speed
+      cyclesToProcess = [CURRENT_CYCLE]
+    }
+    
+    const lockId = memberIdFilter 
+      ? `${JOB_ID}:${memberIdFilter}` 
+      : cycleFilter 
+        ? `${JOB_ID}:cycle-${cycleFilter}` 
+        : JOB_ID
 
     // Try to acquire lock
     if (!await acquireLock(supabase, lockId)) {
@@ -251,7 +314,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get watermark for incremental sync
+    console.log(`Starting FEC finance sync (cycles: ${cyclesToProcess.join(', ')})...`)
+
+    // Get watermark for offset
     const { lastCursor } = await getWatermark(supabase)
     let offset = lastCursor?.memberOffset || 0
     let limit = BATCH_SIZE
@@ -269,32 +334,103 @@ Deno.serve(async (req) => {
         if (typeof body.offset === 'number' && Number.isFinite(body.offset)) {
           offset = Math.max(0, Math.floor(body.offset))
         }
-        if (body.limit) limit = Math.min(body.limit, 50)
+        if (body.limit) limit = Math.min(body.limit, 10)
       } catch {
         // Use defaults
       }
     }
 
-    console.log(`Starting FEC finance sync (offset: ${offset}, limit: ${limit})...`)
-
-    // Get members to sync - include fec_candidate_id to avoid re-searching
-    let membersQuery = supabase
-      .from('members')
-      .select(
-        'id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids',
-        { count: 'exact' }
-      )
+    // Get members to sync
+    let members: any[] = []
+    let totalMembers: number = 0
 
     if (isSingleMemberRun && memberIdFilter) {
-      membersQuery = membersQuery.eq('id', memberIdFilter)
+      // Single member run - fetch specific member
+      const { data, count } = await supabase
+        .from('members')
+        .select(
+          'id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids',
+          { count: 'exact' }
+        )
+        .eq('id', memberIdFilter)
+      
+      members = data || []
+      totalMembers = count || 0
     } else {
-      membersQuery = membersQuery
-        .eq('in_office', true)
-        .order('last_name')
-        .range(offset, offset + limit - 1)
-    }
+      // Priority queue: Get members with INCOMPLETE or missing data first
+      const targetCycle = cyclesToProcess[0]
+      
+      // First, check for members with incomplete sync states for this cycle
+      const { data: incompleteSyncStates } = await supabase
+        .from('fec_sync_state')
+        .select('member_id, contributions_count, last_synced_at')
+        .eq('cycle', targetCycle)
+        .eq('is_complete', false)
+        .order('contributions_count', { ascending: true }) // Least data first
+        .order('last_synced_at', { ascending: true, nullsFirst: true }) // Oldest first
+        .limit(limit)
 
-    const { data: members, count: totalMembers } = await membersQuery
+      let memberIds: string[] = []
+
+      if (incompleteSyncStates && incompleteSyncStates.length > 0) {
+        memberIds = incompleteSyncStates.map((s: any) => s.member_id)
+        console.log(`Found ${memberIds.length} members with incomplete data for cycle ${targetCycle}`)
+      } else {
+        // No incomplete syncs - get members who have NEVER been synced for this cycle
+        // These are members not present in fec_sync_state for this cycle
+        const { data: syncedMemberIds } = await supabase
+          .from('fec_sync_state')
+          .select('member_id')
+          .eq('cycle', targetCycle)
+        
+        const syncedSet = new Set((syncedMemberIds || []).map((s: any) => s.member_id))
+        
+        const { data: allActiveMembers } = await supabase
+          .from('members')
+          .select('id')
+          .eq('in_office', true)
+          .order('last_name')
+        
+        if (allActiveMembers) {
+          // Filter to only members not yet synced for this cycle
+          const notSynced = allActiveMembers.filter((m: any) => !syncedSet.has(m.id))
+          memberIds = notSynced.slice(0, limit).map((m: any) => m.id)
+          
+          if (memberIds.length > 0) {
+            console.log(`Found ${memberIds.length} members never synced for cycle ${targetCycle}`)
+          } else {
+            // All members synced - just get next batch by offset
+            console.log(`All members synced for cycle ${targetCycle} - cycling through for updates`)
+            const batchMembers = allActiveMembers.slice(offset, offset + limit)
+            memberIds = batchMembers.map((m: any) => m.id)
+          }
+        }
+      }
+
+      if (memberIds.length === 0) {
+        console.log('No members to process')
+        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `All members processed for cycle ${targetCycle}`,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Fetch full member details
+      const { data, count } = await supabase
+        .from('members')
+        .select(
+          'id, bioguide_id, first_name, last_name, full_name, state, party, chamber, fec_candidate_id, fec_committee_ids',
+          { count: 'exact' }
+        )
+        .in('id', memberIds)
+      
+      members = data || []
+      totalMembers = count || 0
+    }
 
     if (!members || members.length === 0) {
       if (isSingleMemberRun) {
@@ -319,15 +455,16 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(`Processing ${members.length} members (${offset + 1} to ${offset + members.length} of ${totalMembers})`)
+    console.log(`Processing ${members.length} members for cycles ${cyclesToProcess.join(', ')}`)
 
     let processedCount = 0
     let matchedCount = 0
     let errorCount = 0
+    let totalContributionsInserted = 0
 
     for (const member of members) {
-      // Check if we're running out of time
-      if (Date.now() - startTime > (MAX_DURATION_SECONDS - 30) * 1000) {
+      // Check if we're running out of time (leave 60s buffer for cleanup)
+      if (Date.now() - startTime > (MAX_DURATION_SECONDS - 60) * 1000) {
         console.log('Approaching time limit, stopping batch early')
         break
       }
@@ -343,11 +480,22 @@ Deno.serve(async (req) => {
         const lastName = member.last_name.replace(/[^a-zA-Z\s]/g, '').trim()
         const office = member.chamber === 'house' ? 'H' : 'S'
         
-        // Check if we already have a cached FEC candidate ID
+        // Check for manual mapping first
+        const { data: manualMapping } = await supabase
+          .from('fec_manual_mapping')
+          .select('fec_candidate_id')
+          .eq('member_id', member.id)
+          .single()
+        
         let matchingCandidate: any = null
         let bestScore = 0
         
-        if (member.fec_candidate_id) {
+        if (manualMapping?.fec_candidate_id) {
+          // Use manual mapping - highest priority
+          console.log(`Using manual FEC mapping for ${member.full_name}: ${manualMapping.fec_candidate_id}`)
+          matchingCandidate = { candidate_id: manualMapping.fec_candidate_id, name: member.full_name }
+          bestScore = 100
+        } else if (member.fec_candidate_id) {
           // Use cached candidate ID - skip search
           console.log(`Using cached FEC ID for ${member.full_name}: ${member.fec_candidate_id}`)
           matchingCandidate = { candidate_id: member.fec_candidate_id, name: member.full_name }
@@ -376,23 +524,20 @@ Deno.serve(async (req) => {
           const candidateData = await candidateResponse.json()
           const candidates = candidateData.results || []
           
-          // Find matching candidate - STRICT first name matching to avoid wrong matches
+          // Find matching candidate with score-based matching
           const memberLastName = member.last_name.toLowerCase().replace(/[^a-z]/g, '')
           const memberFirstName = member.first_name.toLowerCase().replace(/[^a-z]/g, '')
           
-          // Get possible legal names from nickname map
           const possibleFirstNames = [memberFirstName]
           if (NICKNAME_MAP[memberFirstName]) {
             possibleFirstNames.push(...NICKNAME_MAP[memberFirstName])
           }
-          // Also check reverse - if member uses legal name but FEC has nickname
           for (const [nickname, legalNames] of Object.entries(NICKNAME_MAP)) {
             if (legalNames.includes(memberFirstName)) {
               possibleFirstNames.push(nickname)
             }
           }
           
-          // Score-based matching for better accuracy
           let bestCandidate: any = null
           
           for (const c of candidates) {
@@ -402,39 +547,26 @@ Deno.serve(async (req) => {
             const fecLastName = nameParts[0]?.trim().replace(/[^a-z]/g, '') || ''
             const fecFirstPart = nameParts[1]?.trim().split(' ')[0]?.replace(/[^a-z]/g, '') || ''
             
-            // Last name must match exactly
             if (fecLastName !== memberLastName) continue
             
             let score = 0
             
-            // Check against all possible first names (including nicknames)
             for (const possibleName of possibleFirstNames) {
-              // Exact first name match = 100 points
               if (fecFirstPart === possibleName) {
-                score = Math.max(score, possibleName === memberFirstName ? 100 : 90) // Slight penalty for nickname match
-              }
-              // First name starts with possible name (e.g., "al" matches "albert")
-              else if (fecFirstPart.startsWith(possibleName) && possibleName.length >= 2) {
+                score = Math.max(score, possibleName === memberFirstName ? 100 : 90)
+              } else if (fecFirstPart.startsWith(possibleName) && possibleName.length >= 2) {
                 score = Math.max(score, 80)
-              }
-              // Possible name starts with FEC first name (e.g., "albert" matches "al")
-              else if (possibleName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
+              } else if (possibleName.startsWith(fecFirstPart) && fecFirstPart.length >= 2) {
                 score = Math.max(score, 70)
-              }
-              // At least 3 chars match at start (weak match)
-              else if (fecFirstPart.length >= 3 && possibleName.length >= 3 && 
-                       fecFirstPart.substring(0, 3) === possibleName.substring(0, 3)) {
+              } else if (fecFirstPart.length >= 3 && possibleName.length >= 3 && 
+                         fecFirstPart.substring(0, 3) === possibleName.substring(0, 3)) {
                 score = Math.max(score, 50)
               }
             }
             
-            // No first name match = skip
             if (score === 0) continue
             
-            // Bonus for matching office type
             if (c.office === office) score += 10
-            
-            // Bonus for recent election years
             if (c.election_years?.includes(2024)) score += 5
             if (c.election_years?.includes(2022)) score += 3
             
@@ -444,7 +576,6 @@ Deno.serve(async (req) => {
             }
           }
           
-          // Require minimum score of 50 to prevent bad matches
           if (bestCandidate && bestScore >= 50) {
             matchingCandidate = bestCandidate
             console.log(`Matched (score=${bestScore}): ${member.full_name} -> ${bestCandidate.name} (${bestCandidate.candidate_id})`)
@@ -462,7 +593,7 @@ Deno.serve(async (req) => {
 
         // Store the FEC candidate ID on the member record for future syncs
         if (!member.fec_candidate_id || member.fec_candidate_id !== candidateId) {
-          const { error: updateCandidateError } = await supabase
+          await supabase
             .from('members')
             .update({ 
               fec_candidate_id: candidateId,
@@ -470,15 +601,10 @@ Deno.serve(async (req) => {
             })
             .eq('id', member.id)
           
-          if (updateCandidateError) {
-            console.error(`Failed to store FEC candidate ID for ${member.full_name}:`, updateCandidateError)
-          } else {
-            console.log(`Stored FEC candidate ID ${candidateId} for ${member.full_name}`)
-          }
+          console.log(`Stored FEC candidate ID ${candidateId} for ${member.full_name}`)
         }
 
-        // Get committees using httpClient
-        // NOTE: per_page=5 can miss the principal committee; use a higher page size.
+        // Get committees
         const committeesUrl = `${FEC_API_BASE}/candidate/${candidateId}/committees/?api_key=${FEC_API_KEY}&per_page=100`
         const { response: committeesResponse, metrics: committeesMetrics } = await fetchWithRetry(committeesUrl, {}, PROVIDER, HTTP_CONFIG)
         apiCalls++
@@ -498,7 +624,7 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Persist committee IDs for debugging and future syncs
+        // Persist committee IDs
         const fetchedCommitteeIds = Array.from(
           new Set(
             committees
@@ -509,18 +635,13 @@ Deno.serve(async (req) => {
 
         const existingCommitteeIds = Array.from(new Set((member.fec_committee_ids || []).filter(Boolean))).sort()
         if (fetchedCommitteeIds.join(',') !== existingCommitteeIds.join(',')) {
-          const { error: updateCommitteesError } = await supabase
+          await supabase
             .from('members')
             .update({ fec_committee_ids: fetchedCommitteeIds })
             .eq('id', member.id)
-
-          if (updateCommitteesError) {
-            console.error(`Failed to store FEC committee IDs for ${member.full_name}:`, updateCommitteesError)
-          }
         }
 
-        // Pick the best committee for itemized contributions.
-        // Start with principal ('P'), but fall back to other committees if the principal returns 0 items.
+        // Pick the best committee for itemized contributions
         const committeeCandidates = [
           committees.find((c: any) => c.committee_type === 'P'),
           ...committees.filter((c: any) => c.committee_type !== 'P'),
@@ -529,33 +650,67 @@ Deno.serve(async (req) => {
         const defaultCommitteeId = committeeCandidates[0].committee_id
         const defaultCommitteeName = committeeCandidates[0].name || ''
 
-        // Process ALL cycles to get complete historical data
+        // Process cycles with RESUMABLE PAGINATION
         let rateLimited = false
-        for (const cycle of CYCLES_TO_TRY) {
+        for (const cycle of cyclesToProcess) {
           if (rateLimited) break
+
+          // Check time budget per cycle
+          if (Date.now() - startTime > (MAX_DURATION_SECONDS - 60) * 1000) {
+            console.log('Approaching time limit mid-cycle, saving progress')
+            break
+          }
+
+          // Check sync state to see if we should resume or skip
+          const syncState = await getSyncState(supabase, member.id, cycle)
+          
+          // Skip if already complete
+          if (syncState?.is_complete) {
+            console.log(`Cycle ${cycle} already complete for ${member.full_name} - skipping`)
+            continue
+          }
 
           let committeeId = defaultCommitteeId
           let committeeName = defaultCommitteeName
           let contributionsResults: any[] = []
-          let totalContributionsAvailable: number | null = null // Track FEC total count
+          let totalContributionsAvailable: number | null = syncState?.contributions_count || null
 
-          // Try each committee for this cycle - paginate to get ALL contributions
+          // Resume from last page + 1
+          let startPage = syncState?.last_page_fetched ? syncState.last_page_fetched + 1 : 1
+          console.log(`Processing cycle ${cycle} for ${member.full_name} from page ${startPage}`)
+
+          // Try each committee for this cycle
           for (const committee of committeeCandidates.slice(0, 5)) {
             const candidateCommitteeId = committee.committee_id
             if (!candidateCommitteeId) continue
 
-            // Fetch itemized contributions with pagination to get ALL donors (FEC returns max 100 per page)
-            // NOTE: We use page-based pagination because last_indexes is not always returned reliably.
             let hasMore = true
-            // Increase MAX_PAGES significantly to capture ALL contributions
-            // FEC allows up to 100 pages per request, so 100 pages = 10,000 contributions max
-            // For high-profile members like Senators, they may have 5,000+ contributions per cycle
-            const MAX_PAGES = isSingleMemberRun ? 500 : 100 // Much higher limits to get complete data
+            // Allow up to 500 pages = 50,000 contributions for deep pagination
+            const MAX_PAGES = 500
             let pageCount = 0
-            let page = 1
-            let totalPages: number | null = null
+            let page = startPage
+            let totalPages: number | null = syncState?.total_pages_estimated || null
 
             while (hasMore && pageCount < MAX_PAGES && !rateLimited) {
+              // Check time budget
+              if (Date.now() - startTime > (MAX_DURATION_SECONDS - 60) * 1000) {
+                console.log('Approaching time limit - saving progress')
+                
+                // Save current progress
+                await updateSyncState(
+                  supabase,
+                  member.id,
+                  cycle,
+                  page - 1,
+                  totalPages,
+                  contributionsResults.length + (syncState?.contributions_count || 0),
+                  false
+                )
+                
+                hasMore = false
+                break
+              }
+
               const url = new URL(`${FEC_API_BASE}/schedules/schedule_a/`)
               url.searchParams.set('api_key', FEC_API_KEY)
               url.searchParams.set('committee_id', candidateCommitteeId)
@@ -575,6 +730,17 @@ Deno.serve(async (req) => {
               pageCount++
 
               if (contributionsResponse?.status === 429) {
+                console.log('Rate limited - saving progress')
+                await updateSyncState(
+                  supabase,
+                  member.id,
+                  cycle,
+                  page - 1,
+                  totalPages,
+                  contributionsResults.length + (syncState?.contributions_count || 0),
+                  false,
+                  'Rate limited'
+                )
                 rateLimited = true
                 break
               }
@@ -593,7 +759,7 @@ Deno.serve(async (req) => {
                 committeeName = committee.name || ''
                 contributionsResults = contributionsResults.concat(results)
 
-                // Capture total count/pages from first response (if provided)
+                // Capture total count/pages from first response
                 if (totalContributionsAvailable === null && typeof pagination.count === 'number') {
                   totalContributionsAvailable = pagination.count
                 }
@@ -604,8 +770,23 @@ Deno.serve(async (req) => {
                 const reachedEnd = totalPages !== null ? page >= totalPages : results.length < 100
                 if (reachedEnd) {
                   hasMore = false
+                  console.log(`Reached end of data for ${member.full_name} cycle ${cycle} at page ${page}`)
                 } else {
                   page += 1
+                }
+
+                // Save progress checkpoint every 10 pages
+                if (pageCount % 10 === 0) {
+                  await updateSyncState(
+                    supabase,
+                    member.id,
+                    cycle,
+                    page - 1,
+                    totalPages,
+                    contributionsResults.length + (syncState?.contributions_count || 0),
+                    false
+                  )
+                  console.log(`Progress checkpoint: page ${page-1}/${totalPages || '?'} for ${member.full_name} cycle ${cycle}`)
                 }
               } else {
                 hasMore = false
@@ -616,6 +797,19 @@ Deno.serve(async (req) => {
               console.log(
                 `Found ${contributionsResults.length} itemized contributions for ${member.full_name} in cycle ${cycle} (${pageCount} pages)`
               )
+              
+              // Mark as complete if we reached the end
+              const isComplete = !hasMore && !rateLimited
+              await updateSyncState(
+                supabase,
+                member.id,
+                cycle,
+                page - 1,
+                totalPages,
+                contributionsResults.length + (syncState?.contributions_count || 0),
+                isComplete
+              )
+              
               break // Found data for this cycle, move to processing
             }
           }
@@ -706,23 +900,22 @@ Deno.serve(async (req) => {
             }
 
             if (allContributions.length > 0) {
-              await supabase
-                .from('member_contributions')
-                .delete()
-                .eq('member_id', member.id)
-                .eq('cycle', cycle)
-
+              // Use upsert instead of delete+insert to preserve data during partial syncs
               const { error: insertError } = await supabase
                 .from('member_contributions')
-                .insert(allContributions)
+                .upsert(allContributions, {
+                  onConflict: 'contribution_uid',
+                  ignoreDuplicates: false
+                })
 
               if (insertError) {
                 console.error(`Error inserting contributions for ${member.full_name} cycle ${cycle}:`, insertError)
               } else {
-                console.log(`Inserted ${allContributions.length} contributions for ${member.full_name} cycle ${cycle}`)
+                console.log(`Upserted ${allContributions.length} contributions for ${member.full_name} cycle ${cycle}`)
+                totalContributionsInserted += allContributions.length
                 
                 // Update funding_metrics with contribution completeness data
-                const { error: metricsError } = await supabase
+                await supabase
                   .from('funding_metrics')
                   .upsert({
                     member_id: member.id,
@@ -733,12 +926,6 @@ Deno.serve(async (req) => {
                     onConflict: 'member_id,cycle',
                     ignoreDuplicates: false,
                   })
-                
-                if (metricsError) {
-                  console.error(`Error updating contribution completeness for ${member.full_name} cycle ${cycle}:`, metricsError)
-                } else {
-                  console.log(`Updated contribution completeness: ${allContributions.length}/${totalContributionsAvailable || 'unknown'} for ${member.full_name} cycle ${cycle}`)
-                }
               }
             }
           }
@@ -802,15 +989,11 @@ Deno.serve(async (req) => {
               .eq('member_id', member.id)
               .eq('cycle', cycle)
 
-            const { error: insertSponsorsError } = await supabase
+            await supabase
               .from('member_sponsors')
               .insert(sponsors)
             
-            if (insertSponsorsError) {
-              console.error(`Error inserting sponsors for ${member.full_name} cycle ${cycle}:`, insertSponsorsError)
-            } else {
-              console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name} cycle ${cycle}`)
-            }
+            console.log(`Inserted ${sponsors.length} sponsors for ${member.full_name} cycle ${cycle}`)
           }
 
           // Insert industry lobbying data for this cycle
@@ -856,7 +1039,12 @@ Deno.serve(async (req) => {
     }
 
     const nextOffset = offset + processedCount
-    const hasMore = nextOffset < (totalMembers || 0)
+    const { count: totalActiveMembers } = await supabase
+      .from('members')
+      .select('*', { count: 'exact', head: true })
+      .eq('in_office', true)
+    
+    const hasMore = nextOffset < (totalActiveMembers || 0)
 
     // Get total contributions for accurate cumulative progress
     const { count: totalContributions } = await supabase
@@ -877,13 +1065,14 @@ Deno.serve(async (req) => {
         cursor_json: {
           last_offset: nextOffset,
           members_processed: nextOffset,
-          total_members: totalMembers,
+          total_members: totalActiveMembers,
         },
         metadata: {
           members_processed: nextOffset,
-          total_members: totalMembers,
+          total_members: totalActiveMembers,
           api_calls: apiCalls,
           wait_time_ms: totalWaitMs,
+          cycles_processed: cyclesToProcess,
         }
       })
       .eq('id', JOB_ID)
@@ -899,14 +1088,15 @@ Deno.serve(async (req) => {
       started_at: new Date(startTime).toISOString(),
       finished_at: new Date().toISOString(),
       records_fetched: processedCount,
-      records_upserted: matchedCount,
+      records_upserted: totalContributionsInserted,
       api_calls: apiCalls,
       wait_time_ms: totalWaitMs,
       metadata: { 
         offset, 
         nextOffset: hasMore ? nextOffset : 0,
         hasMore,
-        totalMembers
+        totalMembers: totalActiveMembers,
+        cycles: cyclesToProcess,
       }
     })
 
@@ -916,12 +1106,14 @@ Deno.serve(async (req) => {
       processedCount,
       matchedCount,
       errorCount,
-      totalMembers,
+      totalContributionsInserted,
+      totalMembers: totalActiveMembers,
       currentOffset: offset,
       nextOffset: hasMore ? nextOffset : 0,
       hasMore,
       apiCalls,
-      progress: `${Math.round((nextOffset / (totalMembers || 1)) * 100)}%`,
+      cycles: cyclesToProcess,
+      progress: `${Math.round((nextOffset / (totalActiveMembers || 1)) * 100)}%`,
       duration_seconds: Math.round((Date.now() - startTime) / 1000),
     }
 
@@ -939,10 +1131,8 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    // Try to release lock - use JOB_ID as fallback since lockId may not be available in catch
     await releaseLock(supabase, 'error', 0, 1, JOB_ID)
 
-    // Log failed job run
     await supabase.from('sync_job_runs').insert({
       job_id: `fec-finance-${Date.now()}`,
       provider: PROVIDER,
@@ -972,31 +1162,19 @@ function classifyFromEntityType(
   occupation: string | null, 
   contributorName: string | null = null
 ): string {
-  // FEC entity_type codes:
-  // IND = Individual
-  // COM = Committee (PAC, party, etc.)
-  // ORG = Organization  
-  // CAN = Candidate
-  // PAC = Political Action Committee
-  // PTY = Party Organization
-  // CCM = Candidate Committee
-  
   if (entityType) {
     const et = entityType.toUpperCase()
     if (et === 'IND') return 'individual'
     if (et === 'COM' || et === 'PAC' || et === 'PTY' || et === 'CCM') return 'pac'
     if (et === 'ORG') {
-      // Organization - check if it's a union or corporate
       return classifyOrganization(employer, occupation, contributorName)
     }
-    if (et === 'CAN') return 'individual' // Treat candidate contributions as individual
+    if (et === 'CAN') return 'individual'
   }
   
-  // Fallback to heuristic classification
   return categorizeContributorHeuristic(employer, occupation, contributorName)
 }
 
-// Classify ORG entity types into union, corporate, or organization
 function classifyOrganization(employer: string | null, occupation: string | null, contributorName: string | null): string {
   const name = (contributorName || '').toLowerCase()
   const emp = (employer || '').toLowerCase()
@@ -1016,7 +1194,6 @@ function classifyOrganization(employer: string | null, occupation: string | null
   return 'organization'
 }
 
-// Heuristic fallback when entity_type is not available
 function categorizeContributorHeuristic(employer: string | null, occupation: string | null, contributorName: string | null = null): string {
   const emp = (employer || '').toLowerCase()
   const occ = (occupation || '').toLowerCase()
