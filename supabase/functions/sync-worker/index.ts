@@ -9,9 +9,13 @@ const corsHeaders = {
 // Uses FOR UPDATE SKIP LOCKED pattern to prevent overlap
 
 const MAX_JOBS_PER_INVOCATION = 3;
-const MAX_RECORDS_PER_JOB = 500; // Limit records processed per job invocation
+const MAX_RECORDS_PER_JOB = 500;
 const MAX_RETRIES = 6;
 const BASE_BACKOFF_MS = 2000;
+
+// Priority cycles: 2024+ first, then historical
+const PRIORITY_CYCLES = [2026, 2024];
+const HISTORICAL_CYCLES = [2022, 2020, 2018];
 
 interface SyncJob {
   id: string;
@@ -367,13 +371,41 @@ async function processJob(
         limit: MAX_RECORDS_PER_JOB,
       });
 
+    // FEC Finance with cycle-specific prioritization
     case 'fec-finance':
     case 'sync-fec-finance':
+      return await processFecFinanceJob(supabase, supabaseUrl, supabaseKey, job, lastCursor);
+
+    // Cycle-specific FEC jobs (priority cycles: 2024, 2026)
+    case 'fec-finance-2026':
       return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
-        mode: 'incremental',
-        since: lastSuccessAt,
-        cursor: lastCursor,
-        limit: MAX_RECORDS_PER_JOB,
+        cycle: 2026,
+        limit: 10,
+      });
+
+    case 'fec-finance-2024':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle: 2024,
+        limit: 10,
+      });
+
+    // Historical cycles (lower priority, processed later)
+    case 'fec-finance-2022':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle: 2022,
+        limit: 5,
+      });
+
+    case 'fec-finance-2020':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle: 2020,
+        limit: 5,
+      });
+
+    case 'fec-finance-2018':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle: 2018,
+        limit: 5,
       });
 
     case 'member-scores':
@@ -406,6 +438,69 @@ async function processJob(
         error: `Unknown job type: ${job.id}`,
       };
   }
+}
+
+// FEC Finance job with intelligent cycle prioritization
+async function processFecFinanceJob(
+  supabase: any,
+  supabaseUrl: string,
+  supabaseKey: string,
+  job: SyncJob,
+  lastCursor: Record<string, unknown>
+): Promise<JobResult> {
+  // Check completion status for each cycle
+  const { data: syncStates } = await supabase
+    .from("fec_sync_state")
+    .select("cycle, is_complete")
+    .eq("is_complete", false);
+
+  const incompleteCycles = new Set((syncStates || []).map((s: any) => s.cycle));
+
+  // Priority: 2024/2026 first, then historical
+  for (const cycle of PRIORITY_CYCLES) {
+    if (incompleteCycles.has(cycle) || incompleteCycles.size === 0) {
+      console.log(`[sync-worker] Processing priority cycle ${cycle}`);
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle,
+        limit: 10,
+      });
+    }
+  }
+
+  // Check if priority cycles are complete before processing historical
+  const { data: priorityComplete } = await supabase
+    .from("fec_sync_state")
+    .select("cycle")
+    .in("cycle", PRIORITY_CYCLES)
+    .eq("is_complete", false);
+
+  if (priorityComplete && priorityComplete.length > 0) {
+    // Still have incomplete priority cycles
+    const nextCycle = priorityComplete[0].cycle;
+    console.log(`[sync-worker] Continuing priority cycle ${nextCycle}`);
+    return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+      cycle: nextCycle,
+      limit: 10,
+    });
+  }
+
+  // Process historical cycles only after priority cycles are complete
+  for (const cycle of HISTORICAL_CYCLES) {
+    if (incompleteCycles.has(cycle)) {
+      console.log(`[sync-worker] Processing historical cycle ${cycle}`);
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+        cycle,
+        limit: 5, // Slower rate for historical data
+      });
+    }
+  }
+
+  // All cycles complete, run general sync
+  console.log(`[sync-worker] All cycles complete, running general FEC sync`);
+  return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
+    mode: 'incremental',
+    limit: 10,
+  });
 }
 
 async function callEdgeFunction(
