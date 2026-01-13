@@ -16,9 +16,10 @@ const CURRENT_CYCLE = (() => {
   return year % 2 === 0 ? year : year + 1;
 })();
 
-// Include next cycle (+2) so we capture Senators fundraising for 2026
-const CYCLES = [CURRENT_CYCLE - 4, CURRENT_CYCLE - 2, CURRENT_CYCLE, CURRENT_CYCLE + 2];
-const BATCH_SIZE = 10;
+// Include next cycle (+2) for Senators fundraising for 2026/2028
+// Go back further in history for complete financial picture
+const CYCLES = [CURRENT_CYCLE + 2, CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6, CURRENT_CYCLE - 8];
+const BATCH_SIZE = 8; // Smaller batch to allow more API calls per member
 
 // State name to abbreviation mapping
 const STATE_ABBREVS: Record<string, string> = {
@@ -141,15 +142,19 @@ interface ProcessingStats {
 }
 
 // Generic FEC API helper with pagination and better error handling
+// Now fetches ALL pages to ensure complete data
 async function fecGet(
   path: string, 
   params: Record<string, string | number>, 
   apiKey: string,
-  stats: ProcessingStats
+  stats: ProcessingStats,
+  maxResults: number = 10000 // Increased from 500 to capture all data
 ): Promise<any[]> {
   const results: any[] = [];
   let page = 1;
   const perPage = 100;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 3;
   
   while (true) {
     const url = new URL(`${FEC_API_BASE}${path}`);
@@ -166,17 +171,25 @@ async function fecGet(
       const response = await fetch(url.toString());
       
       if (response.status === 429) {
-        console.log(`Rate limited on ${path}, waiting 2 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`Rate limited on ${path}, waiting 3 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.log(`Too many rate limits, stopping pagination for ${path}`);
+          break;
+        }
         continue; // Retry same page
       }
       
       if (!response.ok) {
         console.error(`FEC API error: ${response.status} for ${path}`);
         stats.errors.push(`API ${response.status} for ${path}`);
-        break;
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) break;
+        continue;
       }
       
+      consecutiveErrors = 0; // Reset on success
       const data = await response.json();
       if (!data.results || data.results.length === 0) break;
       
@@ -184,13 +197,22 @@ async function fecGet(
       
       // Check if we've fetched all pages
       if (data.pagination?.pages && page >= data.pagination.pages) break;
-      if (results.length >= 500) break; // Safety limit
+      if (results.length >= maxResults) {
+        console.log(`Reached max results (${maxResults}) for ${path}`);
+        break;
+      }
       
       page++;
+      
+      // Small delay between pages to avoid rate limiting
+      if (page % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     } catch (error) {
       console.error(`FEC API fetch error for ${path}:`, error);
       stats.errors.push(`Fetch error for ${path}: ${error}`);
-      break;
+      consecutiveErrors++;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) break;
     }
   }
   

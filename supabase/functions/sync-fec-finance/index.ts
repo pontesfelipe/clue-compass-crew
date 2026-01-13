@@ -11,13 +11,15 @@ const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY"
 const PROVIDER = 'fec'
 const DATASET = 'contributions'
 const JOB_ID = "fec-finance"
-const MAX_DURATION_SECONDS = 240
-const BATCH_SIZE = 15
+const MAX_DURATION_SECONDS = 280 // Increased to allow more pagination
+const BATCH_SIZE = 10 // Fewer members per batch to allow deeper pagination per member
 const CURRENT_CYCLE = (() => {
   const y = new Date().getFullYear()
   return y % 2 === 0 ? y : y + 1
 })()
-const CYCLES_TO_TRY = [CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6]
+// FEC cycles are even years - include future cycle for Senators fundraising ahead
+// Go back further in history for complete data
+const CYCLES_TO_TRY = [CURRENT_CYCLE + 2, CURRENT_CYCLE, CURRENT_CYCLE - 2, CURRENT_CYCLE - 4, CURRENT_CYCLE - 6, CURRENT_CYCLE - 8]
 const HTTP_CONFIG: HttpClientConfig = {
   maxRetries: 5,
   baseDelayMs: 1000,
@@ -545,7 +547,10 @@ Deno.serve(async (req) => {
             // Fetch itemized contributions with pagination to get ALL donors (FEC returns max 100 per page)
             // NOTE: We use page-based pagination because last_indexes is not always returned reliably.
             let hasMore = true
-            const MAX_PAGES = isSingleMemberRun ? 200 : 20 // Single-member runs can go deeper
+            // Increase MAX_PAGES significantly to capture ALL contributions
+            // FEC allows up to 100 pages per request, so 100 pages = 10,000 contributions max
+            // For high-profile members like Senators, they may have 5,000+ contributions per cycle
+            const MAX_PAGES = isSingleMemberRun ? 500 : 100 // Much higher limits to get complete data
             let pageCount = 0
             let page = 1
             let totalPages: number | null = null
