@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ComparisonProvider } from "@/contexts/ComparisonContext";
 import { ComparisonBar } from "@/components/ComparisonBar";
+import { BottomNav } from "@/components/BottomNav";
 import Index from "./pages/Index";
 import MapPage from "./pages/MapPage";
 import StatePage from "./pages/StatePage";
@@ -46,7 +47,8 @@ const App = () => {
           {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+        <BrowserRouter>
+          <div className="pb-16 lg:pb-0"> {/* Bottom padding for mobile nav */}
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/map" element={<MapPage />} />
@@ -77,6 +79,8 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
           <ComparisonBar />
+          <BottomNav />
+          </div>
         </BrowserRouter>
       </ComparisonProvider>
     </TooltipProvider>

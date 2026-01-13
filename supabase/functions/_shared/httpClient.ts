@@ -277,7 +277,7 @@ export async function fetchJson<T>(
   return { data, metrics };
 }
 
-// Batch processing helper with rate limiting
+// Basic batch processing helper
 export async function processBatch<T, R>(
   items: T[],
   processor: (item: T) => Promise<R>,
@@ -302,5 +302,98 @@ export async function processBatch<T, R>(
     }
   }
   
+  return results;
+}
+
+// Enhanced batch processing with error recovery
+export interface BatchOptions<T, R> {
+  batchSize?: number;
+  delayBetweenBatches?: number;
+  onProgress?: (completed: number, total: number, item: T) => void;
+  onError?: (item: T, error: Error) => void;
+  continueOnError?: boolean;
+}
+
+export async function processBatchWithRecovery<T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  options: BatchOptions<T, R> = {}
+): Promise<{ results: R[]; errors: Array<{ item: T; error: Error }> }> {
+  const {
+    batchSize = 10,
+    delayBetweenBatches = 100,
+    onProgress,
+    onError,
+    continueOnError = true,
+  } = options;
+
+  const results: R[] = [];
+  const errors: Array<{ item: T; error: Error }> = [];
+
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+
+    const batchPromises = batch.map(async (item, batchIndex) => {
+      try {
+        const result = await processor(item);
+        onProgress?.(i + batchIndex + 1, items.length, item);
+        return { success: true as const, result };
+      } catch (error) {
+        const err = error as Error;
+        errors.push({ item, error: err });
+        onError?.(item, err);
+
+        if (!continueOnError) {
+          throw error;
+        }
+        return { success: false as const, result: null };
+      }
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    
+    for (const r of batchResults) {
+      if (r.success && r.result !== null) {
+        results.push(r.result);
+      }
+    }
+
+    if (i + batchSize < items.length) {
+      await sleep(delayBetweenBatches);
+    }
+  }
+
+  return { results, errors };
+}
+
+// Parallel batch processing with concurrency control
+export async function processParallelBatch<T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  options: {
+    concurrency?: number;
+    onProgress?: (completed: number, total: number) => void;
+  } = {}
+): Promise<R[]> {
+  const { concurrency = 5, onProgress } = options;
+  const results: R[] = new Array(items.length);
+  let completed = 0;
+  let currentIndex = 0;
+
+  const worker = async () => {
+    while (currentIndex < items.length) {
+      const index = currentIndex++;
+      const item = items[index];
+      results[index] = await processor(item);
+      completed++;
+      onProgress?.(completed, items.length);
+    }
+  };
+
+  const workers = Array(Math.min(concurrency, items.length))
+    .fill(null)
+    .map(() => worker());
+
+  await Promise.all(workers);
   return results;
 }
