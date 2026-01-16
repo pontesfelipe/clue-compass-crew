@@ -377,16 +377,17 @@ async function processJob(
       return await processFecFinanceJob(supabase, supabaseUrl, supabaseKey, job, lastCursor);
 
     // Cycle-specific FEC jobs (priority cycles: 2024, 2026)
+    // Note: limit controls members per run, NOT contributions - each member fetches ALL contributions
     case 'fec-finance-2026':
       return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
         cycle: 2026,
-        limit: 10,
+        limit: 50, // More members per run, each gets ALL contributions
       });
 
     case 'fec-finance-2024':
       return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
         cycle: 2024,
-        limit: 10,
+        // No limit - process as many members as time allows, each gets ALL contributions
       });
 
     // Historical cycles (lower priority, processed later)
@@ -457,12 +458,15 @@ async function processFecFinanceJob(
   const incompleteCycles = new Set((syncStates || []).map((s: any) => s.cycle));
 
   // Priority: 2024/2026 first, then historical
+  // For 2024, we want ALL contributions so don't limit members
   for (const cycle of PRIORITY_CYCLES) {
     if (incompleteCycles.has(cycle) || incompleteCycles.size === 0) {
       console.log(`[sync-worker] Processing priority cycle ${cycle}`);
+      // 2024 gets no limit - fetch ALL contributions for each member
+      // 2026 is new cycle with less data, can use smaller batches
       return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
         cycle,
-        limit: 10,
+        ...(cycle === 2024 ? {} : { limit: 50 }), // No limit for 2024
       });
     }
   }
@@ -480,7 +484,7 @@ async function processFecFinanceJob(
     console.log(`[sync-worker] Continuing priority cycle ${nextCycle}`);
     return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-fec-finance', {
       cycle: nextCycle,
-      limit: 10,
+      ...(nextCycle === 2024 ? {} : { limit: 50 }), // No limit for 2024
     });
   }
 
