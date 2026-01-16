@@ -30,6 +30,7 @@ const DEFAULT_JOBS: JobConfig[] = [
   { id: 'member-scores', provider: 'internal', job_type: 'scores', frequency_minutes: 120, priority: 50 },
   { id: 'classify-issues', provider: 'internal', job_type: 'classification', frequency_minutes: 360, priority: 40 },
   { id: 'state-scores', provider: 'internal', job_type: 'state_scores', frequency_minutes: 120, priority: 30 },
+  { id: 'data-healing-agent', provider: 'internal', job_type: 'healing', frequency_minutes: 30, priority: 45 },
 ];
 
 Deno.serve(async (req) => {
