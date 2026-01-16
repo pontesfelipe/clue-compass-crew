@@ -90,6 +90,11 @@ export function DataHealthPanel() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [showRecentRuns, setShowRecentRuns] = useState(false);
   const [showApiErrors, setShowApiErrors] = useState(false);
+  const [isHealingRunning, setIsHealingRunning] = useState(false);
+  const [healingResults, setHealingResults] = useState<{
+    summary?: { members_processed: number; issues_found: number; issues_fixed: number };
+    actions?: Array<{ member_name: string; action_type: string; status: string; error?: string }>;
+  } | null>(null);
 
   // Fetch sync health
   const { data: syncHealth, isLoading: loadingSyncHealth, refetch: refetchSyncHealth } = useQuery({
@@ -247,6 +252,51 @@ export function DataHealthPanel() {
     refetchJobRuns();
   };
 
+  const handleRunHealingAgent = async (dryRun: boolean = false) => {
+    setIsHealingRunning(true);
+    setHealingResults(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('data-healing-agent', {
+        body: {},
+        method: 'GET',
+      });
+
+      // Try with query params for dry run
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/data-healing-agent${dryRun ? '?dry_run=true' : '?max=20'}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setHealingResults(result);
+      
+      toast({
+        title: dryRun ? "Dry Run Complete" : "Healing Agent Complete",
+        description: `Processed ${result.summary?.members_processed || 0} members, fixed ${result.summary?.issues_fixed || 0} issues.`,
+      });
+
+      // Refresh data
+      handleRefresh();
+    } catch (error) {
+      console.error("Error running healing agent:", error);
+      toast({
+        title: "Error",
+        description: "Failed to run healing agent. Check console for details.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsHealingRunning(false);
+    }
+  };
+
   const handleResolveAnomaly = async (anomalyId: string) => {
     setResolvingId(anomalyId);
     try {
@@ -322,11 +372,73 @@ export function DataHealthPanel() {
           <h2 className="text-2xl font-bold">Data Health Dashboard</h2>
           <p className="text-muted-foreground">Monitor data quality, sync status, and identify gaps</p>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="default" 
+            onClick={() => handleRunHealingAgent(false)} 
+            disabled={isHealingRunning}
+          >
+            {isHealingRunning ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4 mr-2" />
+            )}
+            Run Healing Agent
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => handleRunHealingAgent(true)} 
+            disabled={isHealingRunning}
+          >
+            Dry Run
+          </Button>
+          <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Healing Agent Results */}
+      {healingResults && (
+        <Card className="border-primary/50 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Healing Agent Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center p-3 rounded-lg bg-background">
+                <div className="text-2xl font-bold">{healingResults.summary?.members_processed || 0}</div>
+                <div className="text-sm text-muted-foreground">Members Processed</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-background">
+                <div className="text-2xl font-bold text-amber-600">{healingResults.summary?.issues_found || 0}</div>
+                <div className="text-sm text-muted-foreground">Issues Found</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-background">
+                <div className="text-2xl font-bold text-green-600">{healingResults.summary?.issues_fixed || 0}</div>
+                <div className="text-sm text-muted-foreground">Issues Fixed</div>
+              </div>
+            </div>
+            {healingResults.actions && healingResults.actions.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {healingResults.actions.slice(0, 20).map((action, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded bg-background text-sm">
+                    <span>{action.member_name}</span>
+                    <span className="text-muted-foreground">{action.action_type}</span>
+                    <Badge variant={action.status === 'success' ? 'default' : action.status === 'failed' ? 'destructive' : 'secondary'}>
+                      {action.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Overall Health Score */}
       <div className="grid gap-4 md:grid-cols-4">

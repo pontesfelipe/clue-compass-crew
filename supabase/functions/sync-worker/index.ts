@@ -427,6 +427,12 @@ async function processJob(
     case 'recalculate-state-scores':
       return await callEdgeFunction(supabaseUrl, supabaseKey, 'recalculate-state-scores', {});
 
+    // Data healing agent - finds and fixes incomplete data
+    case 'data-healing-agent':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'data-healing-agent', {
+        max: 20, // Process 20 members per run
+      });
+
     default:
       console.log(`[sync-worker] Unknown job type: ${job.id}`);
       return {
