@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,35 +8,44 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { ComparisonProvider } from "@/contexts/ComparisonContext";
 import { ComparisonBar } from "@/components/ComparisonBar";
 import { BottomNav } from "@/components/BottomNav";
-import Index from "./pages/Index";
-import MapPage from "./pages/MapPage";
-import StatePage from "./pages/StatePage";
-import MembersPage from "./pages/MembersPage";
-import MemberPage from "./pages/MemberPage";
-import BillPage from "./pages/BillPage";
-import BillsPage from "./pages/BillsPage";
-import VotesPage from "./pages/VotesPage";
-import ComparePage from "./pages/ComparePage";
-import HowItWorksPage from "./pages/HowItWorksPage";
-import MethodologyPage from "./pages/MethodologyPage";
-import DataSourcesPage from "./pages/DataSourcesPage";
-import FAQPage from "./pages/FAQPage";
-import AuthPage from "./pages/AuthPage";
-import AdminPage from "./pages/AdminPage";
-import AdminDataInspectorPage from "./pages/AdminDataInspectorPage";
-import AdminFECCompletenessPage from "./pages/AdminFECCompletenessPage";
-import MyProfilePage from "./pages/MyProfilePage";
-import MyMatchesPage from "./pages/MyMatchesPage";
-import TrackedMembersPage from "./pages/TrackedMembersPage";
-import TrackedBillsPage from "./pages/TrackedBillsPage";
-import CongressNewsPage from "./pages/CongressNewsPage";
-import GovernorsPage from "./pages/GovernorsPage";
-import GovernorPage from "./pages/GovernorPage";
-import NotFound from "./pages/NotFound";
-import TermsPage from "./pages/TermsPage";
-import PrivacyPage from "./pages/PrivacyPage";
+
+// Lazy load all page components for code splitting
+const Index = lazy(() => import("./pages/Index"));
+const MapPage = lazy(() => import("./pages/MapPage"));
+const StatePage = lazy(() => import("./pages/StatePage"));
+const MembersPage = lazy(() => import("./pages/MembersPage"));
+const MemberPage = lazy(() => import("./pages/MemberPage"));
+const BillPage = lazy(() => import("./pages/BillPage"));
+const BillsPage = lazy(() => import("./pages/BillsPage"));
+const VotesPage = lazy(() => import("./pages/VotesPage"));
+const ComparePage = lazy(() => import("./pages/ComparePage"));
+const HowItWorksPage = lazy(() => import("./pages/HowItWorksPage"));
+const MethodologyPage = lazy(() => import("./pages/MethodologyPage"));
+const DataSourcesPage = lazy(() => import("./pages/DataSourcesPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
+const AuthPage = lazy(() => import("./pages/AuthPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const AdminDataInspectorPage = lazy(() => import("./pages/AdminDataInspectorPage"));
+const AdminFECCompletenessPage = lazy(() => import("./pages/AdminFECCompletenessPage"));
+const MyProfilePage = lazy(() => import("./pages/MyProfilePage"));
+const MyMatchesPage = lazy(() => import("./pages/MyMatchesPage"));
+const TrackedMembersPage = lazy(() => import("./pages/TrackedMembersPage"));
+const TrackedBillsPage = lazy(() => import("./pages/TrackedBillsPage"));
+const CongressNewsPage = lazy(() => import("./pages/CongressNewsPage"));
+const GovernorsPage = lazy(() => import("./pages/GovernorsPage"));
+const GovernorPage = lazy(() => import("./pages/GovernorPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 
 const queryClient = new QueryClient();
+
+// Minimal loading fallback that doesn't affect UX
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+);
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);
@@ -50,6 +59,7 @@ const App = () => {
           <Sonner />
         <BrowserRouter>
           <div className="pb-16 lg:pb-0"> {/* Bottom padding for mobile nav */}
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/map" element={<MapPage />} />
@@ -80,6 +90,7 @@ const App = () => {
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           <ComparisonBar />
           <BottomNav />
           </div>
