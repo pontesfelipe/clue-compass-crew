@@ -33,8 +33,7 @@ export function useMemberFinance(memberId: string) {
           .from("member_contributions")
           .select("*")
           .eq("member_id", memberId)
-          .order("amount", { ascending: false })
-          .limit(100),
+          .order("amount", { ascending: false }),
         supabase
           .from("member_lobbying")
           .select("*")
