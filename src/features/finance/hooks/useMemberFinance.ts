@@ -2,12 +2,33 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Contribution, Lobbying, Sponsor, MemberFinance, ContributionCompleteness } from "../types";
 
+export interface FundingMetrics {
+  cycle: number;
+  total_receipts: number | null;
+  pct_from_individuals: number | null;
+  pct_from_committees: number | null;
+  pct_from_small_donors: number | null;
+  pct_from_in_state: number | null;
+  pct_from_out_of_state: number | null;
+  grassroots_support_score: number | null;
+  pac_dependence_score: number | null;
+  local_money_score: number | null;
+  computed_at: string;
+  contributions_fetched: number | null;
+  contributions_total: number | null;
+}
+
+export interface MemberFinanceExtended extends MemberFinance {
+  fundingMetrics: FundingMetrics[];
+  memberState: string | null;
+}
+
 export function useMemberFinance(memberId: string) {
   return useQuery({
     queryKey: ["member-finance", memberId],
-    queryFn: async (): Promise<MemberFinance> => {
-      // Fetch all finance data in parallel - no limit to get ALL records
-      const [contributionsRes, lobbyingRes, sponsorsRes, metricsRes] = await Promise.all([
+    queryFn: async (): Promise<MemberFinanceExtended> => {
+      // Fetch all finance data in parallel
+      const [contributionsRes, lobbyingRes, sponsorsRes, metricsRes, memberRes] = await Promise.all([
         supabase
           .from("member_contributions")
           .select("*")
@@ -28,15 +49,19 @@ export function useMemberFinance(memberId: string) {
           .limit(50),
         supabase
           .from("funding_metrics")
-          .select("cycle, contributions_fetched, contributions_total")
+          .select("*")
           .eq("member_id", memberId)
           .order("cycle", { ascending: false }),
+        supabase
+          .from("members")
+          .select("state")
+          .eq("id", memberId)
+          .single(),
       ]);
 
       if (contributionsRes.error) throw contributionsRes.error;
       if (lobbyingRes.error) throw lobbyingRes.error;
       if (sponsorsRes.error) throw sponsorsRes.error;
-      // Don't throw on metrics error - it's optional data
 
       const contributions: Contribution[] = (contributionsRes.data || []).map((c) => ({
         id: c.id,
@@ -72,10 +97,27 @@ export function useMemberFinance(memberId: string) {
         cycle: s.cycle,
       }));
 
+      // Full funding metrics for analytics display
+      const fundingMetrics: FundingMetrics[] = (metricsRes.data || []).map((m: any) => ({
+        cycle: m.cycle,
+        total_receipts: m.total_receipts,
+        pct_from_individuals: m.pct_from_individuals,
+        pct_from_committees: m.pct_from_committees,
+        pct_from_small_donors: m.pct_from_small_donors,
+        pct_from_in_state: m.pct_from_in_state,
+        pct_from_out_of_state: m.pct_from_out_of_state,
+        grassroots_support_score: m.grassroots_support_score,
+        pac_dependence_score: m.pac_dependence_score,
+        local_money_score: m.local_money_score,
+        computed_at: m.computed_at,
+        contributions_fetched: m.contributions_fetched,
+        contributions_total: m.contributions_total,
+      }));
+
       // Parse contribution completeness from funding_metrics
-      const contributionCompleteness: ContributionCompleteness[] = (metricsRes.data || [])
-        .filter((m: any) => m.contributions_fetched !== null && m.contributions_fetched > 0)
-        .map((m: any) => ({
+      const contributionCompleteness: ContributionCompleteness[] = fundingMetrics
+        .filter((m) => m.contributions_fetched !== null && m.contributions_fetched > 0)
+        .map((m) => ({
           cycle: m.cycle,
           fetched: m.contributions_fetched || 0,
           total: m.contributions_total,
@@ -85,7 +127,7 @@ export function useMemberFinance(memberId: string) {
       const totalContributions = contributions.reduce((sum, c) => sum + c.amount, 0);
       const totalLobbying = lobbying.reduce((sum, l) => sum + l.totalSpent, 0);
 
-      // Calculate top industries from contributions and lobbying
+      // Calculate top industries
       const industryAmounts = new Map<string, number>();
       contributions.forEach((c) => {
         if (c.industry) {
@@ -109,6 +151,8 @@ export function useMemberFinance(memberId: string) {
         totalLobbying,
         topIndustries,
         contributionCompleteness,
+        fundingMetrics,
+        memberState: memberRes.data?.state || null,
       };
     },
     enabled: !!memberId,
