@@ -113,7 +113,12 @@ export function MemberFinanceSection({ memberId }: MemberFinanceSectionProps) {
 
       {hasData ? (
         <>
-          <FinanceOverview finance={filteredFinance} />
+          <FinanceOverview 
+            finance={filteredFinance} 
+            fundingMetrics={finance.fundingMetrics}
+            memberState={finance.memberState}
+            selectedCycle={effectiveYear !== "all" ? parseInt(effectiveYear) : null}
+          />
 
           <Tabs defaultValue="trends" className="mt-6">
             <TabsList className="grid w-full grid-cols-4">
