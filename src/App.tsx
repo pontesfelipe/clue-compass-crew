@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ComparisonProvider } from "@/contexts/ComparisonContext";
 import { ComparisonBar } from "@/components/ComparisonBar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { BottomNav } from "@/components/BottomNav";
 
 // Lazy load all page components for code splitting
@@ -59,6 +60,7 @@ const App = () => {
           <Sonner />
         <BrowserRouter>
           <div className="pb-16 lg:pb-0"> {/* Bottom padding for mobile nav */}
+          <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -91,6 +93,7 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          </ErrorBoundary>
           <ComparisonBar />
           <BottomNav />
           </div>
