@@ -13,19 +13,19 @@ export function useMemberFinance(memberId: string) {
           .select("*")
           .eq("member_id", memberId)
           .order("amount", { ascending: false })
-          .limit(10000),
+          .limit(100),
         supabase
           .from("member_lobbying")
           .select("*")
           .eq("member_id", memberId)
           .order("total_spent", { ascending: false })
-          .limit(10000),
+          .limit(50),
         supabase
           .from("member_sponsors")
           .select("*")
           .eq("member_id", memberId)
           .order("total_support", { ascending: false })
-          .limit(10000),
+          .limit(50),
         supabase
           .from("funding_metrics")
           .select("cycle, contributions_fetched, contributions_total")

@@ -60,13 +60,14 @@ export function SyncStatus() {
   });
 
   const { data: dataStatus } = useQuery({
-    queryKey: ["data-status"],
+    queryKey: ["data-freshness"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("data-status");
       if (error) throw error;
       return data as DataStatus;
     },
     refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   if (isLoading) {

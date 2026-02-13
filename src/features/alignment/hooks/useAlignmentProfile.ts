@@ -214,10 +214,12 @@ export function useDeleteProfile() {
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
       
-      // Delete in order due to constraints
+      // Delete alignment first (depends on answers/priorities), then delete answers & priorities in parallel
       await supabase.from("user_politician_alignment").delete().eq("user_id", user.id);
-      await supabase.from("user_answers").delete().eq("user_id", user.id);
-      await supabase.from("user_issue_priorities").delete().eq("user_id", user.id);
+      await Promise.all([
+        supabase.from("user_answers").delete().eq("user_id", user.id),
+        supabase.from("user_issue_priorities").delete().eq("user_id", user.id),
+      ]);
       
       // Reset profile fields
       const { error } = await supabase
