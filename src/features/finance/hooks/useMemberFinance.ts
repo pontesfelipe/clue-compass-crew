@@ -80,6 +80,8 @@ export function useMemberFinance(memberId: string) {
 
       if (lobbyingRes.error) throw lobbyingRes.error;
       if (sponsorsRes.error) throw sponsorsRes.error;
+      if (metricsRes.error) throw metricsRes.error;
+      if (memberRes.error) throw memberRes.error;
 
       const contributions: Contribution[] = contributionsData.map((c: any) => ({
         id: c.id,
