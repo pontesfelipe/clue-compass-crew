@@ -6,12 +6,21 @@ import { Footer } from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Users, Search } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { useState, useMemo } from "react";
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [chamberFilter, setChamberFilter] = useState<string>("all");
+  const [partyFilter, setPartyFilter] = useState<string>("all");
 
   const { data: members, isLoading } = useQuery({
     queryKey: ["all-members"],
@@ -29,15 +38,18 @@ export default function MembersPage() {
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
-    if (!searchTerm) return members;
     const term = searchTerm.toLowerCase();
-    return members.filter(
-      (m) =>
+    return members.filter((m) => {
+      if (chamberFilter !== "all" && m.chamber !== chamberFilter) return false;
+      if (partyFilter !== "all" && m.party !== partyFilter) return false;
+      if (!term) return true;
+      return (
         m.full_name.toLowerCase().includes(term) ||
         m.state.toLowerCase().includes(term) ||
         m.party.toLowerCase().includes(term)
-    );
-  }, [members, searchTerm]);
+      );
+    });
+  }, [members, searchTerm, chamberFilter, partyFilter]);
 
   // Group members by first letter of last name
   const groupedMembers = useMemo(() => {
@@ -88,14 +100,37 @@ export default function MembersPage() {
               : `${members?.length || 0} current members sorted alphabetically by last name`}
           </p>
 
-          <div className="relative mb-8 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, state, or party..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:max-w-2xl">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, state, or party..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={chamberFilter} onValueChange={setChamberFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Chamber" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Chambers</SelectItem>
+                <SelectItem value="house">House</SelectItem>
+                <SelectItem value="senate">Senate</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={partyFilter} onValueChange={setPartyFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Party" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Parties</SelectItem>
+                <SelectItem value="D">Democratic</SelectItem>
+                <SelectItem value="R">Republican</SelectItem>
+                <SelectItem value="I">Independent</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {isLoading ? (

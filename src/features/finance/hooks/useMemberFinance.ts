@@ -23,17 +23,37 @@ export interface MemberFinanceExtended extends MemberFinance {
   memberState: string | null;
 }
 
+// PostgREST applies a 1000-row hard cap by default, so contributions must be
+// paginated explicitly to avoid silently truncating aggregates.
+const CONTRIBUTIONS_BATCH_SIZE = 1000;
+
+async function fetchAllContributions(memberId: string) {
+  const rows: Array<Record<string, unknown>> = [];
+  let from = 0;
+  while (true) {
+    const to = from + CONTRIBUTIONS_BATCH_SIZE - 1;
+    const { data, error } = await supabase
+      .from("member_contributions")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("amount", { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    const batch = data || [];
+    rows.push(...batch);
+    if (batch.length < CONTRIBUTIONS_BATCH_SIZE) break;
+    from += CONTRIBUTIONS_BATCH_SIZE;
+  }
+  return rows;
+}
+
 export function useMemberFinance(memberId: string) {
   return useQuery({
     queryKey: ["member-finance", memberId],
     queryFn: async (): Promise<MemberFinanceExtended> => {
       // Fetch all finance data in parallel
-      const [contributionsRes, lobbyingRes, sponsorsRes, metricsRes, memberRes] = await Promise.all([
-        supabase
-          .from("member_contributions")
-          .select("*")
-          .eq("member_id", memberId)
-          .order("amount", { ascending: false }),
+      const [contributionsData, lobbyingRes, sponsorsRes, metricsRes, memberRes] = await Promise.all([
+        fetchAllContributions(memberId),
         supabase
           .from("member_lobbying")
           .select("*")
@@ -58,11 +78,10 @@ export function useMemberFinance(memberId: string) {
           .single(),
       ]);
 
-      if (contributionsRes.error) throw contributionsRes.error;
       if (lobbyingRes.error) throw lobbyingRes.error;
       if (sponsorsRes.error) throw sponsorsRes.error;
 
-      const contributions: Contribution[] = (contributionsRes.data || []).map((c) => ({
+      const contributions: Contribution[] = contributionsData.map((c: any) => ({
         id: c.id,
         memberId: c.member_id,
         contributorName: c.contributor_name,

@@ -39,15 +39,21 @@ export default function Index() {
         
         <div className="civic-container relative py-20 lg:py-32">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            {/* Mission Statement */}
+            {/* Eyebrow + Main Headline (H1 first for SEO & a11y) */}
             <div className="space-y-6">
-              <h2 className="font-serif text-xl font-semibold text-foreground sm:text-2xl">
+              <p className="font-serif text-sm font-semibold uppercase tracking-widest text-muted-foreground">
                 CivicScore's Mission
-              </h2>
+              </p>
+              <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+                Understand politicians you are choosing
+                <span className="block mt-2">
+                  <span className="civic-gradient-text">to represent you</span>
+                </span>
+              </h1>
               <p className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-                CivicScore's mission is to deliver public voting and campaign finance information 
-                of current politicians in your State to help you form an opinion on whether they 
-                are serving and protecting your interests.
+                CivicScore delivers public voting and campaign finance information
+                of current politicians in your State to help you form an opinion on
+                whether they are serving and protecting your interests.
               </p>
             </div>
 
@@ -60,14 +66,6 @@ export default function Index() {
                 </span>
               </div>
             </div>
-
-            {/* Main Headline */}
-            <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl pt-4">
-              Understand politicians you are choosing
-              <span className="block mt-2">
-                <span className="civic-gradient-text">to represent you</span>
-              </span>
-            </h1>
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">

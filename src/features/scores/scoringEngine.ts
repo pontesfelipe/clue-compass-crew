@@ -20,6 +20,13 @@ export interface VoteForScoring {
   issueArea?: string | null;
 }
 
+export interface VoteScoreComponents {
+  /** Precomputed productivity score (0-100). Required for a full score. */
+  productivityScore?: number;
+  /** Precomputed bipartisanship score (0-100). Required for a full score. */
+  bipartisanshipScore?: number;
+}
+
 /**
  * Compute recency weight using exponential decay
  * More recent votes have higher weight
@@ -37,18 +44,19 @@ function computeRecencyWeight(voteDate: string, halfLifeDays: number = 180): num
  */
 export function computeScoreFromVotes(
   votes: VoteForScoring[],
-  config: Partial<ScoringConfig> = {}
+  config: Partial<ScoringConfig> = {},
+  components: VoteScoreComponents = {}
 ): Score {
   const fullConfig = { ...DEFAULT_SCORING_CONFIG, ...config };
-  
+
   if (!votes.length) {
     return {
       memberId: "",
       score: 0,
       breakdown: {
-        productivity: 0,
+        productivity: components.productivityScore ?? 0,
         attendance: 0,
-        bipartisanship: 0,
+        bipartisanship: components.bipartisanshipScore ?? 0,
         issueAlignment: 0,
       },
     };
@@ -94,20 +102,38 @@ export function computeScoreFromVotes(
     ? Math.round((priorityIssueYea / priorityIssueVotes) * 100)
     : 50; // Default to neutral if no priority issue votes
 
+  // Productivity and bipartisanship cannot be derived from votes alone. Accept
+  // them as inputs when callers have the sponsorship data; otherwise omit them
+  // from the weighted total rather than falling back to a fabricated 50.
+  const hasProductivity = typeof components.productivityScore === "number";
+  const hasBipartisanship = typeof components.bipartisanshipScore === "number";
+
   const breakdown: ScoreBreakdown = {
-    productivity: 50, // Placeholder: requires bill sponsorship data
+    productivity: hasProductivity ? components.productivityScore! : 0,
     attendance: attendanceScore,
-    bipartisanship: 50, // Placeholder: requires cross-party voting analysis
+    bipartisanship: hasBipartisanship ? components.bipartisanshipScore! : 0,
     issueAlignment: issueAlignmentScore,
   };
 
-  // Compute weighted overall score
-  const overallScore = Math.round(
-    breakdown.productivity * fullConfig.productivityWeight +
-    breakdown.attendance * fullConfig.attendanceWeight +
-    breakdown.bipartisanship * fullConfig.bipartisanshipWeight +
-    breakdown.issueAlignment * fullConfig.issueAlignmentWeight
-  );
+  // Compute weighted overall score, renormalizing weights across only the
+  // components we actually have, so missing productivity/bipartisanship don't
+  // silently drag the total toward zero.
+  const contributors: Array<{ value: number; weight: number }> = [
+    { value: breakdown.attendance, weight: fullConfig.attendanceWeight },
+    { value: breakdown.issueAlignment, weight: fullConfig.issueAlignmentWeight },
+  ];
+  if (hasProductivity) {
+    contributors.push({ value: breakdown.productivity, weight: fullConfig.productivityWeight });
+  }
+  if (hasBipartisanship) {
+    contributors.push({ value: breakdown.bipartisanship, weight: fullConfig.bipartisanshipWeight });
+  }
+  const totalWeight = contributors.reduce((s, c) => s + c.weight, 0);
+  const overallScore = totalWeight > 0
+    ? Math.round(
+        contributors.reduce((s, c) => s + c.value * c.weight, 0) / totalWeight
+      )
+    : 0;
 
   return {
     memberId: "",

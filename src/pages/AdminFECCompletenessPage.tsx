@@ -32,11 +32,13 @@ export default function AdminFECCompletenessPage() {
   const { data: completeness, isLoading, refetch } = useQuery({
     queryKey: ['fec-completeness'],
     queryFn: async () => {
+      // Paginate: Congress has ~540 members and PostgREST defaults to a 1000-row
+      // cap; an explicit range keeps us in control if the view ever grows.
       const { data, error } = await supabase
         .from('fec_sync_completeness')
         .select('*')
         .order('completeness_percent', { ascending: true })
-        .limit(100);
+        .range(0, 999);
 
       if (error) throw error;
       return data as MemberCompleteness[];

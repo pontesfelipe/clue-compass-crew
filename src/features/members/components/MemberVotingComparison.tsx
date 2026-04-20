@@ -15,12 +15,14 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
   const { data, isLoading } = useQuery({
     queryKey: ["voting-comparison", memberId],
     queryFn: async () => {
-      // Get this member's votes - sample 100 most recent for performance
+      // Get this member's votes - sample 100 most recent for performance.
+      // Order by the referenced vote_date so sampling reflects legislative
+      // recency rather than DB insertion order.
       const { data: memberVotes, error: memberError, count: totalVoteCount } = await supabase
         .from("member_votes")
-        .select("vote_id, position", { count: "exact" })
+        .select("vote_id, position, votes!inner(vote_date)", { count: "exact" })
         .eq("member_id", memberId)
-        .order("created_at", { ascending: false })
+        .order("vote_date", { referencedTable: "votes", ascending: false })
         .limit(100);
 
       if (memberError) throw memberError;

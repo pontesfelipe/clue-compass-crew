@@ -249,6 +249,10 @@ export function ContributorsList({ contributions, completeness = [] }: Contribut
 
   return (
     <div className="space-y-4">
+      {/* Persistent FEC disclaimer — the >$200 itemization rule and source-data
+          caveats apply to every aggregate shown below, not just to revealed names. */}
+      <DonorDisclaimer variant="inline" />
+
       {/* Data Completeness Indicator */}
       {completenessStats && (
         <TooltipProvider>
