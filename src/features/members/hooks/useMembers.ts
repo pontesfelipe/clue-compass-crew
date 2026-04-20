@@ -98,7 +98,7 @@ export function useMember(memberId: string) {
           bill_sponsorships (
             is_sponsor,
             cosponsored_date,
-            bills (
+            bills!inner (
               id,
               title,
               short_title,
@@ -115,7 +115,7 @@ export function useMember(memberId: string) {
           ),
           member_votes (
             position,
-            votes (
+            votes!inner (
               id,
               congress,
               chamber,
@@ -132,6 +132,12 @@ export function useMember(memberId: string) {
         `)
         .eq("id", memberId)
         .is("member_scores.user_id", null)
+        // Bound nested collections at the DB so we don't ship an entire career
+        // of votes/sponsorships to the client only to slice to 5/10 below.
+        .order("latest_action_date", { referencedTable: "bill_sponsorships.bills", ascending: false, nullsFirst: false })
+        .order("vote_date", { referencedTable: "member_votes.votes", ascending: false, nullsFirst: false })
+        .limit(30, { referencedTable: "bill_sponsorships" })
+        .limit(30, { referencedTable: "member_votes" })
         .maybeSingle();
 
       if (error) throw error;

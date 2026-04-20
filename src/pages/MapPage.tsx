@@ -17,12 +17,14 @@ function useNationalStats() {
   return useQuery({
     queryKey: ["national-stats"],
     queryFn: async () => {
+      // Member-level aggregates: attendance average + member count.
+      // NOTE: bills_sponsored is summed across members to give a "Total
+      // Sponsorships" figure, not a count of distinct bills.
       const { data, error } = await supabase
         .from("members")
         .select(`
           id,
           member_scores!inner (
-            overall_score,
             attendance_score,
             bills_sponsored
           )
@@ -36,26 +38,27 @@ function useNationalStats() {
       const memberCount = members.length;
 
       if (memberCount === 0) {
-        return { memberCount: 0, avgAttendance: 0, totalBillsSponsored: 0 };
+        return { memberCount: 0, avgAttendance: 0, totalSponsorships: 0 };
       }
 
       let totalAttendance = 0;
-      let totalBillsSponsored = 0;
+      let totalSponsorships = 0;
 
       members.forEach((m: any) => {
         const scores = m.member_scores?.[0];
         if (scores) {
           totalAttendance += Number(scores.attendance_score) || 0;
-          totalBillsSponsored += Number(scores.bills_sponsored) || 0;
+          totalSponsorships += Number(scores.bills_sponsored) || 0;
         }
       });
 
       return {
         memberCount,
-        avgAttendance: Math.round(totalAttendance / memberCount * 10) / 10,
-        totalBillsSponsored,
+        avgAttendance: Math.round((totalAttendance / memberCount) * 10) / 10,
+        totalSponsorships,
       };
     },
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -102,8 +105,8 @@ export default function MapPage() {
               />
               <StatsCard
                 icon={FileText}
-                value={nationalStats?.totalBillsSponsored ?? 0}
-                label="Bills Sponsored"
+                value={nationalStats?.totalSponsorships ?? 0}
+                label="Total Sponsorships"
               />
               <StatsCard
                 icon={Vote}

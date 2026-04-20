@@ -26,14 +26,17 @@ import {
 } from "lucide-react";
 import { useStateMembers, useStateStats, stateNames } from "@/hooks/useStateData";
 
-type ScoreFilter = "all" | "top" | "good" | "average" | "below";
+type ScoreFilter = "all" | "excellent" | "good" | "average" | "poor" | "bad";
 
+// Thresholds mirror getScoreLevel() in scoringEngine.ts so the filter labels
+// and the score-badge colors stay consistent across the app.
 const scoreFilters: { value: ScoreFilter; label: string; min: number; max: number }[] = [
   { value: "all", label: "All Scores", min: 0, max: 100 },
-  { value: "top", label: "Top Performers (80+)", min: 80, max: 100 },
-  { value: "good", label: "Good (60-79)", min: 60, max: 79 },
-  { value: "average", label: "Average (40-59)", min: 40, max: 59 },
-  { value: "below", label: "Below Average (<40)", min: 0, max: 39 },
+  { value: "excellent", label: "Excellent (80+)", min: 80, max: 100 },
+  { value: "good", label: "Good (70-79)", min: 70, max: 79 },
+  { value: "average", label: "Average (60-69)", min: 60, max: 69 },
+  { value: "poor", label: "Poor (50-59)", min: 50, max: 59 },
+  { value: "bad", label: "Bad (<50)", min: 0, max: 49 },
 ];
 
 export default function StatePage() {
@@ -53,10 +56,12 @@ export default function StatePage() {
     return memberList.filter(m => (m.score ?? 0) >= filter.min && (m.score ?? 0) <= filter.max);
   };
 
-  const senators = filterByScore(members?.filter(m => m.chamber === "senate"))
-    ?.sort((a, b) => a.fullName.split(" ").pop()!.localeCompare(b.fullName.split(" ").pop()!));
-  const representatives = filterByScore(members?.filter(m => m.chamber === "house"))
-    ?.sort((a, b) => a.fullName.split(" ").pop()!.localeCompare(b.fullName.split(" ").pop()!));
+  // Sort on the structured last_name field so suffixes like "Jr." / "III"
+  // don't bubble to the front of the list.
+  const byLastName = (a: { lastName: string }, b: { lastName: string }) =>
+    a.lastName.localeCompare(b.lastName);
+  const senators = filterByScore(members?.filter(m => m.chamber === "senate"))?.sort(byLastName);
+  const representatives = filterByScore(members?.filter(m => m.chamber === "house"))?.sort(byLastName);
 
   const isLoading = membersLoading || statsLoading;
 
