@@ -15,19 +15,25 @@ export function MemberVotingComparison({ memberId, party, state }: MemberVotingC
   const { data, isLoading } = useQuery({
     queryKey: ["voting-comparison", memberId],
     queryFn: async () => {
-      // Get this member's votes - sample 100 most recent for performance.
-      // Order by the referenced vote_date so sampling reflects legislative
-      // recency rather than DB insertion order.
-      const { data: memberVotes, error: memberError, count: totalVoteCount } = await supabase
-        .from("member_votes")
-        .select("vote_id, position, votes!inner(vote_date)", { count: "exact" })
-        .eq("member_id", memberId)
-        .order("vote_date", { referencedTable: "votes", ascending: false })
+      // Get this member's 100 most recent votes by querying votes directly and
+      // joining member_votes. Ordering on votes.vote_date here controls the
+      // top-level result order (unlike .order() on a referenced table, which
+      // only sorts nested arrays).
+      const { data: votesWithMember, error: memberError, count: totalVoteCount } = await supabase
+        .from("votes")
+        .select("id, vote_date, member_votes!inner(position)", { count: "exact" })
+        .eq("member_votes.member_id", memberId)
+        .order("vote_date", { ascending: false })
         .limit(100);
 
       if (memberError) throw memberError;
 
-      if (!memberVotes || memberVotes.length === 0) {
+      const memberVotes = (votesWithMember || []).map((v: any) => ({
+        vote_id: v.id as string,
+        position: (Array.isArray(v.member_votes) ? v.member_votes[0]?.position : v.member_votes?.position) as string,
+      })).filter(v => v.position);
+
+      if (memberVotes.length === 0) {
         return {
           partyAlignment: null,
           stateAlignment: null,
