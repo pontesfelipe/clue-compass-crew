@@ -56,9 +56,9 @@ const DEFAULT_CONFIG: Required<HttpClientConfig> = {
   baseDelayMs: 2000,
   maxDelayMs: 120000, // 2 minutes
   jitterPercent: 0.3,
-  timeoutMs: 30000,
-  maxConcurrency: 2,
-  minDelayBetweenRequestsMs: 300, // Default 300ms between requests
+  timeoutMs: 45000, // Increased from 30s to 45s to reduce false timeouts
+  maxConcurrency: 3, // Increased from 2 to 3 for better throughput
+  minDelayBetweenRequestsMs: 250, // Reduced from 300ms to 250ms for faster processing
 };
 
 // Simple in-memory concurrency limiter per provider
@@ -83,10 +83,10 @@ function decrementActive(provider: string): void {
   }
 }
 
-function recordRateLimitHit(provider: string): void {
+function recordRateLimitHit(provider: string, endpoint?: string, retryAfter?: number | null): void {
   const existing = rateLimitHits.get(provider) || { count: 0, lastHit: 0 };
   rateLimitHits.set(provider, { count: existing.count + 1, lastHit: Date.now() });
-  console.log(`[httpClient] 429 rate limit hit for ${provider}, total hits: ${existing.count + 1}`);
+  console.log(`[httpClient] 429 rate limit hit for ${provider} ${endpoint || ''}, total hits: ${existing.count + 1}, retry after: ${retryAfter || 'unknown'}s`);
 }
 
 export function getRateLimitStats(): Record<string, { count: number; lastHit: number }> {
@@ -200,7 +200,8 @@ export async function fetchWithRetry(
         
         // Track 429s for observability
         if (response.status === 429) {
-          recordRateLimitHit(provider);
+          const retryAfter = parseRetryAfter(response.headers);
+          recordRateLimitHit(provider, url, retryAfter ? retryAfter / 1000 : null);
         }
         
         // Handle retry
