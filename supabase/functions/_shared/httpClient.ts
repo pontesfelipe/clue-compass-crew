@@ -87,6 +87,39 @@ function recordRateLimitHit(provider: string, endpoint?: string, retryAfter?: nu
   const existing = rateLimitHits.get(provider) || { count: 0, lastHit: 0 };
   rateLimitHits.set(provider, { count: existing.count + 1, lastHit: Date.now() });
   console.log(`[httpClient] 429 rate limit hit for ${provider} ${endpoint || ''}, total hits: ${existing.count + 1}, retry after: ${retryAfter || 'unknown'}s`);
+
+  // Persist to api_rate_limits for observability. Fire-and-forget — never
+  // block the request path or throw on logging failure.
+  void persistRateLimitHit(provider, endpoint, retryAfter);
+}
+
+async function persistRateLimitHit(
+  provider: string,
+  endpoint?: string,
+  retryAfter?: number | null,
+): Promise<void> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !serviceKey) return;
+
+    await fetch(`${url}/rest/v1/api_rate_limits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        provider,
+        endpoint: endpoint ?? null,
+        retry_after_seconds: retryAfter ?? null,
+      }),
+    });
+  } catch (err) {
+    console.log(`[httpClient] Failed to persist rate limit hit: ${err}`);
+  }
 }
 
 export function getRateLimitStats(): Record<string, { count: number; lastHit: number }> {
