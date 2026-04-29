@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4'
 import { fetchJson, fetchWithRetry, HttpClientConfig, TimeBudget } from '../_shared/httpClient.ts'
 
 const corsHeaders = {

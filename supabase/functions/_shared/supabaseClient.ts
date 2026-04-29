@@ -1,7 +1,7 @@
 // Singleton Supabase client with connection pooling pattern
 // Reduces connection overhead for edge functions
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
 // Singleton pattern for database connections
 let supabaseClient: SupabaseClient | null = null;
