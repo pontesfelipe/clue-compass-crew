@@ -47,6 +47,30 @@ export type Database = {
         }
         Relationships: []
       }
+      api_rate_limits: {
+        Row: {
+          endpoint: string | null
+          hit_at: string
+          id: string
+          provider: string
+          retry_after_seconds: number | null
+        }
+        Insert: {
+          endpoint?: string | null
+          hit_at?: string
+          id?: string
+          provider: string
+          retry_after_seconds?: number | null
+        }
+        Update: {
+          endpoint?: string | null
+          hit_at?: string
+          id?: string
+          provider?: string
+          retry_after_seconds?: number | null
+        }
+        Relationships: []
+      }
       api_sources: {
         Row: {
           base_url: string | null

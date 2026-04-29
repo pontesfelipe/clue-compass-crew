@@ -1,12 +1,11 @@
 // Simple in-memory cache with TTL for edge functions
 // Reduces external API calls by 60-80%
-// Enhanced with LRU eviction and size limits
+// Enhanced with O(1) LRU eviction and tracked memory usage
 
 interface CacheEntry<T> {
   data: T;
   expiresAt: number;
-  lastAccessed: number;
-  size: number; // Estimated size in bytes
+  size: number; // Estimated size in bytes (cached at insert time)
 }
 
 interface CacheStats {
@@ -18,20 +17,23 @@ interface CacheStats {
 }
 
 class MemoryCache {
+  // Map preserves insertion order, so the first key is the LRU when we
+  // re-insert on access. This gives us O(1) LRU operations.
   private cache = new Map<string, CacheEntry<any>>();
-  private maxEntries: number = 1000; // Max number of entries
-  private maxMemoryMB: number = 50; // Max memory usage in MB
+  private maxEntries: number;
+  private maxMemoryBytes: number;
+  private currentMemoryBytes = 0;
   private stats: CacheStats = {
     hits: 0,
     misses: 0,
     evictions: 0,
     currentSize: 0,
-    maxSize: this.maxEntries
+    maxSize: 0,
   };
 
   constructor(maxEntries: number = 1000, maxMemoryMB: number = 50) {
     this.maxEntries = maxEntries;
-    this.maxMemoryMB = maxMemoryMB;
+    this.maxMemoryBytes = maxMemoryMB * 1024 * 1024;
     this.stats.maxSize = maxEntries;
   }
 
@@ -44,50 +46,67 @@ class MemoryCache {
 
     if (Date.now() > entry.expiresAt) {
       this.cache.delete(key);
+      this.currentMemoryBytes -= entry.size;
       this.stats.misses++;
       return null;
     }
 
-    // Update last accessed time for LRU
-    entry.lastAccessed = Date.now();
+    // O(1) LRU touch: delete + set moves the key to the end (most recent).
+    this.cache.delete(key);
+    this.cache.set(key, entry);
     this.stats.hits++;
     return entry.data;
   }
 
   set<T>(key: string, data: T, ttlSeconds: number): void {
     const estimatedSize = this.estimateSize(data);
-    
-    // Check if we need to evict entries
-    if (this.cache.size >= this.maxEntries) {
-      this.evictLRU();
+
+    // If updating an existing key, free its bytes first so we don't
+    // double-count and don't trigger an unnecessary eviction.
+    const existing = this.cache.get(key);
+    if (existing) {
+      this.cache.delete(key);
+      this.currentMemoryBytes -= existing.size;
     }
-    
-    // Check memory usage
-    const currentMemoryMB = this.getTotalMemoryMB();
-    if (currentMemoryMB + (estimatedSize / 1024 / 1024) > this.maxMemoryMB) {
-      this.evictUntilFits(estimatedSize);
+
+    // Evict by count only if we'd exceed the limit by inserting a NEW key.
+    while (this.cache.size >= this.maxEntries) {
+      if (!this.evictLRU()) break;
+    }
+
+    // Evict by memory if needed.
+    while (
+      this.currentMemoryBytes + estimatedSize > this.maxMemoryBytes &&
+      this.cache.size > 0
+    ) {
+      if (!this.evictLRU()) break;
     }
 
     this.cache.set(key, {
       data,
-      expiresAt: Date.now() + (ttlSeconds * 1000),
-      lastAccessed: Date.now(),
-      size: estimatedSize
+      expiresAt: Date.now() + ttlSeconds * 1000,
+      size: estimatedSize,
     });
+    this.currentMemoryBytes += estimatedSize;
   }
 
   delete(key: string): void {
-    this.cache.delete(key);
+    const entry = this.cache.get(key);
+    if (entry) {
+      this.cache.delete(key);
+      this.currentMemoryBytes -= entry.size;
+    }
   }
 
   clear(): void {
     this.cache.clear();
+    this.currentMemoryBytes = 0;
     this.stats = {
       hits: 0,
       misses: 0,
       evictions: 0,
       currentSize: 0,
-      maxSize: this.maxEntries
+      maxSize: this.maxEntries,
     };
   }
 
@@ -102,6 +121,7 @@ class MemoryCache {
     for (const [key, entry] of this.cache.entries()) {
       if (now > entry.expiresAt) {
         this.cache.delete(key);
+        this.currentMemoryBytes -= entry.size;
         pruned++;
       }
     }
@@ -112,7 +132,7 @@ class MemoryCache {
   getStats(): CacheStats {
     return {
       ...this.stats,
-      currentSize: this.cache.size
+      currentSize: this.cache.size,
     };
   }
 
@@ -122,50 +142,33 @@ class MemoryCache {
     return total > 0 ? (this.stats.hits / total) * 100 : 0;
   }
 
-  // Estimate size of data in bytes
+  // Estimate size of data in bytes. Uses cheap heuristics for primitives
+  // and only falls back to JSON.stringify for objects/arrays. The result
+  // is cached on the entry so this only runs once per set().
   private estimateSize(data: any): number {
+    if (data === null || data === undefined) return 8;
+    const t = typeof data;
+    if (t === "boolean") return 4;
+    if (t === "number") return 8;
+    if (t === "string") return (data as string).length * 2;
     try {
+      // Object/array: rough estimate via JSON length. Done once per set.
       const str = JSON.stringify(data);
-      return str.length * 2; // Rough estimate: 2 bytes per character
+      return str.length * 2;
     } catch {
-      return 1024; // Default 1KB if can't stringify
+      return 1024;
     }
   }
 
-  // Get total memory usage in MB
-  private getTotalMemoryMB(): number {
-    let totalBytes = 0;
-    for (const entry of this.cache.values()) {
-      totalBytes += entry.size;
-    }
-    return totalBytes / 1024 / 1024;
-  }
-
-  // Evict least recently used entry
-  private evictLRU(): void {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.lastAccessed < oldestTime) {
-        oldestTime = entry.lastAccessed;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
-      this.stats.evictions++;
-    }
-  }
-
-  // Evict entries until we have enough space
-  private evictUntilFits(requiredBytes: number): void {
-    const requiredMB = requiredBytes / 1024 / 1024;
-    
-    while (this.getTotalMemoryMB() + requiredMB > this.maxMemoryMB && this.cache.size > 0) {
-      this.evictLRU();
-    }
+  // O(1) LRU eviction: the first key in the Map is the least-recently-used.
+  private evictLRU(): boolean {
+    const oldestKey = this.cache.keys().next().value;
+    if (oldestKey === undefined) return false;
+    const entry = this.cache.get(oldestKey);
+    this.cache.delete(oldestKey);
+    if (entry) this.currentMemoryBytes -= entry.size;
+    this.stats.evictions++;
+    return true;
   }
 }
 
