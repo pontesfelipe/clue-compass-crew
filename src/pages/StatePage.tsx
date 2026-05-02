@@ -43,8 +43,9 @@ export default function StatePage() {
   const { stateAbbr } = useParams<{ stateAbbr: string }>();
   const normalizedAbbr = stateAbbr?.toUpperCase() || "";
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
-  
-  const { data: members, isLoading: membersLoading } = useStateMembers(normalizedAbbr);
+  const [levelFilter, setLevelFilter] = useState<"federal" | "state">("federal");
+
+  const { data: members, isLoading: membersLoading } = useStateMembers(normalizedAbbr, levelFilter);
   const { data: stats, isLoading: statsLoading } = useStateStats(normalizedAbbr);
 
   const stateName = stateNames[normalizedAbbr] || normalizedAbbr;
