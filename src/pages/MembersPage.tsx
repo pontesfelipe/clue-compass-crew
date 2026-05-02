@@ -21,16 +21,25 @@ export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [chamberFilter, setChamberFilter] = useState<string>("all");
   const [partyFilter, setPartyFilter] = useState<string>("all");
+  const [levelFilter, setLevelFilter] = useState<string>("federal");
 
   const { data: members, isLoading } = useQuery({
-    queryKey: ["all-members"],
+    queryKey: ["all-members", levelFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("members")
-        .select("id, full_name, first_name, last_name, party, state, chamber, district")
+        .select("id, full_name, first_name, last_name, party, state, chamber, district, level")
         .eq("in_office", true)
         .order("last_name", { ascending: true });
 
+      if (levelFilter !== "all") {
+        query = query.eq("level", levelFilter as "federal" | "state");
+      }
+
+      // State legislators can be ~7000+ rows — raise the cap above the default 1000
+      query = query.limit(10000);
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -78,10 +87,10 @@ export default function MembersPage() {
   return (
     <>
       <Helmet>
-        <title>All Members of Congress | CivicScore</title>
+        <title>All Legislators | CivicScore</title>
         <meta
           name="description"
-          content="Browse all current members of the U.S. Congress, including Senators and Representatives, sorted alphabetically."
+          content="Browse all current U.S. federal and state legislators — Senators, Representatives, and state House and Senate members."
         />
       </Helmet>
 
@@ -91,17 +100,25 @@ export default function MembersPage() {
         <main className="flex-1 civic-container py-8">
           <div className="flex items-center gap-3 mb-6">
             <Users className="h-8 w-8 text-primary" />
-            <h1 className="font-serif text-3xl font-bold">All Members of Congress</h1>
+            <h1 className="font-serif text-3xl font-bold">
+              {levelFilter === "state"
+                ? "State Legislators"
+                : levelFilter === "federal"
+                ? "Members of Congress"
+                : "All Legislators"}
+            </h1>
           </div>
 
           <p className="text-muted-foreground mb-6">
             {isLoading
               ? "Loading..."
-              : `${members?.length || 0} current members sorted alphabetically by last name`}
+              : `${members?.length || 0} current ${
+                  levelFilter === "state" ? "state legislators" : levelFilter === "federal" ? "members of Congress" : "legislators"
+                } sorted alphabetically by last name`}
           </p>
 
-          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:max-w-2xl">
-            <div className="relative flex-1">
+          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, state, or party..."
@@ -110,6 +127,16 @@ export default function MembersPage() {
                 className="pl-10"
               />
             </div>
+            <Select value={levelFilter} onValueChange={setLevelFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="federal">Federal</SelectItem>
+                <SelectItem value="state">State</SelectItem>
+                <SelectItem value="all">All Levels</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={chamberFilter} onValueChange={setChamberFilter}>
               <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Chamber" />
@@ -164,7 +191,11 @@ export default function MembersPage() {
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{member.state}</span>
                           <Badge variant="secondary">
-                            {member.chamber === "senate" ? "Senator" : `District ${member.district}`}
+                            {member.level === "state"
+                              ? `${member.chamber === "senate" ? "State Senate" : "State House"}${member.district ? ` · ${member.district}` : ""}`
+                              : member.chamber === "senate"
+                              ? "Senator"
+                              : `District ${member.district}`}
                           </Badge>
                         </div>
                       </Link>

@@ -43,8 +43,9 @@ export default function StatePage() {
   const { stateAbbr } = useParams<{ stateAbbr: string }>();
   const normalizedAbbr = stateAbbr?.toUpperCase() || "";
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
-  
-  const { data: members, isLoading: membersLoading } = useStateMembers(normalizedAbbr);
+  const [levelFilter, setLevelFilter] = useState<"federal" | "state">("federal");
+
+  const { data: members, isLoading: membersLoading } = useStateMembers(normalizedAbbr, levelFilter);
   const { data: stats, isLoading: statsLoading } = useStateStats(normalizedAbbr);
 
   const stateName = stateNames[normalizedAbbr] || normalizedAbbr;
@@ -151,30 +152,56 @@ export default function StatePage() {
         </div>
 
         {/* Score Filter */}
-        <div className="flex items-center justify-between mb-8 p-4 bg-card rounded-xl border border-border">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            <span className="text-sm font-medium">Filter by Score</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 p-4 bg-card rounded-xl border border-border">
+          <div className="inline-flex rounded-lg border border-border bg-background p-1">
+            <button
+              type="button"
+              onClick={() => setLevelFilter("federal")}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                levelFilter === "federal"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Federal
+            </button>
+            <button
+              type="button"
+              onClick={() => setLevelFilter("state")}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                levelFilter === "state"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              State Legislature
+            </button>
           </div>
-          <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as ScoreFilter)}>
-            <SelectTrigger className="w-[200px] bg-background">
-              <SelectValue placeholder="Select score range" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border z-50">
-              {scoreFilters.map((filter) => (
-                <SelectItem key={filter.value} value={filter.value}>
-                  {filter.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              <span className="text-sm font-medium">Filter by Score</span>
+            </div>
+            <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as ScoreFilter)}>
+              <SelectTrigger className="w-[200px] bg-background">
+                <SelectValue placeholder="Select score range" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border z-50">
+                {scoreFilters.map((filter) => (
+                  <SelectItem key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Senators Section */}
         <section className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl font-bold text-foreground">
-              Senators
+              {levelFilter === "state" ? "State Senate" : "Senators"}
             </h2>
             <Badge variant="secondary">{senators.length} members</Badge>
           </div>
@@ -216,7 +243,7 @@ export default function StatePage() {
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl font-bold text-foreground">
-              Representatives
+              {levelFilter === "state" ? "State House" : "Representatives"}
             </h2>
             <Badge variant="secondary">{representatives.length} members</Badge>
           </div>

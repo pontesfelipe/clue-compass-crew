@@ -2216,15 +2216,17 @@ export type Database = {
         Row: {
           bill_id: string | null
           chamber: Database["public"]["Enums"]["chamber_type"]
-          congress: number
+          congress: number | null
           created_at: string | null
           description: string | null
           id: string
+          level: Database["public"]["Enums"]["gov_level"]
+          openstates_vote_id: string | null
           question: string | null
           raw: Json | null
           result: string | null
-          roll_number: number
-          session: number
+          roll_number: number | null
+          session: number | null
           total_nay: number | null
           total_not_voting: number | null
           total_present: number | null
@@ -2234,15 +2236,17 @@ export type Database = {
         Insert: {
           bill_id?: string | null
           chamber: Database["public"]["Enums"]["chamber_type"]
-          congress: number
+          congress?: number | null
           created_at?: string | null
           description?: string | null
           id?: string
+          level?: Database["public"]["Enums"]["gov_level"]
+          openstates_vote_id?: string | null
           question?: string | null
           raw?: Json | null
           result?: string | null
-          roll_number: number
-          session: number
+          roll_number?: number | null
+          session?: number | null
           total_nay?: number | null
           total_not_voting?: number | null
           total_present?: number | null
@@ -2252,15 +2256,17 @@ export type Database = {
         Update: {
           bill_id?: string | null
           chamber?: Database["public"]["Enums"]["chamber_type"]
-          congress?: number
+          congress?: number | null
           created_at?: string | null
           description?: string | null
           id?: string
+          level?: Database["public"]["Enums"]["gov_level"]
+          openstates_vote_id?: string | null
           question?: string | null
           raw?: Json | null
           result?: string | null
-          roll_number?: number
-          session?: number
+          roll_number?: number | null
+          session?: number | null
           total_nay?: number | null
           total_not_voting?: number | null
           total_present?: number | null
