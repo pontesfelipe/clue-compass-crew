@@ -229,13 +229,16 @@ export function useStateFundingScores() {
 /**
  * Fetch members for a specific state
  */
-export function useStateMembers(stateAbbr: string) {
+export function useStateMembers(stateAbbr: string, level: "federal" | "state" = "federal") {
   const stateName = getStateName(stateAbbr);
-  
+
   return useQuery({
-    queryKey: ["state-members", stateAbbr],
+    queryKey: ["state-members", stateAbbr, level],
     queryFn: async (): Promise<MemberWithScore[]> => {
-      const { data, error } = await supabase
+      // Federal members are stored with the full state name; state legislators with the abbreviation.
+      const stateValue = level === "state" ? stateAbbr.toUpperCase() : stateName;
+
+      let query = supabase
         .from("members")
         .select(`
           *,
@@ -253,14 +256,22 @@ export function useStateMembers(stateAbbr: string) {
             bipartisan_bills
           )
         `)
-        .eq("state", stateName)
+        .eq("state", stateValue)
+        .eq("level", level)
         .eq("in_office", true)
         .is("member_scores.user_id", null)
         .order("overall_score", { referencedTable: "member_scores", ascending: false });
 
+      if (level === "state") {
+        // State legislatures are large — raise the cap above the default 1000
+        query = query.limit(5000);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
 
-      return (data || []).map((member) => 
+      return (data || []).map((member) =>
         mapApiMemberWithScores(member as Record<string, unknown>)
       );
     },
