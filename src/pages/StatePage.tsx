@@ -201,7 +201,7 @@ export default function StatePage() {
         <section className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl font-bold text-foreground">
-              Senators
+              {levelFilter === "state" ? "State Senate" : "Senators"}
             </h2>
             <Badge variant="secondary">{senators.length} members</Badge>
           </div>
@@ -243,7 +243,7 @@ export default function StatePage() {
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl font-bold text-foreground">
-              Representatives
+              {levelFilter === "state" ? "State House" : "Representatives"}
             </h2>
             <Badge variant="secondary">{representatives.length} members</Badge>
           </div>
