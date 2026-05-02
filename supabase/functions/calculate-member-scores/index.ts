@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     // Get all current members
     const { data: members, error: membersError } = await supabase
       .from('members')
-      .select('id, bioguide_id, party, chamber, full_name')
+      .select('id, bioguide_id, party, chamber, full_name, level')
       .eq('in_office', true)
     
     if (membersError) throw membersError
