@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS members_openstates_id_unique ON public.members (openstates_id) WHERE openstates_id IS NOT NULL;
