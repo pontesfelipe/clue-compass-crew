@@ -21,16 +21,25 @@ export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [chamberFilter, setChamberFilter] = useState<string>("all");
   const [partyFilter, setPartyFilter] = useState<string>("all");
+  const [levelFilter, setLevelFilter] = useState<string>("federal");
 
   const { data: members, isLoading } = useQuery({
-    queryKey: ["all-members"],
+    queryKey: ["all-members", levelFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("members")
-        .select("id, full_name, first_name, last_name, party, state, chamber, district")
+        .select("id, full_name, first_name, last_name, party, state, chamber, district, level")
         .eq("in_office", true)
         .order("last_name", { ascending: true });
 
+      if (levelFilter !== "all") {
+        query = query.eq("level", levelFilter as "federal" | "state");
+      }
+
+      // State legislators can be ~7000+ rows — raise the cap above the default 1000
+      query = query.limit(10000);
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
