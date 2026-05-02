@@ -228,7 +228,7 @@ export type Database = {
           bill_impact: string | null
           bill_number: number
           bill_type: Database["public"]["Enums"]["bill_type"]
-          congress: number
+          congress: number | null
           created_at: string | null
           enacted: boolean | null
           enacted_date: string | null
@@ -237,9 +237,13 @@ export type Database = {
           introduced_date: string | null
           latest_action_date: string | null
           latest_action_text: string | null
+          level: Database["public"]["Enums"]["gov_level"]
+          openstates_id: string | null
           policy_area: string | null
           raw: Json | null
+          session: string | null
           short_title: string | null
+          state: string | null
           subjects: string[] | null
           summary: string | null
           title: string
@@ -250,7 +254,7 @@ export type Database = {
           bill_impact?: string | null
           bill_number: number
           bill_type: Database["public"]["Enums"]["bill_type"]
-          congress: number
+          congress?: number | null
           created_at?: string | null
           enacted?: boolean | null
           enacted_date?: string | null
@@ -259,9 +263,13 @@ export type Database = {
           introduced_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
+          level?: Database["public"]["Enums"]["gov_level"]
+          openstates_id?: string | null
           policy_area?: string | null
           raw?: Json | null
+          session?: string | null
           short_title?: string | null
+          state?: string | null
           subjects?: string[] | null
           summary?: string | null
           title: string
@@ -272,7 +280,7 @@ export type Database = {
           bill_impact?: string | null
           bill_number?: number
           bill_type?: Database["public"]["Enums"]["bill_type"]
-          congress?: number
+          congress?: number | null
           created_at?: string | null
           enacted?: boolean | null
           enacted_date?: string | null
@@ -281,9 +289,13 @@ export type Database = {
           introduced_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
+          level?: Database["public"]["Enums"]["gov_level"]
+          openstates_id?: string | null
           policy_area?: string | null
           raw?: Json | null
+          session?: string | null
           short_title?: string | null
+          state?: string | null
           subjects?: string[] | null
           summary?: string | null
           title?: string
@@ -1337,7 +1349,7 @@ export type Database = {
       }
       members: {
         Row: {
-          bioguide_id: string
+          bioguide_id: string | null
           chamber: Database["public"]["Enums"]["chamber_type"]
           created_at: string | null
           district: string | null
@@ -1351,20 +1363,23 @@ export type Database = {
           image_url: string | null
           in_office: boolean | null
           last_name: string
+          level: Database["public"]["Enums"]["gov_level"]
           office_address: string | null
           office_city: string | null
           office_state: string | null
           office_zip: string | null
+          openstates_id: string | null
           party: Database["public"]["Enums"]["party_type"]
           phone: string | null
           start_date: string | null
           state: string
+          state_district_chamber: string | null
           twitter_handle: string | null
           updated_at: string | null
           website_url: string | null
         }
         Insert: {
-          bioguide_id: string
+          bioguide_id?: string | null
           chamber: Database["public"]["Enums"]["chamber_type"]
           created_at?: string | null
           district?: string | null
@@ -1378,20 +1393,23 @@ export type Database = {
           image_url?: string | null
           in_office?: boolean | null
           last_name: string
+          level?: Database["public"]["Enums"]["gov_level"]
           office_address?: string | null
           office_city?: string | null
           office_state?: string | null
           office_zip?: string | null
+          openstates_id?: string | null
           party: Database["public"]["Enums"]["party_type"]
           phone?: string | null
           start_date?: string | null
           state: string
+          state_district_chamber?: string | null
           twitter_handle?: string | null
           updated_at?: string | null
           website_url?: string | null
         }
         Update: {
-          bioguide_id?: string
+          bioguide_id?: string | null
           chamber?: Database["public"]["Enums"]["chamber_type"]
           created_at?: string | null
           district?: string | null
@@ -1405,14 +1423,17 @@ export type Database = {
           image_url?: string | null
           in_office?: boolean | null
           last_name?: string
+          level?: Database["public"]["Enums"]["gov_level"]
           office_address?: string | null
           office_city?: string | null
           office_state?: string | null
           office_zip?: string | null
+          openstates_id?: string | null
           party?: Database["public"]["Enums"]["party_type"]
           phone?: string | null
           start_date?: string | null
           state?: string
+          state_district_chamber?: string | null
           twitter_handle?: string | null
           updated_at?: string | null
           website_url?: string | null
@@ -2338,6 +2359,7 @@ export type Database = {
         | "hres"
         | "sres"
       chamber_type: "house" | "senate"
+      gov_level: "federal" | "state"
       party_type: "D" | "R" | "I" | "L"
       vote_position: "yea" | "nay" | "present" | "not_voting"
     }
@@ -2480,6 +2502,7 @@ export const Constants = {
         "sres",
       ],
       chamber_type: ["house", "senate"],
+      gov_level: ["federal", "state"],
       party_type: ["D", "R", "I", "L"],
       vote_position: ["yea", "nay", "present", "not_voting"],
     },
