@@ -198,20 +198,14 @@ Deno.serve(async (req) => {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`State ${state.abbr} failed:`, msg);
-        await supabase.from("sync_progress").upsert(
-          {
-            id: SYNC_ID,
-            status: "failed",
-            cursor_json: { stateIndex, page },
-            error_message: msg,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" },
-        );
-        return new Response(
-          JSON.stringify({ success: false, error: msg, statesProcessed, totalUpserted }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        statesProcessed.push(`${state.abbr}(ERR)`);
+        // On rate limit / budget, stop and resume at this same state next call
+        if (msg.includes("429") || msg.toLowerCase().includes("budget")) {
+          break;
+        }
+        // Other errors: skip the state and advance
+        stateIndex++;
+        page = 1;
       }
     }
 
