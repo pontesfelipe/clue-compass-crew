@@ -191,7 +191,11 @@ export default function MembersPage() {
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{member.state}</span>
                           <Badge variant="secondary">
-                            {member.chamber === "senate" ? "Senator" : `District ${member.district}`}
+                            {member.level === "state"
+                              ? `${member.chamber === "senate" ? "State Senate" : "State House"}${member.district ? ` · ${member.district}` : ""}`
+                              : member.chamber === "senate"
+                              ? "Senator"
+                              : `District ${member.district}`}
                           </Badge>
                         </div>
                       </Link>
