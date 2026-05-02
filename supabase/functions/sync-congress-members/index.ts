@@ -259,7 +259,15 @@ Deno.serve(async (req) => {
       
       const state = latestTerm?.stateName || member.state || latestTerm?.stateCode || ''
       const memberDetails = memberDetailsMap.get(member.bioguideId)
-      
+
+      // Determine if member is currently in office based on latest term's endYear.
+      // Congress.gov includes `currentMember=true` filter, but a term with an endYear
+      // in the past means the member has left (resigned, term ended, replaced, etc.).
+      const currentYear = new Date().getFullYear()
+      const termEndYear = latestTerm?.endYear ?? null
+      const isInOffice = termEndYear === null || termEndYear === undefined || termEndYear > currentYear
+      const endDate = termEndYear && termEndYear <= currentYear ? `${termEndYear}-01-03` : null
+
       return {
         bioguide_id: member.bioguideId,
         first_name: firstName,
@@ -276,8 +284,9 @@ Deno.serve(async (req) => {
         office_city: memberDetails?.officeCity || null,
         office_state: memberDetails?.officeState || null,
         office_zip: memberDetails?.officeZip || null,
-        in_office: true,
+        in_office: isInOffice,
         start_date: latestTerm?.startYear ? `${latestTerm.startYear}-01-03` : null,
+        end_date: endDate,
         updated_at: new Date().toISOString(),
       }
     })
