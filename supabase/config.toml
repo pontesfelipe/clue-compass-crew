@@ -90,3 +90,12 @@ verify_jwt = false
 
 [functions.sync-governors]
 verify_jwt = false
+
+[functions.sync-state-legislators]
+verify_jwt = false
+
+[functions.sync-state-bills]
+verify_jwt = false
+
+[functions.sync-state-votes]
+verify_jwt = false
