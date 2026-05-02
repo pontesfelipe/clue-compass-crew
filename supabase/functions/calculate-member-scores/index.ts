@@ -150,6 +150,56 @@ Deno.serve(async (req) => {
           votesCast = voteStats.yea + voteStats.nay + voteStats.present
           votesMissed = voteStats.notVoting
         }
+
+        // STATE LEGISLATORS: simpler scoring path — no Congress.gov, no FEC.
+        // Use member_votes for attendance; productivity/bipartisanship are baseline
+        // until we capture state bill sponsorships in a follow-up sync.
+        if (member.level === 'state') {
+          const totalVotes = votesCast + votesMissed
+          const attendanceScore = totalVotes > 0
+            ? Math.round((votesCast / totalVotes) * 100)
+            : 50 // baseline when we don't yet have vote data for this member
+
+          const productivityScore = 50 // baseline — no sponsorship data yet
+          const bipartisanshipScore = 50 // baseline
+          const issueAlignmentScore = 50 // baseline
+
+          const overallScore = Math.round(
+            (attendanceScore * 0.4) +
+            (productivityScore * 0.2) +
+            (bipartisanshipScore * 0.2) +
+            (issueAlignmentScore * 0.2)
+          )
+
+          const { error: stateUpsertErr } = await supabase
+            .from('member_scores')
+            .upsert({
+              member_id: member.id,
+              user_id: null,
+              overall_score: overallScore,
+              productivity_score: productivityScore,
+              attendance_score: attendanceScore,
+              bipartisanship_score: bipartisanshipScore,
+              issue_alignment_score: issueAlignmentScore,
+              votes_cast: votesCast,
+              votes_missed: votesMissed,
+              bills_sponsored: 0,
+              bills_cosponsored: 0,
+              bills_enacted: 0,
+              bipartisan_bills: 0,
+              is_provisional: true,
+              provisional_reason: 'State legislator — productivity & alignment scoring pending sponsorship sync',
+              calculated_at: new Date().toISOString(),
+            }, { onConflict: 'member_id,user_id' })
+
+          if (stateUpsertErr) {
+            errors.push(`${member.full_name}: ${stateUpsertErr.message}`)
+          } else {
+            scoresUpdated++
+          }
+          // Skip Congress.gov fetching for state members
+          continue
+        }
         
         // Fetch member details from Congress.gov for bill data
         const memberUrl = `https://api.congress.gov/v3/member/${member.bioguide_id}?format=json&api_key=${congressApiKey}`
