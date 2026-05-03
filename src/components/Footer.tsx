@@ -66,7 +66,11 @@ export function Footer() {
 
         <div className="mt-12 border-t border-border pt-8 space-y-4">
           <div className="flex justify-center min-h-5">
-            {showLiveStatus ? <SyncStatus /> : null}
+            {showLiveStatus ? (
+              <Suspense fallback={null}>
+                <SyncStatus />
+              </Suspense>
+            ) : null}
           </div>
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p className="text-sm text-muted-foreground">
