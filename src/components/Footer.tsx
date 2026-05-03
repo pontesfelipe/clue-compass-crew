@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { SyncStatus } from "@/components/SyncStatus";
-import { DataFreshnessIndicator } from "@/components/DataFreshnessIndicator";
+
+const SyncStatus = lazy(() =>
+  import("@/components/SyncStatus").then((m) => ({ default: m.SyncStatus }))
+);
+const DataFreshnessIndicator = lazy(() =>
+  import("@/components/DataFreshnessIndicator").then((m) => ({
+    default: m.DataFreshnessIndicator,
+  }))
+);
 
 export function Footer() {
   const [showLiveStatus, setShowLiveStatus] = useState(false);
@@ -59,14 +66,22 @@ export function Footer() {
 
         <div className="mt-12 border-t border-border pt-8 space-y-4">
           <div className="flex justify-center min-h-5">
-            {showLiveStatus ? <SyncStatus /> : null}
+            {showLiveStatus ? (
+              <Suspense fallback={null}>
+                <SyncStatus />
+              </Suspense>
+            ) : null}
           </div>
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} CivicScore. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              {showLiveStatus ? <DataFreshnessIndicator /> : null}
+              {showLiveStatus ? (
+                <Suspense fallback={null}>
+                  <DataFreshnessIndicator />
+                </Suspense>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 Data sourced from Congress.gov & FEC
               </p>
