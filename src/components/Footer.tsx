@@ -1,9 +1,20 @@
+import { useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SyncStatus } from "@/components/SyncStatus";
 import { DataFreshnessIndicator } from "@/components/DataFreshnessIndicator";
 
 export function Footer() {
+  const [showLiveStatus, setShowLiveStatus] = useState(false);
+
+  useEffect(() => {
+    const schedule = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(cb, 1200));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const handle = schedule(() => setShowLiveStatus(true));
+
+    return () => cancel(handle);
+  }, []);
+
   return (
     <footer className="border-t border-border bg-muted/30">
       <div className="civic-container py-12">
@@ -50,15 +61,15 @@ export function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border pt-8 space-y-4">
-          <div className="flex justify-center">
-            <SyncStatus />
+          <div className="flex justify-center min-h-5">
+            {showLiveStatus ? <SyncStatus /> : null}
           </div>
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} CivicScore. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              <DataFreshnessIndicator />
+              {showLiveStatus ? <DataFreshnessIndicator /> : null}
               <p className="text-xs text-muted-foreground">
                 Data sourced from Congress.gov & FEC
               </p>

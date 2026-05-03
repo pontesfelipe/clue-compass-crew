@@ -230,7 +230,7 @@ export function useMember(memberId: string) {
 /**
  * Fetch top performing members
  */
-export function useTopMembers(limit = 4) {
+export function useTopMembers(limit = 4, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["top-members", limit],
     queryFn: async (): Promise<MemberWithScore[]> => {
@@ -259,10 +259,11 @@ export function useTopMembers(limit = 4) {
 
       if (error) throw error;
 
-      return (data || []).map((member) => 
+      return (data || []).map((member) =>
         mapApiMemberWithScores(member as Record<string, unknown>)
       );
     },
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled ?? true,
   });
 }

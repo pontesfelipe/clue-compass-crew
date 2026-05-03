@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
@@ -5,41 +6,65 @@ import { Button } from "@/components/ui/button";
 import { FeatureCard } from "@/components/FeatureCard";
 import { MemberCard } from "@/components/MemberCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  BarChart3, 
-  Scale, 
-  Map, 
+import {
+  BarChart3,
+  Scale,
+  Map,
   Users,
   ArrowRight,
   Shield,
   Database,
-  Target
+  Target,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTopMembers } from "@/hooks/useMembers";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
-  const { data: topMembers, isLoading } = useTopMembers(4);
+  const featuredMembersRef = useRef<HTMLElement | null>(null);
+  const [shouldLoadTopMembers, setShouldLoadTopMembers] = useState(false);
+  const { data: topMembers, isLoading } = useTopMembers(4, {
+    enabled: shouldLoadTopMembers,
+  });
   const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    const section = featuredMembersRef.current;
+    if (!section || shouldLoadTopMembers) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoadTopMembers(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" }
+    );
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [shouldLoadTopMembers]);
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <Header />
       <ProfileCompletionBanner />
-      
+
       {/* Hero Section - Mission Focused */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ 
-            backgroundImage: `radial-gradient(circle at 20% 50%, hsl(var(--civic-gold)) 0%, transparent 50%), 
-                              radial-gradient(circle at 80% 50%, hsl(var(--civic-blue)) 0%, transparent 50%)` 
-          }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `radial-gradient(circle at 20% 50%, hsl(var(--civic-gold)) 0%, transparent 50%), 
+                              radial-gradient(circle at 80% 50%, hsl(var(--civic-blue)) 0%, transparent 50%)`,
+            }}
+          />
         </div>
-        
+
         <div className="civic-container relative py-20 lg:py-32">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            {/* Eyebrow + Main Headline (H1 first for SEO & a11y) */}
             <div className="space-y-6">
               <p className="font-serif text-sm font-semibold uppercase tracking-widest text-muted-foreground">
                 CivicScore's Mission
@@ -57,7 +82,6 @@ export default function Index() {
               </p>
             </div>
 
-            {/* Neutral Badge */}
             <div className="flex justify-center">
               <div className="inline-flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-3 shadow-sm">
                 <Shield className="h-5 w-5 text-primary" />
@@ -67,7 +91,6 @@ export default function Index() {
               </div>
             </div>
 
-            {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
               <Button variant="hero" size="xl" asChild>
                 <Link to="/map">
@@ -76,16 +99,13 @@ export default function Index() {
                 </Link>
               </Button>
               <Button variant="civic-outline" size="xl" asChild>
-                <Link to="/how-it-works">
-                  How it Works
-                </Link>
+                <Link to="/how-it-works">How it Works</Link>
               </Button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="bg-muted/30 py-20 lg:py-28">
         <div className="civic-container">
           <div className="text-center mb-16">
@@ -93,7 +113,7 @@ export default function Index() {
               From Data to Clarity
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              We transform raw congressional data into structured signals you can understand — 
+              We transform raw congressional data into structured signals you can understand —
               without adding opinions or ideological labels.
             </p>
           </div>
@@ -139,8 +159,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Featured Members Section */}
-      <section className="py-20 lg:py-28">
+      <section ref={featuredMembersRef} className="py-20 lg:py-28">
         <div className="civic-container">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-12">
             <div>
@@ -160,7 +179,7 @@ export default function Index() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {isLoading ? (
+            {!shouldLoadTopMembers || isLoading ? (
               Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center gap-3 mb-4">
@@ -178,7 +197,7 @@ export default function Index() {
                 <div
                   key={member.id}
                   className="opacity-0 animate-slide-up"
-                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
+                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
                 >
                   <MemberCard
                     id={member.id}
@@ -196,23 +215,25 @@ export default function Index() {
         </div>
       </section>
 
-      {/* CTA Section - Only show for non-authenticated users */}
       {!isAuthenticated && (
         <section className="relative overflow-hidden py-20 lg:py-28">
-          <div className="absolute inset-0" style={{ background: 'var(--gradient-hero)' }} />
+          <div className="absolute inset-0" style={{ background: "var(--gradient-hero)" }} />
           <div className="absolute inset-0 opacity-20">
-            <div className="absolute inset-0" style={{
-              backgroundImage: `radial-gradient(circle at 30% 30%, hsl(var(--civic-gold) / 0.3) 0%, transparent 40%)`
-            }} />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `radial-gradient(circle at 30% 30%, hsl(var(--civic-gold) / 0.3) 0%, transparent 40%)`,
+              }}
+            />
           </div>
-          
+
           <div className="civic-container relative">
             <div className="text-center max-w-3xl mx-auto">
               <h2 className="font-serif text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl mb-6">
                 Compare Politicians to What Matters to You
               </h2>
               <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
-                Create a free account to define your priorities and see how actions 
+                Create a free account to define your priorities and see how actions
                 align with what matters to you — based on public data, not opinions.
               </p>
               <Button variant="hero" size="xl" asChild>
