@@ -8,11 +8,8 @@ export function Footer() {
   const [showLiveStatus, setShowLiveStatus] = useState(false);
 
   useEffect(() => {
-    const schedule = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(cb, 1200));
-    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
-    const handle = schedule(() => setShowLiveStatus(true));
-
-    return () => cancel(handle);
+    const handle = window.setTimeout(() => setShowLiveStatus(true), 1200);
+    return () => window.clearTimeout(handle);
   }, []);
 
   return (
