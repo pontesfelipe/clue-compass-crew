@@ -77,7 +77,11 @@ export function Footer() {
               © {new Date().getFullYear()} CivicScore. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              {showLiveStatus ? <DataFreshnessIndicator /> : null}
+              {showLiveStatus ? (
+                <Suspense fallback={null}>
+                  <DataFreshnessIndicator />
+                </Suspense>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 Data sourced from Congress.gov & FEC
               </p>
