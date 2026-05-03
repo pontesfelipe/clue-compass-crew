@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { SyncStatus } from "@/components/SyncStatus";
-import { DataFreshnessIndicator } from "@/components/DataFreshnessIndicator";
+
+const SyncStatus = lazy(() =>
+  import("@/components/SyncStatus").then((m) => ({ default: m.SyncStatus }))
+);
+const DataFreshnessIndicator = lazy(() =>
+  import("@/components/DataFreshnessIndicator").then((m) => ({
+    default: m.DataFreshnessIndicator,
+  }))
+);
 
 export function Footer() {
   const [showLiveStatus, setShowLiveStatus] = useState(false);
