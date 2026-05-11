@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import DOMPurify from "dompurify";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
@@ -233,9 +234,14 @@ export default function BillPage() {
                 <h2 className="font-serif text-xl font-semibold text-foreground mb-4">
                   Summary
                 </h2>
-                <div 
+                <div
                   className="text-muted-foreground prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: bill.summary }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(bill.summary, {
+                      ALLOWED_TAGS: ["p", "br", "strong", "em", "b", "i", "u", "ul", "ol", "li", "span"],
+                      ALLOWED_ATTR: [],
+                    }),
+                  }}
                 />
               </div>
             )}
