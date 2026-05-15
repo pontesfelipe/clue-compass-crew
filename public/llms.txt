@@ -1,0 +1,25 @@
+# CivicScore
+
+> Non-partisan, data-driven insights into U.S. congressional representatives' performance, sourced from Congress.gov and FEC.
+
+CivicScore provides neutral civic analytics — voting records, bill sponsorships, committee work, attendance, bipartisanship, and campaign finance — without ideological labels or partisan framing.
+
+## Pages
+
+- [Home](/): Overview and featured representatives.
+- [U.S. Map](/map): State-by-state performance map.
+- [Members](/members): All members of Congress.
+- [Bills](/bills): Recent and tracked legislation.
+- [Votes](/votes): Recent floor votes.
+- [Compare](/compare): Side-by-side member comparison.
+- [News](/news): Congressional news feed.
+- [Governors](/governors): U.S. state governors.
+- [How It Works](/how-it-works): Platform overview.
+- [Methodology](/methodology): How scores are calculated.
+- [Data Sources](/data-sources): Where the data comes from.
+- [FAQ](/faq): Common questions.
+
+## Optional
+
+- [Privacy](/privacy)
+- [Terms](/terms)
