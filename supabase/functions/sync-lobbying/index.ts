@@ -158,32 +158,17 @@ interface LDAResponse {
   results: LDAFiling[];
 }
 
-async function fetchWithRateLimit(url: string, retries = 3): Promise<Response> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    const response = await fetch(url);
-    
-    if (response.status === 429) {
-      const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
-      console.log(`Rate limited, waiting ${retryAfter}s...`);
-      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-      continue;
-    }
-    
-    return response;
-  }
-  throw new Error(`Failed to fetch after ${retries} retries`);
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const startTime = Date.now();
+  const budget = new TimeBudget(JOB_BUDGET_SECONDS);
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  
+
   console.log("Starting Senate LDA lobbying sync...");
-  
+
   try {
     // Check if sync is paused
     const { data: pauseToggle } = await supabase
@@ -191,7 +176,7 @@ Deno.serve(async (req) => {
       .select("enabled")
       .eq("id", "sync_paused")
       .single();
-    
+
     if (pauseToggle?.enabled) {
       console.log("Sync is paused globally");
       return new Response(JSON.stringify({ success: true, message: "Sync paused" }), {
@@ -199,71 +184,74 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get current year for filtering
+    // Cursor: { year, nextUrl } — resumable across invocations.
+    // Previously hard-capped at 10 pages/year with no cursor: every run
+    // restarted from page 1 and only saw the first 250 filings.
     const currentYear = new Date().getFullYear();
-    const years = [currentYear, currentYear - 1]; // Current year and previous year
-    
-    // Aggregate lobbying spending by issue
+    const { lastCursor } = await getWatermark(supabase);
+    let year: number = lastCursor?.year || currentYear;
+    let nextUrl: string | null = lastCursor?.nextUrl ||
+      `${LDA_API_BASE}/filings/?filing_year=${year}&filing_type=Q1&filing_type=Q2&filing_type=Q3&filing_type=Q4`;
+
+    // Aggregate lobbying spending by issue (resets per invocation — the
+    // upsert-then-cleanup at the end merges with previously-synced data).
     const issueSpending: Record<string, { total: number; clientCount: number; clients: Set<string> }> = {};
-    
     let totalFilings = 0;
     let totalPages = 0;
-    const maxPages = 10; // Limit to prevent timeout (25 results per page = 250 filings)
-    
-    for (const year of years) {
-      let nextUrl: string | null = `${LDA_API_BASE}/filings/?filing_year=${year}&filing_type=Q1&filing_type=Q2&filing_type=Q3&filing_type=Q4`;
-      let pageCount = 0;
-      
-      while (nextUrl && pageCount < maxPages) {
-        console.log(`Fetching page ${pageCount + 1} for year ${year}...`);
-        
-        const response = await fetchWithRateLimit(nextUrl);
-        if (!response.ok) {
-          console.error(`LDA API error: ${response.status}`);
-          break;
-        }
-        
-        const data: LDAResponse = await response.json();
-        totalPages++;
-        pageCount++;
-        
-        for (const filing of data.results) {
-          totalFilings++;
-          
-          // Parse income/expenses (they come as strings like "$50,000" or ranges)
-          const incomeStr = filing.income || "0";
-          const expensesStr = filing.expenses || "0";
-          
-          // Extract numeric value (handle ranges like "$10,000 - $20,000")
-          const parseAmount = (str: string): number => {
-            const match = str.replace(/[$,]/g, "").match(/\d+/);
-            return match ? parseInt(match[0], 10) : 0;
-          };
-          
-          const amount = parseAmount(incomeStr) || parseAmount(expensesStr);
-          
-          // Aggregate by lobbying issue codes
-          for (const activity of filing.lobbying_activities) {
-            const issueCode = activity.general_issue_code;
-            const issueName = ISSUE_CODE_MAP[issueCode] || activity.general_issue_code_display || issueCode;
-            
-            if (!issueSpending[issueName]) {
-              issueSpending[issueName] = { total: 0, clientCount: 0, clients: new Set() };
-            }
-            
-            // Distribute amount evenly across issues if filing covers multiple
-            const amountPerIssue = amount / filing.lobbying_activities.length;
-            issueSpending[issueName].total += amountPerIssue;
-            issueSpending[issueName].clients.add(filing.client.name);
+    let partial = false;
+
+    while (nextUrl) {
+      if (!budget.shouldContinue()) {
+        console.log(`Time budget expired at page ${totalPages}, marking as partial`);
+        partial = true;
+        break;
+      }
+
+      console.log(`Fetching page ${totalPages + 1} for year ${year}...`);
+      const { response } = await fetchWithRetry(nextUrl, {}, PROVIDER, LDA_HTTP_CONFIG, budget);
+      if (!response.ok) {
+        console.error(`LDA API error: ${response.status}`);
+        break;
+      }
+
+      const data: LDAResponse = await response.json();
+      totalPages++;
+
+      for (const filing of data.results) {
+        totalFilings++;
+
+        const incomeStr = filing.income || "0";
+        const expensesStr = filing.expenses || "0";
+        const parseAmount = (str: string): number => {
+          const match = str.replace(/[$,]/g, "").match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        };
+        const amount = parseAmount(incomeStr) || parseAmount(expensesStr);
+
+        for (const activity of filing.lobbying_activities) {
+          const issueCode = activity.general_issue_code;
+          const issueName = ISSUE_CODE_MAP[issueCode] || activity.general_issue_code_display || issueCode;
+          if (!issueSpending[issueName]) {
+            issueSpending[issueName] = { total: 0, clientCount: 0, clients: new Set() };
           }
+          const amountPerIssue = amount / filing.lobbying_activities.length;
+          issueSpending[issueName].total += amountPerIssue;
+          issueSpending[issueName].clients.add(filing.client.name);
         }
-        
-        nextUrl = data.next;
-        
-        // Small delay to respect rate limits (15/minute = 4 seconds between requests)
-        await new Promise(resolve => setTimeout(resolve, 4100));
+      }
+
+      nextUrl = data.next;
+
+      // If we've finished the current year, advance to the previous year (bounded).
+      if (!nextUrl && year > currentYear - 2) {
+        year -= 1;
+        nextUrl = `${LDA_API_BASE}/filings/?filing_year=${year}&filing_type=Q1&filing_type=Q2&filing_type=Q3&filing_type=Q4`;
       }
     }
+
+    // Persist cursor so the next invocation resumes where we left off.
+    await updateWatermark(supabase, partial ? { year, nextUrl } : null, totalFilings, !partial);
+
     
     // Convert to array and sort by spending
     const lobbyingByIndustry = Object.entries(issueSpending)
