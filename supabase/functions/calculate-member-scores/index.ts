@@ -285,14 +285,14 @@ Deno.serve(async (req) => {
         try {
           const { data: cosponsored } = await supabase
             .from('bill_sponsorships')
-            .select('bill_id, bills!inner(id, sponsors:bill_sponsorships!inner(member_id, is_sponsor))')
+            .select('bill_id')
             .eq('member_id', member.id)
             .eq('is_sponsor', false)
             .limit(500)
 
-          if (cosponsored && cosponsored.length > 0) {
-            const primaryBillIds = cosponsored.map((c: any) => c.bill_id)
-            // Fetch primary sponsors + their party for each of those bills.
+          const primaryBillIds = (cosponsored || []).map((c: any) => c.bill_id).filter(Boolean)
+          if (primaryBillIds.length > 0 && member.party) {
+            // One query returns each bill's primary sponsor plus their party.
             const { data: primarySponsors } = await supabase
               .from('bill_sponsorships')
               .select('bill_id, members!inner(party)')
@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
 
             for (const ps of primarySponsors || []) {
               const primaryParty = (ps as any).members?.party
-              if (!primaryParty || !member.party) continue
+              if (!primaryParty) continue
               if ((member.party === 'D' && primaryParty === 'R') ||
                   (member.party === 'R' && primaryParty === 'D')) {
                 bipartisanBills++
