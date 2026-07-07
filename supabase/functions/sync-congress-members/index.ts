@@ -387,16 +387,6 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('member_scores').insert(chunk)
         if (error) { scoresError = error; break }
       }
-      if (false) {
-        // placeholder so old braces stay balanced
-      }
-      const _oldInsert = async () => {
-        return await supabase.from('member_scores').insert(scoreRecords)
-      }
-      void _oldInsert
-      // Reuse original error-handling below by re-declaring the variable name.
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _err = scoresError
 
       if (scoresError) {
         console.error(`Scores insert error: ${JSON.stringify(scoresError)}`)
