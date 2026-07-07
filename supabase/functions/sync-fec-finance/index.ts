@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
 
       if (memberIds.length === 0) {
         console.log('No members to process')
-        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
         return new Response(
           JSON.stringify({
             success: true,
@@ -444,7 +444,7 @@ Deno.serve(async (req) => {
 
     if (!members || members.length === 0) {
       if (isSingleMemberRun) {
-        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
         return new Response(
           JSON.stringify({ success: false, message: 'No matching member found for requested member_id' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -452,7 +452,7 @@ Deno.serve(async (req) => {
       }
 
       console.log('All members processed. Resetting offset.')
-      await releaseLock(supabase, 'complete', 0, 0, lockId)
+      await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
       await updateWatermark(supabase, { memberOffset: 0 }, 0)
 
       return new Response(
@@ -1087,7 +1087,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', JOB_ID)
 
-    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount, lockId)
+    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount, lockToken, lockId)
 
     // Log job run
     await supabase.from('sync_job_runs').insert({
@@ -1141,7 +1141,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    await releaseLock(supabase, 'error', 0, 1, JOB_ID)
+    await releaseLock(supabase, 'error', 0, 1, lockToken, lockId)
 
     await supabase.from('sync_job_runs').insert({
       job_id: `fec-finance-${Date.now()}`,
