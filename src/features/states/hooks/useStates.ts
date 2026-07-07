@@ -17,49 +17,28 @@ export function usePartyScores() {
   return useQuery({
     queryKey: ["party-scores"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select(`
-          party,
-          member_scores!inner (
-            overall_score
-          )
-        `)
-        .eq("in_office", true)
-        .is("member_scores.user_id", null);
-
+      // Server-side aggregation via RPC — avoids PostgREST's 1000-row cap that
+      // was silently sampling the members/member_scores join.
+      const { data, error } = await supabase.rpc("get_party_score_aggregates");
       if (error) throw error;
 
-      const partyAggregates: Record<string, { total: number; count: number }> = {
-        D: { total: 0, count: 0 },
-        R: { total: 0, count: 0 },
-        I: { total: 0, count: 0 },
+      const byParty: Record<string, { avg: number; count: number }> = {
+        D: { avg: 0, count: 0 },
+        R: { avg: 0, count: 0 },
+        I: { avg: 0, count: 0 },
       };
-
-      (data || []).forEach((member) => {
-        const party = member.party as string;
-        const memberScores = member.member_scores as { overall_score: number | null }[];
-        const score = memberScores?.[0]?.overall_score;
-
-        if (party && score != null && partyAggregates[party]) {
-          partyAggregates[party].total += Number(score);
-          partyAggregates[party].count += 1;
+      for (const row of (data as { party: string; avg_score: number | null; member_count: number }[] | null) || []) {
+        if (byParty[row.party]) {
+          byParty[row.party] = {
+            avg: Math.round(Number(row.avg_score) || 0),
+            count: Number(row.member_count) || 0,
+          };
         }
-      });
-
+      }
       return {
-        democratic: {
-          avg: partyAggregates.D.count > 0 ? Math.round(partyAggregates.D.total / partyAggregates.D.count) : 0,
-          count: partyAggregates.D.count,
-        },
-        republican: {
-          avg: partyAggregates.R.count > 0 ? Math.round(partyAggregates.R.total / partyAggregates.R.count) : 0,
-          count: partyAggregates.R.count,
-        },
-        independent: {
-          avg: partyAggregates.I.count > 0 ? Math.round(partyAggregates.I.total / partyAggregates.I.count) : 0,
-          count: partyAggregates.I.count,
-        },
+        democratic: byParty.D,
+        republican: byParty.R,
+        independent: byParty.I,
       };
     },
     staleTime: 5 * 60 * 1000,
@@ -73,45 +52,22 @@ export function useChamberScores() {
   return useQuery({
     queryKey: ["chamber-scores"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select(`
-          chamber,
-          member_scores!inner (
-            overall_score
-          )
-        `)
-        .eq("in_office", true)
-        .is("member_scores.user_id", null);
-
+      const { data, error } = await supabase.rpc("get_chamber_score_aggregates");
       if (error) throw error;
 
-      const chamberAggregates: Record<string, { total: number; count: number }> = {
-        house: { total: 0, count: 0 },
-        senate: { total: 0, count: 0 },
+      const byChamber: Record<string, { avg: number; count: number }> = {
+        house: { avg: 0, count: 0 },
+        senate: { avg: 0, count: 0 },
       };
-
-      (data || []).forEach((member) => {
-        const chamber = member.chamber as string;
-        const memberScores = member.member_scores as { overall_score: number | null }[];
-        const score = memberScores?.[0]?.overall_score;
-
-        if (chamber && score != null && chamberAggregates[chamber]) {
-          chamberAggregates[chamber].total += Number(score);
-          chamberAggregates[chamber].count += 1;
+      for (const row of (data as { chamber: string; avg_score: number | null; member_count: number }[] | null) || []) {
+        if (byChamber[row.chamber]) {
+          byChamber[row.chamber] = {
+            avg: Math.round(Number(row.avg_score) || 0),
+            count: Number(row.member_count) || 0,
+          };
         }
-      });
-
-      return {
-        house: {
-          avg: chamberAggregates.house.count > 0 ? Math.round(chamberAggregates.house.total / chamberAggregates.house.count) : 0,
-          count: chamberAggregates.house.count,
-        },
-        senate: {
-          avg: chamberAggregates.senate.count > 0 ? Math.round(chamberAggregates.senate.total / chamberAggregates.senate.count) : 0,
-          count: chamberAggregates.senate.count,
-        },
-      };
+      }
+      return { house: byChamber.house, senate: byChamber.senate };
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -125,13 +81,12 @@ export function useStateScores() {
   return useQuery({
     queryKey: ["state-scores"],
     queryFn: async (): Promise<StateScore[]> => {
-      // Try to fetch from pre-computed state_scores table first
+      // Try pre-computed state_scores first
       const { data: precomputed, error: precomputedError } = await supabase
         .from("state_scores")
         .select("state, avg_member_score, member_count");
 
       if (!precomputedError && precomputed && precomputed.length > 0) {
-        // Use pre-computed data
         return precomputed.map((row) => ({
           abbr: getStateAbbr(row.state),
           name: row.state,
@@ -140,44 +95,16 @@ export function useStateScores() {
         }));
       }
 
-      // Fallback: aggregate from members table
-      const { data, error } = await supabase
-        .from("members")
-        .select(`
-          state,
-          member_scores!inner (
-            overall_score
-          )
-        `)
-        .eq("in_office", true)
-        .is("member_scores.user_id", null);
-
+      // Fallback: server-side aggregation via RPC (never client-side to avoid
+      // the PostgREST 1000-row silent truncation on the join).
+      const { data, error } = await supabase.rpc("get_state_score_aggregates");
       if (error) throw error;
 
-      // Aggregate scores by state
-      const stateAggregates: Record<string, { total: number; count: number }> = {};
-      
-      (data || []).forEach((member) => {
-        const stateName = member.state;
-        const memberScores = member.member_scores as { overall_score: number | null }[];
-        const score = memberScores?.[0]?.overall_score;
-        
-        if (stateName && score != null) {
-          const abbr = getStateAbbr(stateName);
-          if (!stateAggregates[abbr]) {
-            stateAggregates[abbr] = { total: 0, count: 0 };
-          }
-          stateAggregates[abbr].total += Number(score);
-          stateAggregates[abbr].count += 1;
-        }
-      });
-
-      // Convert to array with averages
-      return Object.entries(stateAggregates).map(([abbr, agg]) => ({
-        abbr,
-        name: stateNames[abbr] || abbr,
-        score: Math.round(agg.total / agg.count),
-        memberCount: agg.count,
+      return ((data as { state: string; avg_score: number | null; member_count: number }[] | null) || []).map((row) => ({
+        abbr: getStateAbbr(row.state),
+        name: stateNames[getStateAbbr(row.state)] || row.state,
+        score: Math.round(Number(row.avg_score) || 0),
+        memberCount: Number(row.member_count) || 0,
       }));
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -285,32 +212,25 @@ export function useStateMembers(stateAbbr: string, level: "federal" | "state" = 
  */
 export function useStateStats(stateAbbr: string) {
   const stateName = getStateName(stateAbbr);
-  
+
   return useQuery({
     queryKey: ["state-stats", stateAbbr],
     queryFn: async (): Promise<StateStats> => {
-      const { data, error } = await supabase
-        .from("members")
-        .select(`
-          id,
-          member_scores!inner (
-            overall_score,
-            attendance_score,
-            bipartisanship_score,
-            bills_sponsored,
-            votes_cast,
-            votes_missed
-          )
-        `)
-        .eq("state", stateName)
-        .eq("in_office", true)
-        .is("member_scores.user_id", null);
-
+      // Server-side aggregation via RPC — avoids silent 1000-row truncation.
+      const { data, error } = await supabase.rpc("get_state_stat_aggregates", {
+        p_state: stateName,
+      });
       if (error) throw error;
 
-      const members = data || [];
-      const memberCount = members.length;
-      
+      const row = (data as Array<{
+        member_count: number;
+        avg_score: number | null;
+        total_bills_sponsored: number;
+        avg_attendance: number | null;
+        avg_bipartisanship: number | null;
+      }> | null)?.[0];
+
+      const memberCount = Number(row?.member_count) || 0;
       if (memberCount === 0) {
         return {
           memberCount: 0,
@@ -321,27 +241,12 @@ export function useStateStats(stateAbbr: string) {
         };
       }
 
-      let totalScore = 0;
-      let totalBillsSponsored = 0;
-      let totalAttendance = 0;
-      let totalBipartisanship = 0;
-
-      members.forEach((m) => {
-        const scores = (m.member_scores as Record<string, unknown>[])?.[0];
-        if (scores) {
-          totalScore += Number(scores.overall_score) || 0;
-          totalBillsSponsored += Number(scores.bills_sponsored) || 0;
-          totalAttendance += Number(scores.attendance_score) || 0;
-          totalBipartisanship += Number(scores.bipartisanship_score) || 0;
-        }
-      });
-
       return {
         memberCount,
-        avgScore: Math.round(totalScore / memberCount),
-        totalBillsSponsored,
-        avgAttendance: Math.round(totalAttendance / memberCount),
-        avgBipartisanship: Math.round(totalBipartisanship / memberCount),
+        avgScore: Math.round(Number(row?.avg_score) || 0),
+        totalBillsSponsored: Number(row?.total_bills_sponsored) || 0,
+        avgAttendance: Math.round(Number(row?.avg_attendance) || 0),
+        avgBipartisanship: Math.round(Number(row?.avg_bipartisanship) || 0),
       };
     },
     enabled: !!stateAbbr,

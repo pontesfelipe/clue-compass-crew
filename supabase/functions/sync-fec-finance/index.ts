@@ -143,51 +143,56 @@ async function updateWatermark(supabase: any, cursor: any, recordsTotal: number)
     }, { onConflict: 'provider,dataset,scope_key' })
 }
 
-// Helper: Acquire job lock
-async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<boolean> {
-  const now = new Date()
-  const lockUntil = new Date(now.getTime() + MAX_DURATION_SECONDS * 1000)
+// Atomic lock via job_locks table (uses `acquire_job_lock` / `release_job_lock`
+// Postgres functions from migration 20260428). Returns a lock token on success.
+async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<string | null> {
+  const workerId = `edge-${crypto.randomUUID()}`
+  const { data: token, error } = await supabase.rpc('acquire_job_lock', {
+    p_job_id: lockId,
+    p_locked_by: workerId,
+    p_duration_seconds: MAX_DURATION_SECONDS,
+  })
 
-  const { data: progress } = await supabase
-    .from('sync_progress')
-    .select('status, lock_until')
-    .eq('id', lockId)
-    .single()
-
-  if (progress) {
-    const existingLock = progress.lock_until ? new Date(progress.lock_until) : null
-    const isLocked = !!(existingLock && existingLock > now)
-
-    if (isLocked) {
-      console.log(`Job ${lockId} is locked until ${existingLock!.toISOString()}`)
-      return false
-    }
-
-    if (progress.status === 'running') {
-      console.warn(`Job ${lockId} was 'running' but lock expired; restarting`)
-    }
+  if (error) {
+    console.error(`acquire_job_lock failed for ${lockId}:`, error.message)
+    return null
+  }
+  if (!token) {
+    console.log(`Job ${lockId} is already locked`)
+    return null
   }
 
+  // Mirror running status into sync_progress for the UI (advisory only).
   await supabase
     .from('sync_progress')
     .upsert({
       id: lockId,
       status: 'running',
-      lock_until: lockUntil.toISOString(),
-      last_run_at: now.toISOString(),
+      lock_until: new Date(Date.now() + MAX_DURATION_SECONDS * 1000).toISOString(),
+      last_run_at: new Date().toISOString(),
     }, { onConflict: 'id' })
 
-  return true
+  return token as string
 }
 
-// Helper: Release job lock
+// Release atomic lock and update sync_progress. Safe to call with a null token
+// (e.g. when acquireLock returned null because someone else holds the lock).
 async function releaseLock(
   supabase: any,
   status: string,
   successCount: number,
   failureCount: number,
-  lockId: string = JOB_ID
+  lockToken: string | null,
+  lockId: string = JOB_ID,
 ) {
+  if (lockToken) {
+    const { error } = await supabase.rpc('release_job_lock', {
+      p_job_id: lockId,
+      p_lock_token: lockToken,
+    })
+    if (error) console.error(`release_job_lock failed for ${lockId}:`, error.message)
+  }
+
   await supabase
     .from('sync_progress')
     .update({
