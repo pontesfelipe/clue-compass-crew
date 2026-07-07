@@ -1,9 +1,47 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { fetchWithRetry, TimeBudget, HttpClientConfig } from "../_shared/httpClient.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const PROVIDER = "senate_lda";
+const DATASET = "lobbying_filings";
+const JOB_BUDGET_SECONDS = 260;
+// LDA public API: ~15 req/min. Enforce >=4.1s between calls in httpClient.
+const LDA_HTTP_CONFIG: HttpClientConfig = {
+  maxRetries: 4,
+  baseDelayMs: 4000,
+  maxConcurrency: 1,
+  minDelayBetweenRequestsMs: 4100,
+  timeoutMs: 60000,
+};
+
+async function getWatermark(supabase: any): Promise<{ lastCursor: any }> {
+  const { data } = await supabase
+    .from("sync_state")
+    .select("last_cursor")
+    .eq("provider", PROVIDER)
+    .eq("dataset", DATASET)
+    .eq("scope_key", "global")
+    .maybeSingle();
+  return { lastCursor: data?.last_cursor || null };
+}
+
+async function updateWatermark(supabase: any, cursor: any, recordsTotal: number, complete: boolean) {
+  const payload: any = {
+    provider: PROVIDER,
+    dataset: DATASET,
+    scope_key: "global",
+    last_cursor: cursor,
+    records_total: recordsTotal,
+    updated_at: new Date().toISOString(),
+  };
+  if (complete) payload.last_success_at = new Date().toISOString();
+  await supabase.from("sync_state").upsert(payload, { onConflict: "provider,dataset,scope_key" });
+}
+
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

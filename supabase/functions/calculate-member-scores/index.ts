@@ -1,4 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4'
+import { fetchWithRetry, TimeBudget, HttpClientConfig } from '../_shared/httpClient.ts'
+
+const CONGRESS_HTTP_CONFIG: HttpClientConfig = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxConcurrency: 2,
+  minDelayBetweenRequestsMs: 250,
+}
+const SCORE_JOB_BUDGET_SECONDS = 260
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -152,12 +162,18 @@ Deno.serve(async (req) => {
       console.log(`Loaded ${totalRows} vote rows; stats for ${voteStatsMap.size} members`)
     }
 
-    // Process each member
+    // Process each member. A top-level TimeBudget ensures we abort HTTP work
+    // (via fetchWithRetry) before the edge function timeout hits.
+    const budget = new TimeBudget(SCORE_JOB_BUDGET_SECONDS)
     for (const member of members || []) {
+      if (!budget.shouldContinue()) {
+        console.log(`Score calc time budget expired after ${scoresUpdated} members; stopping`)
+        break
+      }
       try {
         // Get real vote stats if available
         const voteStats = voteStatsMap.get(member.id)
-        
+
         let votesCast = 0
         let votesMissed = 0
         
@@ -217,17 +233,23 @@ Deno.serve(async (req) => {
           continue
         }
         
-        // Fetch member details from Congress.gov for bill data
+        // Fetch member details from Congress.gov for bill data.
+        // All Congress.gov calls go through fetchWithRetry so we get retry,
+        // backoff, timeouts, per-provider concurrency, and circuit-breaking.
         const memberUrl = `https://api.congress.gov/v3/member/${member.bioguide_id}?format=json&api_key=${congressApiKey}`
-        const memberResponse = await fetch(memberUrl)
-        
-        if (!memberResponse.ok) {
-          console.log(`Failed to fetch member ${member.bioguide_id}: ${memberResponse.status}`)
+        let memberDetail: any = null
+        try {
+          const { response } = await fetchWithRetry(memberUrl, {}, 'congress_gov', CONGRESS_HTTP_CONFIG, budget)
+          if (!response.ok) {
+            console.log(`Failed to fetch member ${member.bioguide_id}: ${response.status}`)
+            continue
+          }
+          const memberData = await response.json()
+          memberDetail = memberData.member
+        } catch (e) {
+          console.log(`Skipping ${member.bioguide_id} due to fetch error: ${e}`)
           continue
         }
-        
-        const memberData = await memberResponse.json()
-        const memberDetail = memberData.member
 
         // Get bill counts
         let billsSponsored = memberDetail.sponsoredLegislation?.count || 0
@@ -239,11 +261,11 @@ Deno.serve(async (req) => {
         if (memberDetail.sponsoredLegislation?.url) {
           try {
             const sponsoredUrl = `${memberDetail.sponsoredLegislation.url}&format=json&limit=100&api_key=${congressApiKey}`
-            const sponsoredResponse = await fetch(sponsoredUrl)
-            if (sponsoredResponse.ok) {
-              const sponsoredData = await sponsoredResponse.json()
+            const { response } = await fetchWithRetry(sponsoredUrl, {}, 'congress_gov', CONGRESS_HTTP_CONFIG, budget)
+            if (response.ok) {
+              const sponsoredData = await response.json()
               const bills = sponsoredData.sponsoredLegislation || []
-              
+
               for (const bill of bills) {
                 if (bill.latestAction?.text?.toLowerCase().includes('became public law')) {
                   billsEnacted++
@@ -255,39 +277,39 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Check cosponsored bills for bipartisan activity
-        if (memberDetail.cosponsoredLegislation?.url) {
-          try {
-            const cosponsoredUrl = `${memberDetail.cosponsoredLegislation.url}&format=json&limit=50&api_key=${congressApiKey}`
-            const cosponsoredResponse = await fetch(cosponsoredUrl)
-            if (cosponsoredResponse.ok) {
-              const cosponsoredData = await cosponsoredResponse.json()
-              const bills = cosponsoredData.cosponsoredLegislation || []
-              
-              for (const bill of bills.slice(0, 20)) {
-                const billDetailUrl = `https://api.congress.gov/v3/bill/${bill.congress}/${bill.type?.toLowerCase()}/${bill.number}?format=json&api_key=${congressApiKey}`
-                try {
-                  const billDetailResponse = await fetch(billDetailUrl)
-                  if (billDetailResponse.ok) {
-                    const billDetailData = await billDetailResponse.json()
-                    const sponsor = billDetailData.bill?.sponsors?.[0]
-                    if (sponsor?.party) {
-                      const sponsorParty = sponsor.party.charAt(0).toUpperCase()
-                      if ((member.party === 'D' && sponsorParty === 'R') ||
-                          (member.party === 'R' && sponsorParty === 'D')) {
-                        bipartisanBills++
-                      }
-                    }
-                  }
-                } catch (e) {
-                  // Skip bill on error
-                }
-                await new Promise(resolve => setTimeout(resolve, 30))
+        // Bipartisan bills: query local bill_sponsorships joined with the
+        // primary sponsor's party — previously did a per-bill Congress.gov
+        // call which had no retry, no timeout, and cost N extra API calls per
+        // member. sync-bills already populates bill_sponsorships, so no
+        // external HTTP is needed.
+        try {
+          const { data: cosponsored } = await supabase
+            .from('bill_sponsorships')
+            .select('bill_id, bills!inner(id, sponsors:bill_sponsorships!inner(member_id, is_sponsor))')
+            .eq('member_id', member.id)
+            .eq('is_sponsor', false)
+            .limit(500)
+
+          if (cosponsored && cosponsored.length > 0) {
+            const primaryBillIds = cosponsored.map((c: any) => c.bill_id)
+            // Fetch primary sponsors + their party for each of those bills.
+            const { data: primarySponsors } = await supabase
+              .from('bill_sponsorships')
+              .select('bill_id, members!inner(party)')
+              .in('bill_id', primaryBillIds)
+              .eq('is_sponsor', true)
+
+            for (const ps of primarySponsors || []) {
+              const primaryParty = (ps as any).members?.party
+              if (!primaryParty || !member.party) continue
+              if ((member.party === 'D' && primaryParty === 'R') ||
+                  (member.party === 'R' && primaryParty === 'D')) {
+                bipartisanBills++
               }
             }
-          } catch (e) {
-            console.log(`Error fetching cosponsored bills: ${e}`)
           }
+        } catch (e) {
+          console.log(`Error computing bipartisan bills from local data: ${e}`)
         }
 
         // If no real vote data, estimate based on activity
@@ -357,9 +379,9 @@ Deno.serve(async (req) => {
           console.log(`Updated ${member.full_name}: overall=${overallScore}, attendance=${attendanceScore}, productivity=${productivityScore}`)
         }
 
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 150))
-        
+        // fetchWithRetry already enforces minDelayBetweenRequestsMs between
+        // congress_gov requests, so no per-member sleep is needed here.
+
       } catch (memberError) {
         const errMsg = memberError instanceof Error ? memberError.message : String(memberError)
         errors.push(`${member.bioguide_id}: ${errMsg}`)
