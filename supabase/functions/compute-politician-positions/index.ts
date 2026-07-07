@@ -35,17 +35,45 @@ serve(async (req) => {
 
     console.log(`Found ${issues.length} active issues`);
 
-    // Get all issue signals (vote/bill mappings)
-    const { data: signals, error: signalsError } = await supabase
-      .from("issue_signals")
-      .select("*");
-
-    if (signalsError) throw signalsError;
-    console.log(`Found ${signals?.length || 0} issue signals`);
+    // Get all issue signals (vote/bill mappings). Paginate — PostgREST caps at 1000.
+    const signals: any[] = [];
+    {
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("issue_signals")
+          .select("*")
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        signals.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+    }
+    console.log(`Found ${signals.length} issue signals`);
 
     // Group signals by type and external_ref
-    const voteSignals = signals?.filter(s => s.signal_type === "vote") || [];
-    const billSignals = signals?.filter(s => s.signal_type === "bill_sponsorship") || [];
+    const voteSignals = signals.filter((s) => s.signal_type === "vote");
+    const billSignals = signals.filter((s) => s.signal_type === "bill_sponsorship");
+
+    // Build lookup: external_ref -> signals[]
+    const voteSignalsByRef = new Map<string, any[]>();
+    for (const s of voteSignals) {
+      const arr = voteSignalsByRef.get(s.external_ref) || [];
+      arr.push(s);
+      voteSignalsByRef.set(s.external_ref, arr);
+    }
+    const billSignalsByRef = new Map<string, any[]>();
+    for (const s of billSignals) {
+      const arr = billSignalsByRef.get(s.external_ref) || [];
+      arr.push(s);
+      billSignalsByRef.set(s.external_ref, arr);
+    }
+    const voteIds = Array.from(voteSignalsByRef.keys());
+    const billIds = Array.from(billSignalsByRef.keys());
 
     // Get politicians to process
     let politiciansQuery = supabase
@@ -62,101 +90,100 @@ serve(async (req) => {
 
     console.log(`Processing ${politicians?.length || 0} politicians`);
 
+    const politicianIds = (politicians || []).map((p) => p.id);
     const results: { politician_id: string; positions_computed: number }[] = [];
+
+    // Batch-fetch all member_votes and bill_sponsorships for the ENTIRE batch of
+    // politicians in one query each (previously issued 2 queries PER politician).
+    const votesByMember = new Map<string, Array<{ vote_id: string; position: string }>>();
+    const sponsorshipsByMember = new Map<string, Array<{ bill_id: string; is_sponsor: boolean }>>();
+
+    if (politicianIds.length > 0 && voteIds.length > 0) {
+      // Chunk voteIds to keep URL length reasonable.
+      const CHUNK = 200;
+      for (let i = 0; i < voteIds.length; i += CHUNK) {
+        const chunk = voteIds.slice(i, i + CHUNK);
+        const { data, error } = await supabase
+          .from("member_votes")
+          .select("member_id, vote_id, position")
+          .in("member_id", politicianIds)
+          .in("vote_id", chunk);
+        if (error) {
+          console.error("Batch member_votes fetch error:", error.message);
+          continue;
+        }
+        for (const row of data || []) {
+          const arr = votesByMember.get(row.member_id) || [];
+          arr.push({ vote_id: row.vote_id, position: row.position });
+          votesByMember.set(row.member_id, arr);
+        }
+      }
+    }
+
+    if (politicianIds.length > 0 && billIds.length > 0) {
+      const CHUNK = 200;
+      for (let i = 0; i < billIds.length; i += CHUNK) {
+        const chunk = billIds.slice(i, i + CHUNK);
+        const { data, error } = await supabase
+          .from("bill_sponsorships")
+          .select("member_id, bill_id, is_sponsor")
+          .in("member_id", politicianIds)
+          .in("bill_id", chunk);
+        if (error) {
+          console.error("Batch bill_sponsorships fetch error:", error.message);
+          continue;
+        }
+        for (const row of data || []) {
+          const arr = sponsorshipsByMember.get(row.member_id) || [];
+          arr.push({ bill_id: row.bill_id, is_sponsor: row.is_sponsor });
+          sponsorshipsByMember.set(row.member_id, arr);
+        }
+      }
+    }
 
     for (const politician of politicians || []) {
       const issueScores: Record<string, { sum: number; weight: number; count: number }> = {};
-
-      // Initialize scores for all issues
       for (const issue of issues) {
         issueScores[issue.id] = { sum: 0, weight: 0, count: 0 };
       }
 
-      // Process vote signals
-      if (voteSignals.length > 0) {
-        // Get vote IDs from signals (external_ref is the vote ID)
-        const voteIds = voteSignals.map(s => s.external_ref);
-
-        // Get this politician's votes on signaled votes
-        const { data: memberVotes, error: votesError } = await supabase
-          .from("member_votes")
-          .select("vote_id, position")
-          .eq("member_id", politician.id)
-          .in("vote_id", voteIds);
-
-        if (votesError) {
-          console.error(`Error fetching votes for ${politician.id}:`, votesError);
-          continue;
-        }
-
-        // Calculate scores from votes
-        for (const vote of memberVotes || []) {
-          const relevantSignals = voteSignals.filter(s => s.external_ref === vote.vote_id);
-
-          for (const signal of relevantSignals) {
-            // Map vote position to a numeric value
-            let voteValue = 0;
-            if (vote.position === "yea") voteValue = 1;
-            else if (vote.position === "nay") voteValue = -1;
-            // present/not_voting = 0
-
-            // Apply signal direction: positive direction means yea aligns with progressive
-            const contribution = voteValue * signal.direction * signal.weight;
-
-            issueScores[signal.issue_id].sum += contribution;
-            issueScores[signal.issue_id].weight += signal.weight;
-            issueScores[signal.issue_id].count += 1;
-          }
+      // Process this politician's votes
+      const memberVotes = votesByMember.get(politician.id) || [];
+      for (const vote of memberVotes) {
+        const relevantSignals = voteSignalsByRef.get(vote.vote_id) || [];
+        for (const signal of relevantSignals) {
+          let voteValue = 0;
+          if (vote.position === "yea") voteValue = 1;
+          else if (vote.position === "nay") voteValue = -1;
+          const contribution = voteValue * signal.direction * signal.weight;
+          issueScores[signal.issue_id].sum += contribution;
+          issueScores[signal.issue_id].weight += signal.weight;
+          issueScores[signal.issue_id].count += 1;
         }
       }
 
-      // Process bill sponsorship signals
-      if (billSignals.length > 0) {
-        const billIds = billSignals.map(s => s.external_ref);
-
-        // Get this politician's sponsorships
-        const { data: sponsorships, error: sponsorError } = await supabase
-          .from("bill_sponsorships")
-          .select("bill_id, is_sponsor")
-          .eq("member_id", politician.id)
-          .in("bill_id", billIds);
-
-        if (sponsorError) {
-          console.error(`Error fetching sponsorships for ${politician.id}:`, sponsorError);
-          continue;
-        }
-
-        // Calculate scores from sponsorships
-        for (const sponsorship of sponsorships || []) {
-          const relevantSignals = billSignals.filter(s => s.external_ref === sponsorship.bill_id);
-
-          for (const signal of relevantSignals) {
-            // Sponsoring = strongly aligned, co-sponsoring = moderately aligned
-            const sponsorWeight = sponsorship.is_sponsor ? 1.5 : 1.0;
-            const contribution = signal.direction * signal.weight * sponsorWeight;
-
-            issueScores[signal.issue_id].sum += contribution;
-            issueScores[signal.issue_id].weight += signal.weight * sponsorWeight;
-            issueScores[signal.issue_id].count += 1;
-          }
+      // Process this politician's sponsorships
+      const sponsorships = sponsorshipsByMember.get(politician.id) || [];
+      for (const sponsorship of sponsorships) {
+        const relevantSignals = billSignalsByRef.get(sponsorship.bill_id) || [];
+        for (const signal of relevantSignals) {
+          const sponsorWeight = sponsorship.is_sponsor ? 1.5 : 1.0;
+          const contribution = signal.direction * signal.weight * sponsorWeight;
+          issueScores[signal.issue_id].sum += contribution;
+          issueScores[signal.issue_id].weight += signal.weight * sponsorWeight;
+          issueScores[signal.issue_id].count += 1;
         }
       }
 
       // Calculate final scores and upsert positions
       let positionsComputed = 0;
-
       for (const issue of issues) {
         const scores = issueScores[issue.id];
-
         if (scores.count === 0) continue;
 
-        // Normalize score to [-2, 2] range (matching user answer scale)
-        // sum/weight gives us average in [-1, 1], multiply by 2 for [-2, 2]
-        const normalizedScore = scores.weight > 0 
-          ? (scores.sum / scores.weight) * 2 
+        const normalizedScore = scores.weight > 0
+          ? (scores.sum / scores.weight) * 2
           : 0;
-
-        // Clamp to valid range
         const clampedScore = Math.max(-2, Math.min(2, normalizedScore));
 
         const { error: upsertError } = await supabase

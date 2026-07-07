@@ -273,32 +273,40 @@ Deno.serve(async (req) => {
       }
     }
     
-    // Clear old lobbying data and insert new
+    // Upsert first, then delete stale rows — avoids an empty-table window for
+    // any reader hitting member_lobbying mid-sync. Requires the
+    // (member_id, industry, cycle) unique constraint added in migration.
     if (lobbyingRecords.length > 0) {
-      // Delete existing data for current cycle
-      await supabase
-        .from("member_lobbying")
-        .delete()
-        .eq("cycle", currentYear);
-      
-      // Insert in batches
       const batchSize = 500;
-      let inserted = 0;
-      
+      let upserted = 0;
+
       for (let i = 0; i < lobbyingRecords.length; i += batchSize) {
         const batch = lobbyingRecords.slice(i, i + batchSize);
-        const { error: insertError } = await supabase
+        const { error: upsertError } = await supabase
           .from("member_lobbying")
-          .insert(batch);
-        
-        if (insertError) {
-          console.error(`Insert batch error: ${insertError.message}`);
+          .upsert(batch, { onConflict: "member_id,industry,cycle" });
+
+        if (upsertError) {
+          console.error(`Upsert batch error: ${upsertError.message}`);
         } else {
-          inserted += batch.length;
+          upserted += batch.length;
         }
       }
-      
-      console.log(`Inserted ${inserted} lobbying records`);
+
+      // Remove any industries from this cycle that are no longer in the top set.
+      const currentIndustries = Array.from(new Set(topIndustries.map((i) => i.industry)));
+      if (currentIndustries.length > 0) {
+        const { error: cleanupError } = await supabase
+          .from("member_lobbying")
+          .delete()
+          .eq("cycle", currentYear)
+          .not("industry", "in", `(${currentIndustries.map((s) => `"${s.replace(/"/g, '""')}"`).join(",")})`);
+        if (cleanupError) {
+          console.error(`Cleanup stale industries error: ${cleanupError.message}`);
+        }
+      }
+
+      console.log(`Upserted ${upserted} lobbying records`);
     }
     
     // Update sync progress
