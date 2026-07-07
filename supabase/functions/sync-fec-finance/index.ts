@@ -267,6 +267,10 @@ Deno.serve(async (req) => {
   let apiCalls = 0
   let totalWaitMs = 0
 
+  // Hoisted so the catch block below can release the atomic lock.
+  let lockId: string = JOB_ID
+  let lockToken: string | null = null
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -285,7 +289,7 @@ Deno.serve(async (req) => {
     const memberIdFilter = requestUrl.searchParams.get('member_id')
     const cycleFilter = requestUrl.searchParams.get('cycle')
     const isSingleMemberRun = !!memberIdFilter
-    
+
     // Determine which cycles to process
     let cyclesToProcess: number[]
     if (cycleFilter) {
@@ -304,15 +308,16 @@ Deno.serve(async (req) => {
       // Batch mode: process current cycle only for speed
       cyclesToProcess = [CURRENT_CYCLE]
     }
-    
-    const lockId = memberIdFilter 
-      ? `${JOB_ID}:${memberIdFilter}` 
-      : cycleFilter 
-        ? `${JOB_ID}:cycle-${cycleFilter}` 
+
+    lockId = memberIdFilter
+      ? `${JOB_ID}:${memberIdFilter}`
+      : cycleFilter
+        ? `${JOB_ID}:cycle-${cycleFilter}`
         : JOB_ID
 
-    // Try to acquire lock
-    if (!await acquireLock(supabase, lockId)) {
+    // Try to acquire atomic lock via acquire_job_lock RPC
+    lockToken = await acquireLock(supabase, lockId)
+    if (!lockToken) {
       return new Response(
         JSON.stringify({ success: false, message: 'Job is locked or already running' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
