@@ -1,5 +1,13 @@
 // Centralized HTTP client with rate limiting, backoff, retry logic, and timeboxing
 // All sync functions should use this to ensure consistent behavior
+//
+// NOTE: `activeCalls`, `lastRequestTime`, and the circuit breaker registry are
+// module-scoped. Deno edge functions are isolated per invocation, so these
+// protect against concurrency WITHIN a single invocation only. Cross-invocation
+// rate limiting/backoff must rely on database-side state (see api_rate_limits).
+
+import { getCircuitBreaker } from "./circuitBreaker.ts";
+
 
 export interface HttpClientConfig {
   maxRetries?: number;
@@ -191,57 +199,40 @@ export async function fetchWithRetry(
   budget?: TimeBudget
 ): Promise<{ response: Response; metrics: RequestMetrics }> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-  let lastError: Error | null = null;
-  let totalWaitMs = 0;
-  
-  // Check time budget before starting
-  if (budget && budget.isExpired()) {
-    throw new Error(`Time budget expired before request to ${url}`);
-  }
-  
-  await waitForSlot(provider, mergedConfig.maxConcurrency);
-  incrementActive(provider);
-  
-  // Enforce minimum delay between requests to same provider
-  const delayWait = await enforceMinDelay(provider, mergedConfig.minDelayBetweenRequestsMs);
-  totalWaitMs += delayWait;
-  
-  try {
-    for (let attempt = 0; attempt <= mergedConfig.maxRetries; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), mergedConfig.timeoutMs);
-        
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok || !shouldRetry(response.status)) {
-          return {
-            response,
-            metrics: {
-              attempts: attempt + 1,
-              totalWaitMs,
-              finalStatus: response.status,
-              endpoint: url,
-            },
-          };
-        }
-        
-        // Track 429s for observability
-        if (response.status === 429) {
-          const retryAfter = parseRetryAfter(response.headers);
-          recordRateLimitHit(provider, url, retryAfter ? retryAfter / 1000 : null);
-        }
-        
-        // Handle retry
-        if (attempt < mergedConfig.maxRetries) {
-          // Check time budget before retrying
-          if (budget && budget.isNearExpiry()) {
-            console.log(`[httpClient] Time budget near expiry, returning partial result for ${url}`);
+
+  // Circuit breaker fails fast when a provider has been repeatedly failing so
+  // we do not burn all retries × timeouts on a known-down upstream.
+  const breaker = getCircuitBreaker(provider);
+  return await breaker.execute(async () => {
+    let lastError: Error | null = null;
+    let totalWaitMs = 0;
+
+    // Check time budget before starting
+    if (budget && budget.isExpired()) {
+      throw new Error(`Time budget expired before request to ${url}`);
+    }
+
+    await waitForSlot(provider, mergedConfig.maxConcurrency);
+    incrementActive(provider);
+
+    // Enforce minimum delay between requests to same provider
+    const delayWait = await enforceMinDelay(provider, mergedConfig.minDelayBetweenRequestsMs);
+    totalWaitMs += delayWait;
+
+    try {
+      for (let attempt = 0; attempt <= mergedConfig.maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), mergedConfig.timeoutMs);
+
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok || !shouldRetry(response.status)) {
             return {
               response,
               metrics: {
@@ -252,45 +243,68 @@ export async function fetchWithRetry(
               },
             };
           }
-          
-          const retryAfterMs = parseRetryAfter(response.headers);
-          const waitMs = retryAfterMs ?? calculateBackoff(attempt, mergedConfig);
-          
-          console.log(`[httpClient] ${provider} retry ${attempt + 1}/${mergedConfig.maxRetries} for ${url}, status=${response.status}, waiting ${waitMs}ms`);
-          
-          totalWaitMs += waitMs;
-          await sleep(waitMs);
-        } else {
-          return {
-            response,
-            metrics: {
-              attempts: attempt + 1,
-              totalWaitMs,
-              finalStatus: response.status,
-              endpoint: url,
-            },
-          };
-        }
-      } catch (error) {
-        lastError = error as Error;
-        
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.log(`[httpClient] ${provider} timeout for ${url}, attempt ${attempt + 1}`);
-        }
-        
-        if (attempt < mergedConfig.maxRetries) {
-          const waitMs = calculateBackoff(attempt, mergedConfig);
-          console.log(`[httpClient] ${provider} error retry ${attempt + 1}/${mergedConfig.maxRetries}, waiting ${waitMs}ms: ${error}`);
-          totalWaitMs += waitMs;
-          await sleep(waitMs);
+
+          // Track 429s for observability
+          if (response.status === 429) {
+            const retryAfter = parseRetryAfter(response.headers);
+            recordRateLimitHit(provider, url, retryAfter ? retryAfter / 1000 : null);
+          }
+
+          // Handle retry
+          if (attempt < mergedConfig.maxRetries) {
+            // Check time budget before retrying
+            if (budget && budget.isNearExpiry()) {
+              console.log(`[httpClient] Time budget near expiry, returning partial result for ${url}`);
+              return {
+                response,
+                metrics: {
+                  attempts: attempt + 1,
+                  totalWaitMs,
+                  finalStatus: response.status,
+                  endpoint: url,
+                },
+              };
+            }
+
+            const retryAfterMs = parseRetryAfter(response.headers);
+            const waitMs = retryAfterMs ?? calculateBackoff(attempt, mergedConfig);
+
+            console.log(`[httpClient] ${provider} retry ${attempt + 1}/${mergedConfig.maxRetries} for ${url}, status=${response.status}, waiting ${waitMs}ms`);
+
+            totalWaitMs += waitMs;
+            await sleep(waitMs);
+          } else {
+            return {
+              response,
+              metrics: {
+                attempts: attempt + 1,
+                totalWaitMs,
+                finalStatus: response.status,
+                endpoint: url,
+              },
+            };
+          }
+        } catch (error) {
+          lastError = error as Error;
+
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.log(`[httpClient] ${provider} timeout for ${url}, attempt ${attempt + 1}`);
+          }
+
+          if (attempt < mergedConfig.maxRetries) {
+            const waitMs = calculateBackoff(attempt, mergedConfig);
+            console.log(`[httpClient] ${provider} error retry ${attempt + 1}/${mergedConfig.maxRetries}, waiting ${waitMs}ms: ${error}`);
+            totalWaitMs += waitMs;
+            await sleep(waitMs);
+          }
         }
       }
+
+      throw lastError || new Error(`Failed after ${mergedConfig.maxRetries} retries`);
+    } finally {
+      decrementActive(provider);
     }
-    
-    throw lastError || new Error(`Failed after ${mergedConfig.maxRetries} retries`);
-  } finally {
-    decrementActive(provider);
-  }
+  });
 }
 
 export async function fetchJson<T>(

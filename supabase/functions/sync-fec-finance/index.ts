@@ -143,51 +143,56 @@ async function updateWatermark(supabase: any, cursor: any, recordsTotal: number)
     }, { onConflict: 'provider,dataset,scope_key' })
 }
 
-// Helper: Acquire job lock
-async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<boolean> {
-  const now = new Date()
-  const lockUntil = new Date(now.getTime() + MAX_DURATION_SECONDS * 1000)
+// Atomic lock via job_locks table (uses `acquire_job_lock` / `release_job_lock`
+// Postgres functions from migration 20260428). Returns a lock token on success.
+async function acquireLock(supabase: any, lockId: string = JOB_ID): Promise<string | null> {
+  const workerId = `edge-${crypto.randomUUID()}`
+  const { data: token, error } = await supabase.rpc('acquire_job_lock', {
+    p_job_id: lockId,
+    p_locked_by: workerId,
+    p_duration_seconds: MAX_DURATION_SECONDS,
+  })
 
-  const { data: progress } = await supabase
-    .from('sync_progress')
-    .select('status, lock_until')
-    .eq('id', lockId)
-    .single()
-
-  if (progress) {
-    const existingLock = progress.lock_until ? new Date(progress.lock_until) : null
-    const isLocked = !!(existingLock && existingLock > now)
-
-    if (isLocked) {
-      console.log(`Job ${lockId} is locked until ${existingLock!.toISOString()}`)
-      return false
-    }
-
-    if (progress.status === 'running') {
-      console.warn(`Job ${lockId} was 'running' but lock expired; restarting`)
-    }
+  if (error) {
+    console.error(`acquire_job_lock failed for ${lockId}:`, error.message)
+    return null
+  }
+  if (!token) {
+    console.log(`Job ${lockId} is already locked`)
+    return null
   }
 
+  // Mirror running status into sync_progress for the UI (advisory only).
   await supabase
     .from('sync_progress')
     .upsert({
       id: lockId,
       status: 'running',
-      lock_until: lockUntil.toISOString(),
-      last_run_at: now.toISOString(),
+      lock_until: new Date(Date.now() + MAX_DURATION_SECONDS * 1000).toISOString(),
+      last_run_at: new Date().toISOString(),
     }, { onConflict: 'id' })
 
-  return true
+  return token as string
 }
 
-// Helper: Release job lock
+// Release atomic lock and update sync_progress. Safe to call with a null token
+// (e.g. when acquireLock returned null because someone else holds the lock).
 async function releaseLock(
   supabase: any,
   status: string,
   successCount: number,
   failureCount: number,
-  lockId: string = JOB_ID
+  lockToken: string | null,
+  lockId: string = JOB_ID,
 ) {
+  if (lockToken) {
+    const { error } = await supabase.rpc('release_job_lock', {
+      p_job_id: lockId,
+      p_lock_token: lockToken,
+    })
+    if (error) console.error(`release_job_lock failed for ${lockId}:`, error.message)
+  }
+
   await supabase
     .from('sync_progress')
     .update({
@@ -262,6 +267,10 @@ Deno.serve(async (req) => {
   let apiCalls = 0
   let totalWaitMs = 0
 
+  // Hoisted so the catch block below can release the atomic lock.
+  let lockId: string = JOB_ID
+  let lockToken: string | null = null
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -280,7 +289,7 @@ Deno.serve(async (req) => {
     const memberIdFilter = requestUrl.searchParams.get('member_id')
     const cycleFilter = requestUrl.searchParams.get('cycle')
     const isSingleMemberRun = !!memberIdFilter
-    
+
     // Determine which cycles to process
     let cyclesToProcess: number[]
     if (cycleFilter) {
@@ -299,15 +308,16 @@ Deno.serve(async (req) => {
       // Batch mode: process current cycle only for speed
       cyclesToProcess = [CURRENT_CYCLE]
     }
-    
-    const lockId = memberIdFilter 
-      ? `${JOB_ID}:${memberIdFilter}` 
-      : cycleFilter 
-        ? `${JOB_ID}:cycle-${cycleFilter}` 
+
+    lockId = memberIdFilter
+      ? `${JOB_ID}:${memberIdFilter}`
+      : cycleFilter
+        ? `${JOB_ID}:cycle-${cycleFilter}`
         : JOB_ID
 
-    // Try to acquire lock
-    if (!await acquireLock(supabase, lockId)) {
+    // Try to acquire atomic lock via acquire_job_lock RPC
+    lockToken = await acquireLock(supabase, lockId)
+    if (!lockToken) {
       return new Response(
         JSON.stringify({ success: false, message: 'Job is locked or already running' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -409,7 +419,7 @@ Deno.serve(async (req) => {
 
       if (memberIds.length === 0) {
         console.log('No members to process')
-        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
         return new Response(
           JSON.stringify({
             success: true,
@@ -434,7 +444,7 @@ Deno.serve(async (req) => {
 
     if (!members || members.length === 0) {
       if (isSingleMemberRun) {
-        await releaseLock(supabase, 'complete', 0, 0, lockId)
+        await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
         return new Response(
           JSON.stringify({ success: false, message: 'No matching member found for requested member_id' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -442,7 +452,7 @@ Deno.serve(async (req) => {
       }
 
       console.log('All members processed. Resetting offset.')
-      await releaseLock(supabase, 'complete', 0, 0, lockId)
+      await releaseLock(supabase, 'complete', 0, 0, lockToken, lockId)
       await updateWatermark(supabase, { memberOffset: 0 }, 0)
 
       return new Response(
@@ -1077,7 +1087,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', JOB_ID)
 
-    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount, lockId)
+    await releaseLock(supabase, hasMore ? 'idle' : 'complete', matchedCount, errorCount, lockToken, lockId)
 
     // Log job run
     await supabase.from('sync_job_runs').insert({
@@ -1131,7 +1141,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    await releaseLock(supabase, 'error', 0, 1, JOB_ID)
+    await releaseLock(supabase, 'error', 0, 1, lockToken, lockId)
 
     await supabase.from('sync_job_runs').insert({
       job_id: `fec-finance-${Date.now()}`,

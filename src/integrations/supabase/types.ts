@@ -2344,6 +2344,46 @@ export type Database = {
     }
     Functions: {
       cleanup_user_activity_logs: { Args: never; Returns: undefined }
+      get_chamber_score_aggregates: {
+        Args: never
+        Returns: {
+          avg_score: number
+          chamber: string
+          member_count: number
+        }[]
+      }
+      get_congress_sessions: {
+        Args: never
+        Returns: {
+          congress: number
+        }[]
+      }
+      get_party_score_aggregates: {
+        Args: never
+        Returns: {
+          avg_score: number
+          member_count: number
+          party: string
+        }[]
+      }
+      get_state_score_aggregates: {
+        Args: never
+        Returns: {
+          avg_score: number
+          member_count: number
+          state: string
+        }[]
+      }
+      get_state_stat_aggregates: {
+        Args: { p_state: string }
+        Returns: {
+          avg_attendance: number
+          avg_bipartisanship: number
+          avg_score: number
+          member_count: number
+          total_bills_sponsored: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

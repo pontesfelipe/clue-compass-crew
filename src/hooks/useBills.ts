@@ -107,16 +107,12 @@ export function useCongressSessions() {
   return useQuery({
     queryKey: ["congress-sessions"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bills")
-        .select("congress")
-        .order("congress", { ascending: false });
-
+      // Use a Postgres RPC so DISTINCT runs server-side. The previous
+      // implementation selected `congress` from `bills` without a LIMIT and
+      // was silently capped at PostgREST's 1000-row default.
+      const { data, error } = await supabase.rpc("get_congress_sessions");
       if (error) throw error;
-
-      // Get unique congress sessions
-      const uniqueSessions = [...new Set(data.map((b) => b.congress))];
-      return uniqueSessions;
+      return (data as { congress: number }[] | null)?.map((r) => r.congress) ?? [];
     },
   });
 }

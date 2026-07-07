@@ -439,16 +439,33 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
   let waitMs = 0
   let partial = false
 
-  const { data: senators } = await supabase.from('members').select('id, last_name, state').eq('chamber', 'senate').eq('in_office', true)
-  const senatorByNameState = new Map<string, string>()
-  for (const s of senators || []) senatorByNameState.set(`${s.last_name.toLowerCase()}|${s.state.toLowerCase()}`, s.id)
-  console.log(`Built senator lookup with ${senatorByNameState.size} senators`)
+  const { data: senators } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, state')
+    .eq('chamber', 'senate')
+    .eq('in_office', true)
+
+  // Build two lookup maps. Primary is (first_initial|last|state) so two
+  // senators from the same state with the same last name don't collide.
+  // Fallback is (last|state) for legacy matches.
+  const norm = (s: string) => (s || '').toLowerCase().trim()
+  const senatorByFirstLastState = new Map<string, string>()
+  const senatorByLastState = new Map<string, string | 'AMBIGUOUS'>()
+  for (const s of senators || []) {
+    const first = norm(s.first_name).charAt(0)
+    const last = norm(s.last_name)
+    const state = norm(s.state)
+    senatorByFirstLastState.set(`${first}|${last}|${state}`, s.id)
+    const key = `${last}|${state}`
+    senatorByLastState.set(key, senatorByLastState.has(key) ? 'AMBIGUOUS' : s.id)
+  }
+  console.log(`Built senator lookup: ${senatorByFirstLastState.size} by first+last+state`)
 
   // Get watermark for incremental sync
   const { lastCursor } = await getWatermark(supabase, DATASET_SENATE)
   const startRoll = mode === 'delta' && lastCursor?.lastRoll ? lastCursor.lastRoll + 1 : 1
   const maxRolls = 500 // Allow more rolls, timebox will limit
-  
+
   console.log(`Senate votes: starting from roll ${startRoll}`)
 
   let lastSuccessfulRoll = startRoll - 1
@@ -463,11 +480,11 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
     try {
       const paddedRoll = rollNumber.toString().padStart(5, '0')
       const xmlUrl = `https://www.senate.gov/legislative/LIS/roll_call_votes/vote${congress}${session}/vote_${congress}_${session}_${paddedRoll}.xml`
-      
+
       const { response, metrics } = await fetchWithRetry(xmlUrl, {}, 'senate_gov', HTTP_CONFIG, budget)
       apiCalls++
       waitMs += metrics.totalWaitMs
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           console.log(`Senate roll ${rollNumber} not found, stopping`)
@@ -475,7 +492,7 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
         }
         continue
       }
-      
+
       const xmlText = await response.text()
 
       const voteDate = parseSenateDate(extractXmlValue(xmlText, 'vote_date') || '')
@@ -483,7 +500,7 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
 
       const description = extractXmlValue(xmlText, 'vote_title')
       const question = extractXmlValue(xmlText, 'vote_question_text') || extractXmlValue(xmlText, 'question')
-      
+
       // Try to link to a bill
       const billRef = parseBillReference(description) || parseBillReference(question)
       let billId: string | null = null
@@ -514,21 +531,38 @@ async function syncSenateVotes(supabase: any, mode: string, budget: TimeBudget) 
       totalVotesProcessed++
       lastSuccessfulRoll = rollNumber
 
-      // Parse member votes - match by last_name + state
-      const memberPattern = /<member>\s*<member_full>[^<]*<\/member_full>\s*<last_name>([^<]+)<\/last_name>\s*<first_name>[^<]*<\/first_name>\s*<party>[^<]*<\/party>\s*<state>([^<]+)<\/state>\s*<vote_cast>([^<]*)<\/vote_cast>/gi
+      // Parse member votes. Match first_initial+last+state to disambiguate
+      // same-state, same-last-name senators; fall back to last+state ONLY if
+      // that key is unique.
+      const memberPattern = /<member>\s*<member_full>[^<]*<\/member_full>\s*<last_name>([^<]+)<\/last_name>\s*<first_name>([^<]*)<\/first_name>\s*<party>[^<]*<\/party>\s*<state>([^<]+)<\/state>\s*<vote_cast>([^<]*)<\/vote_cast>/gi
       const memberVoteRecords: any[] = []
       let match
+      let unmatched = 0
+      let ambiguous = 0
       while ((match = memberPattern.exec(xmlText)) !== null) {
-        const lastName = match[1].trim()
-        const stateAbbr = match[2].trim()
-        const stateFull = stateAbbrToFull[stateAbbr] || stateAbbr
-        const memberId = senatorByNameState.get(`${lastName.toLowerCase()}|${stateFull.toLowerCase()}`)
-        if (!memberId) continue
+        const lastName = norm(match[1])
+        const firstName = norm(match[2])
+        const stateAbbr = match[3].trim()
+        const stateFull = norm(stateAbbrToFull[stateAbbr] || stateAbbr)
 
-        const pos = match[3].toLowerCase()
+        let memberId: string | undefined = senatorByFirstLastState.get(`${firstName.charAt(0)}|${lastName}|${stateFull}`)
+        if (!memberId) {
+          const fallback = senatorByLastState.get(`${lastName}|${stateFull}`)
+          if (fallback === 'AMBIGUOUS') {
+            ambiguous++
+            continue
+          }
+          memberId = fallback || undefined
+        }
+        if (!memberId) { unmatched++; continue }
+
+        const pos = match[4].toLowerCase()
         let position: 'yea' | 'nay' | 'present' | 'not_voting' = pos === 'yea' ? 'yea' : pos === 'nay' ? 'nay' : pos === 'present' ? 'present' : 'not_voting'
-        const { normalized, weight } = normalizePosition(match[3])
+        const { normalized, weight } = normalizePosition(match[4])
         memberVoteRecords.push({ vote_id: voteId, member_id: memberId, position, position_normalized: normalized, weight })
+      }
+      if (ambiguous > 0 || unmatched > 0) {
+        console.log(`Senate roll ${rollNumber}: ${ambiguous} ambiguous, ${unmatched} unmatched senator records`)
       }
 
       if (memberVoteRecords.length > 0) {
