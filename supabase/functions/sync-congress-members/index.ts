@@ -317,28 +317,52 @@ Deno.serve(async (req) => {
       console.log(`Processed ${inserted}/${memberRecords.length} members`)
     }
 
-    // Generate baseline scores for members without scores
-    // These are provisional scores that will be recalculated once we have voting/bill data
+    // Generate baseline scores for members without scores.
+    // Previous implementation used `.not('id','in', subquery)` which PostgREST
+    // compiles into a URL parameter — with thousands of state legislators this
+    // overflows and silently truncates. Instead, paginate both tables and diff
+    // in memory.
     console.log('Generating baseline scores for new members...')
-    
-    const { data: membersWithoutScores } = await supabase
-      .from('members')
-      .select('id')
-      .not('id', 'in', 
-        supabase.from('member_scores').select('member_id')
-      )
 
-    if (membersWithoutScores && membersWithoutScores.length > 0) {
+    const fetchAllIds = async (
+      table: string,
+      column: string,
+      extraFilter?: (q: any) => any,
+    ): Promise<string[]> => {
+      const PAGE = 1000
+      const ids: string[] = []
+      let from = 0
+      while (true) {
+        let q = supabase.from(table).select(column).order(column, { ascending: true }).range(from, from + PAGE - 1)
+        if (extraFilter) q = extraFilter(q)
+        const { data, error } = await q
+        if (error) { console.error(`fetchAllIds(${table}) error:`, error.message); break }
+        if (!data || data.length === 0) break
+        for (const row of data as any[]) if (row[column]) ids.push(row[column] as string)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      return ids
+    }
+
+    const [allMemberIds, existingScoreMemberIds] = await Promise.all([
+      fetchAllIds('members', 'id'),
+      fetchAllIds('member_scores', 'member_id', (q) => q.is('user_id', null)),
+    ])
+    const existingSet = new Set(existingScoreMemberIds)
+    const missingIds = allMemberIds.filter((id) => !existingSet.has(id))
+    console.log(`Baseline scores: ${allMemberIds.length} members, ${existingSet.size} scored, ${missingIds.length} missing`)
+
+    if (missingIds.length > 0) {
       // Generate baseline scores with is_provisional = true
-      // These will be recalculated by calculate-member-scores once data is available
-      const scoreRecords = membersWithoutScores.map(m => ({
-        member_id: m.id,
+      const scoreRecords = missingIds.map((id) => ({
+        member_id: id,
         user_id: null,
-        overall_score: 50.0,  // Baseline: 50th percentile
+        overall_score: 50.0,
         productivity_score: 50.0,
         attendance_score: 50.0,
         bipartisanship_score: 50.0,
-        issue_alignment_score: null,  // Cannot calculate without user context
+        issue_alignment_score: null,
         transparency_score: null,
         governance_score: null,
         finance_influence_score: null,
@@ -355,9 +379,24 @@ Deno.serve(async (req) => {
         calculated_at: new Date().toISOString(),
       }))
 
-      const { error: scoresError } = await supabase
-        .from('member_scores')
-        .insert(scoreRecords)
+      // Insert in chunks to avoid oversized payloads.
+      const CHUNK = 500
+      let scoresError: any = null
+      for (let i = 0; i < scoreRecords.length; i += CHUNK) {
+        const chunk = scoreRecords.slice(i, i + CHUNK)
+        const { error } = await supabase.from('member_scores').insert(chunk)
+        if (error) { scoresError = error; break }
+      }
+      if (false) {
+        // placeholder so old braces stay balanced
+      }
+      const _oldInsert = async () => {
+        return await supabase.from('member_scores').insert(scoreRecords)
+      }
+      void _oldInsert
+      // Reuse original error-handling below by re-declaring the variable name.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _err = scoresError
 
       if (scoresError) {
         console.error(`Scores insert error: ${JSON.stringify(scoresError)}`)

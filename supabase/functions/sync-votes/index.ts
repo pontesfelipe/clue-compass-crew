@@ -319,19 +319,25 @@ Deno.serve(async (req) => {
 })
 
 async function syncHouseVotes(supabase: any, memberMap: Map<string, { id: string; chamber: string }>, mode: string, budget: TimeBudget) {
-  const year = 2025
+  // Use the current calendar year so the sync advances on Jan 1.
+  const year = new Date().getUTCFullYear()
   let totalVotesProcessed = 0
   let totalMemberVotesCreated = 0
   let apiCalls = 0
   let waitMs = 0
   let partial = false
 
-  // Get watermark for incremental sync
+  // Get watermark for incremental sync. Roll numbers reset each year, so if the
+  // stored cursor is from a prior year we must start from roll 1.
   const { lastCursor } = await getWatermark(supabase, DATASET_HOUSE)
-  const startRoll = mode === 'delta' && lastCursor?.lastRoll ? lastCursor.lastRoll + 1 : 1
+  const cursorYear = lastCursor?.year
+  const sameYear = cursorYear === year
+  const startRoll = mode === 'delta' && sameYear && lastCursor?.lastRoll
+    ? lastCursor.lastRoll + 1
+    : 1
   const maxRolls = 500 // Allow more rolls, timebox will limit
-  
-  console.log(`House votes: starting from roll ${startRoll}`)
+
+  console.log(`House votes: year=${year} starting from roll ${startRoll} (cursorYear=${cursorYear ?? 'none'})`)
 
   let lastSuccessfulRoll = startRoll - 1
 

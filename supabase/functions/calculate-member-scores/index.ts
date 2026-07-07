@@ -111,29 +111,45 @@ Deno.serve(async (req) => {
     }>()
 
     if (useRealVoteData) {
-      console.log('Fetching real vote data from member_votes...')
-      
-      const { data: voteData, error: voteError } = await supabase
-        .from('member_votes')
-        .select('member_id, position')
-      
-      if (!voteError && voteData) {
+      console.log('Fetching real vote data from member_votes (paginated)...')
+
+      // PostgREST caps responses at 1000 rows. member_votes grows to hundreds of
+      // thousands, so we MUST paginate — otherwise attendance is silently wrong.
+      const PAGE_SIZE = 1000
+      let from = 0
+      let totalRows = 0
+      while (true) {
+        const to = from + PAGE_SIZE - 1
+        const { data: voteData, error: voteError } = await supabase
+          .from('member_votes')
+          .select('member_id, position')
+          .order('id', { ascending: true })
+          .range(from, to)
+
+        if (voteError) {
+          console.error('member_votes fetch error:', voteError.message)
+          break
+        }
+        if (!voteData || voteData.length === 0) break
+
         for (const vote of voteData) {
           const stats = voteStatsMap.get(vote.member_id) || {
             total: 0, yea: 0, nay: 0, present: 0, notVoting: 0
           }
-          
           stats.total++
           if (vote.position === 'yea') stats.yea++
           else if (vote.position === 'nay') stats.nay++
           else if (vote.position === 'present') stats.present++
           else stats.notVoting++
-          
           voteStatsMap.set(vote.member_id, stats)
         }
-        
-        console.log(`Loaded vote stats for ${voteStatsMap.size} members`)
+
+        totalRows += voteData.length
+        if (voteData.length < PAGE_SIZE) break
+        from += PAGE_SIZE
       }
+
+      console.log(`Loaded ${totalRows} vote rows; stats for ${voteStatsMap.size} members`)
     }
 
     // Process each member
