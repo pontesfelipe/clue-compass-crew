@@ -226,3 +226,32 @@ git push origin feature/data-pipeline-improvements
 **Ready for Review and Deployment** ✨
 
 All code is committed and ready. Just need to push the branch and create the PR on GitHub!
+---
+
+## Scheduled Sync (pg_cron)
+
+The `scheduled-sync` edge function orchestrates all background jobs and is invoked on a cron schedule. To enable or verify it in Lovable Cloud, ensure `pg_cron` and `pg_net` are enabled, then register the job with the anon key from Cloud settings:
+
+```sql
+select cron.schedule(
+  'civicscore-scheduled-sync',
+  '*/10 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/scheduled-sync',
+    headers := '{"Content-Type":"application/json","apikey":"<anon-key>"}'::jsonb,
+    body   := '{"trigger":"cron"}'::jsonb
+  );
+  $$
+);
+```
+
+Recommended companion schedules:
+
+| Job                             | Frequency        |
+| ------------------------------- | ---------------- |
+| scheduled-sync                  | every 10 min     |
+| cleanup-activity-logs           | daily 03:00 UTC  |
+| data-healing-agent              | hourly           |
+
+Individual sync frequencies live in the `sync_jobs` table and are respected by `scheduled-sync`; you do not need per-job cron entries.
