@@ -158,6 +158,24 @@ export default function MemberPage() {
 
   const canBackfill = useMemo(() => Boolean(user && member?.id), [user, member?.id]);
 
+  // Fetch member level (federal vs state) — not on the domain type
+  const { data: memberMeta } = useQuery({
+    queryKey: ["member-meta", memberId],
+    queryFn: async () => {
+      if (!memberId) return null;
+      const { data } = await supabase
+        .from("members")
+        .select("level")
+        .eq("id", memberId)
+        .maybeSingle();
+      return data as { level: string | null } | null;
+    },
+    enabled: !!memberId,
+  });
+  const isStateLevel = memberMeta?.level === "state";
+
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
