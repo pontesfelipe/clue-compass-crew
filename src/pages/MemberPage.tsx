@@ -425,6 +425,22 @@ export default function MemberPage() {
               <p className="text-sm text-muted-foreground mt-4">
                 {chamberDisplay} · {stateName}
               </p>
+              {isStateLevel && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="mt-3 text-xs cursor-help">
+                        Provisional score
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      State-legislator scoring is provisional while OpenStates
+                      bill and vote data is backfilled. Values may change as
+                      complete data becomes available.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
         </div>
