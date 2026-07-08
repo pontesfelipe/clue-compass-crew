@@ -155,10 +155,12 @@ export function DataHealthPanel() {
           .eq("signal_type", "bill_sponsorship"),
       ]);
 
-      // Fallback: use RPC or direct counts if subquery doesn't work
+      // Distinct-member counts via planner estimate; the exact COUNT variant
+      // scans the entire member_contributions table (millions of rows) on
+      // every admin page load. Estimates are sufficient for the health widget.
       const { count: contribMembersCount } = await supabase
         .from("member_contributions")
-        .select("member_id", { count: "exact", head: true });
+        .select("member_id", { count: "estimated", head: true });
       
       const { count: committeeMembersCount } = await supabase
         .from("member_committees")
