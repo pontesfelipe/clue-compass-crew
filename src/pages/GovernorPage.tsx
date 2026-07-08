@@ -18,6 +18,7 @@ import {
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useGovernor } from "@/features/governors";
+import { Progress } from "@/components/ui/progress";
 
 const partyColors: Record<string, string> = {
   D: "bg-democrat text-democrat-foreground",
@@ -251,20 +252,41 @@ export default function GovernorPage() {
                       </p>
                     </div>
                   )}
+                  {governor.termStart && governor.termEnd && (() => {
+                    const start = new Date(governor.termStart).getTime();
+                    const end = new Date(governor.termEnd).getTime();
+                    const now = Date.now();
+                    const pct = Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="text-muted-foreground">Term progress</span>
+                          <span className="font-medium">{Math.round(pct)}%</span>
+                        </div>
+                        <Progress value={pct} />
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Note about limited data */}
-            <Card className="mt-6 bg-muted/50">
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Governor data is sourced from Open States API. Unlike Congress members, 
-                  governors don't have voting records or bill sponsorships that can be tracked 
-                  in the same way.
+            {/* Limited scoring data notice */}
+            <Card className="mt-6 border-dashed">
+              <CardHeader>
+                <CardTitle className="text-lg">Scoring &amp; Alignment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Governors do not have congressional voting records or bill sponsorships,
+                  so CivicScore does not currently compute a productivity, attendance, or
+                  alignment score for them. We surface official contact information and
+                  term data, and will add executive-action tracking as reliable, neutral
+                  sources become available.
                 </p>
               </CardContent>
             </Card>
+
           </div>
         </main>
 

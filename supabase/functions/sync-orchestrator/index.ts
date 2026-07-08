@@ -209,18 +209,22 @@ async function runDataQualityChecks(supabase: any): Promise<any[]> {
       });
     }
 
-    // Check 2: Members have scores
-    const { data: membersWithoutScores } = await supabase
+    // Check 2: Members have scores (avoid Supabase `.in(subquery)` antipattern)
+    const { data: inOfficeMembers } = await supabase
       .from("members")
       .select("id")
-      .eq("in_office", true)
-      .not("id", "in", supabase.from("member_scores").select("member_id"));
-
-    if (membersWithoutScores && membersWithoutScores.length > 10) {
+      .eq("in_office", true);
+    const { data: scoredRows } = await supabase
+      .from("member_scores")
+      .select("member_id")
+      .is("user_id", null);
+    const scoredIds = new Set((scoredRows || []).map((r: any) => r.member_id));
+    const missing = (inOfficeMembers || []).filter((m: any) => !scoredIds.has(m.id));
+    if (missing.length > 10) {
       anomalies.push({
         type: "members_missing_scores",
         severity: "warning",
-        message: `${membersWithoutScores.length} members have no scores`,
+        message: `${missing.length} members have no scores`,
       });
     }
 
