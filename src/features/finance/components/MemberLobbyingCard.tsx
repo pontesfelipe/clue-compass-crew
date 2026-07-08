@@ -66,11 +66,11 @@ export function MemberLobbyingCard({ memberId }: MemberLobbyingCardProps) {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Cycle {row.cycle}
-                  {row.filings_count ? ` · ${row.filings_count.toLocaleString()} filings` : ""}
+                  {row.client_count ? ` · ${row.client_count.toLocaleString()} clients` : ""}
                 </p>
               </div>
               <span className="ml-4 shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                {formatUsd(row.total_amount)}
+                {formatUsd(row.total_spent)}
               </span>
             </li>
           ))}

@@ -5,8 +5,8 @@ export interface MemberLobbyingRecord {
   id: string;
   industry: string;
   cycle: number;
-  total_amount: number | null;
-  filings_count: number | null;
+  total_spent: number | null;
+  client_count: number | null;
   updated_at: string | null;
 }
 
@@ -19,14 +19,15 @@ export function useMemberLobbying(memberId: string | undefined, cycle?: number) 
       if (!memberId) return [];
       let query = supabase
         .from("member_lobbying")
-        .select("id, industry, cycle, total_amount, filings_count, updated_at")
+        .select("id, industry, cycle, total_spent, client_count, updated_at")
         .eq("member_id", memberId)
-        .order("total_amount", { ascending: false })
+        .order("total_spent", { ascending: false })
         .limit(10);
       if (cycle) query = query.eq("cycle", cycle);
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as MemberLobbyingRecord[];
+      return (data ?? []) as unknown as MemberLobbyingRecord[];
     },
   });
 }
+
