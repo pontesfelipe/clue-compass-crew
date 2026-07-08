@@ -54,23 +54,35 @@ export function usePoliticianAlignment(politicianId: string | undefined) {
 
 export function useStateAlignments(stateAbbr: string | undefined) {
   const { user } = useAuth();
-  
+
   return useQuery({
     queryKey: ["alignment", "state", user?.id, stateAbbr],
     queryFn: async () => {
       if (!user || !stateAbbr) return [];
-      
+
       // Get members from this state
       const { data: members, error: membersError } = await supabase
         .from("members")
         .select("id, full_name, party, chamber")
         .eq("state", stateAbbr)
         .eq("in_office", true);
-      
+
       if (membersError) throw membersError;
       if (!members?.length) return [];
-      
-      // Get or compute alignments for each
+
+      const memberIds = members.map((m) => m.id);
+
+      // Single batched query for all cached alignments
+      const { data: cachedRows } = await supabase
+        .from("user_politician_alignment")
+        .select("politician_id, overall_alignment")
+        .eq("user_id", user.id)
+        .in("politician_id", memberIds);
+
+      const cachedMap = new Map(
+        (cachedRows || []).map((r) => [r.politician_id, Number(r.overall_alignment)])
+      );
+
       const alignments: Array<{
         politician_id: string;
         politician_name: string;
@@ -78,46 +90,37 @@ export function useStateAlignments(stateAbbr: string | undefined) {
         chamber: string;
         overall_alignment: number | null;
       }> = [];
-      
+
+      // Compute (and cache) missing ones sequentially — usually a small subset
       for (const member of members) {
-        const { data: cached } = await supabase
-          .from("user_politician_alignment")
-          .select("overall_alignment")
-          .eq("user_id", user.id)
-          .eq("politician_id", member.id)
-          .single();
-        
-        if (cached) {
-          alignments.push({
-            politician_id: member.id,
-            politician_name: member.full_name,
-            party: member.party,
-            chamber: member.chamber,
-            overall_alignment: cached.overall_alignment,
-          });
-        } else {
-          // Compute on demand
+        let overall = cachedMap.get(member.id) ?? null;
+
+        if (overall === null) {
           const alignment = await computeAlignment(user.id, member.id);
-          alignments.push({
-            politician_id: member.id,
-            politician_name: member.full_name,
-            party: member.party,
-            chamber: member.chamber,
-            overall_alignment: alignment?.overall_alignment ?? null,
-          });
-          
           if (alignment) {
-            await supabase.from("user_politician_alignment").upsert({
-              user_id: user.id,
-              politician_id: member.id,
-              overall_alignment: alignment.overall_alignment,
-              breakdown: alignment.breakdown,
-              profile_version: 1,
-            }, { onConflict: "user_id,politician_id" });
+            overall = alignment.overall_alignment;
+            await supabase.from("user_politician_alignment").upsert(
+              {
+                user_id: user.id,
+                politician_id: member.id,
+                overall_alignment: alignment.overall_alignment,
+                breakdown: alignment.breakdown,
+                profile_version: 1,
+              },
+              { onConflict: "user_id,politician_id" }
+            );
           }
         }
+
+        alignments.push({
+          politician_id: member.id,
+          politician_name: member.full_name,
+          party: member.party,
+          chamber: member.chamber,
+          overall_alignment: overall,
+        });
       }
-      
+
       return alignments;
     },
     enabled: !!user && !!stateAbbr,
