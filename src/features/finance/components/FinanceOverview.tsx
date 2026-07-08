@@ -91,7 +91,7 @@ export function FinanceOverview({ finance, fundingMetrics = [], memberState, sel
     const pctIndividuals = (individualAmt / total) * 100;
     const pctPacs = (pacAmt / total) * 100;
 
-    const stateAbbr = memberState ? (stateAbbreviations[memberState] || memberState) : null;
+    const stateAbbr = memberState ? getStateAbbr(memberState) : null;
     const inStateAmt = stateAbbr ? cycleContributions.filter(c => c.contributorState?.toUpperCase() === stateAbbr.toUpperCase()).reduce((s, c) => s + c.amount, 0) : 0;
     const outStateAmt = stateAbbr ? cycleContributions.filter(c => c.contributorState && c.contributorState.toUpperCase() !== stateAbbr.toUpperCase()).reduce((s, c) => s + c.amount, 0) : 0;
     const geoTotal = inStateAmt + outStateAmt;
