@@ -1,7 +1,10 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { ExternalLink, Database, DollarSign, FileText, Vote, Shield, Clock } from "lucide-react";
+import { ExternalLink, DollarSign, FileText, Vote, Shield, Clock, Users, Building2, Landmark } from "lucide-react";
 import { Helmet } from "react-helmet";
+import { useDataStatus } from "@/hooks/useDataStatus";
+import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 export default function DataSourcesPage() {
   const sources = [
