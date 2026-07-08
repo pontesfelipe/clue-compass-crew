@@ -287,16 +287,6 @@ export default function GovernorPage() {
               </CardContent>
             </Card>
 
-            {/* Note about limited data */}
-            <Card className="mt-6 bg-muted/50">
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Governor data is sourced from Open States API. Unlike Congress members, 
-                  governors don't have voting records or bill sponsorships that can be tracked 
-                  in the same way.
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </main>
 
