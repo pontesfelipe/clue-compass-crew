@@ -1036,6 +1036,7 @@ export type Database = {
       }
       member_scores: {
         Row: {
+          alignment_score: number | null
           attendance_score: number | null
           bills_cosponsored: number | null
           bills_enacted: number | null
@@ -1060,6 +1061,7 @@ export type Database = {
           votes_missed: number | null
         }
         Insert: {
+          alignment_score?: number | null
           attendance_score?: number | null
           bills_cosponsored?: number | null
           bills_enacted?: number | null
@@ -1084,6 +1086,7 @@ export type Database = {
           votes_missed?: number | null
         }
         Update: {
+          alignment_score?: number | null
           attendance_score?: number | null
           bills_cosponsored?: number | null
           bills_enacted?: number | null
