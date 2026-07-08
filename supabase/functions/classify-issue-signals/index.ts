@@ -6,9 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Neutral position framing (Core rule: no ideological labels).
+// direction here means: does the bill SUPPORT (+1) or OPPOSE (-1) the *stated goal*
+// of the issue category (e.g. for issue "environmental_protection", a bill that
+// strengthens EPA authority = +1; a bill that weakens it = -1). Never encodes
+// left/right or progressive/conservative.
 interface IssueClassification {
   issue_slug: string;
-  direction: number; // -1 conservative, 0 neutral, 1 progressive
+  direction: number; // +1 supports the issue's stated goal, -1 opposes, 0 neutral/mixed (skipped)
   confidence: number;
   reasoning: string;
 }
@@ -180,29 +185,37 @@ serve(async (req) => {
           bill.subjects?.length && `Subjects: ${bill.subjects.join(", ")}`,
         ].filter(Boolean).join("\n");
 
-        const prompt = `You are an expert political analyst classifying legislation into policy issues.
+        const prompt = `You are a strictly neutral legislative analyst. Classify this bill against policy-issue categories based ONLY on its stated legislative effect.
 
 Given this bill:
 ${billContext}
 
-Available issue categories:
+Available issue categories (each has a stated goal):
 ${issueDescriptions}
 
-Classify this bill into one or more relevant issue categories. For each classification, determine:
-1. The issue_slug (must match exactly from the list above)
-2. The direction: +1 if the bill generally aligns with progressive/liberal positions on this issue, -1 if it aligns with conservative positions, 0 if neutral or mixed
-3. Your confidence level (0.0 to 1.0)
-4. Brief reasoning (one sentence)
+For each relevant category, determine:
+1. issue_slug (must match exactly from the list above)
+2. direction:
+   - +1 if the bill's operative provisions ADVANCE the stated goal of that issue category
+     (e.g. bill "expands renewable energy tax credits" for issue "environmental_protection" -> +1)
+   - -1 if the bill's operative provisions ROLL BACK or WORK AGAINST the stated goal
+     (e.g. bill "repeals emissions limits" for issue "environmental_protection" -> -1)
+   - 0 if neutral, procedural, or mixed effect
+3. confidence (0.0 to 1.0) — how clear the effect is from the bill text
+4. reasoning: one sentence citing the specific provision, no ideological terms
 
-Only classify into issues where the bill is clearly relevant. Skip issues where it's not applicable.
+STRICT RULES:
+- Never use the words "liberal", "conservative", "progressive", "left", "right", "Democrat", "Republican" in reasoning.
+- Judge only against each issue's stated goal, not against a political spectrum.
+- Skip issues where the bill has no clear operative effect.
 
-Respond with a JSON array of classifications. Example:
+Respond with a JSON array. Example:
 [
-  {"issue_slug": "healthcare", "direction": 1, "confidence": 0.9, "reasoning": "Expands federal healthcare coverage"},
-  {"issue_slug": "economy", "direction": -1, "confidence": 0.7, "reasoning": "Reduces business regulations"}
+  {"issue_slug": "healthcare_access", "direction": 1, "confidence": 0.9, "reasoning": "Expands Medicaid eligibility to 200% FPL under Section 2"},
+  {"issue_slug": "small_business", "direction": -1, "confidence": 0.6, "reasoning": "Adds paperwork requirements for firms under 50 employees"}
 ]
 
-If the bill doesn't clearly fit any issue, return an empty array: []`;
+If no clear fit, return: []`;
 
         // Call OpenAI
         const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {

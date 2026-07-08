@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
       records_fetched: totalFilings,
       records_upserted: lobbyingRecords.length,
       metadata: {
-        years: years,
+        year,
         top_industries: lobbyingByIndustry.slice(0, 5).map(i => i.industry),
       },
     });
