@@ -132,7 +132,7 @@ const PrivacyPage = () => {
                 <li><strong>Opt-out:</strong> Opt out of certain data processing activities</li>
               </ul>
               <p className="mt-4">
-                To exercise these rights, please contact us at privacy@civicscore.com.
+                To exercise these rights, please contact us at privacy@civicscore.info.
               </p>
             </section>
 
