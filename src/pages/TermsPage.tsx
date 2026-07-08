@@ -17,7 +17,9 @@ const TermsPage = () => {
           <h1 className="text-4xl font-display font-bold text-foreground mb-8">Terms & Conditions</h1>
           
           <div className="prose prose-lg max-w-none text-muted-foreground space-y-8">
-            <p className="text-sm text-muted-foreground">Last updated: December 9, 2024</p>
+            <p className="text-sm text-muted-foreground">
+              Effective date: July 8, 2026 · Last updated: July 8, 2026 · Governing law: State of Delaware, USA
+            </p>
             
             <section>
               <h2 className="text-2xl font-semibold text-foreground mt-8 mb-4">1. Acceptance of Terms</h2>
@@ -144,7 +146,7 @@ const TermsPage = () => {
                 If you have any questions about these Terms, please contact us at:
               </p>
               <p className="mt-4">
-                <strong>Email:</strong> legal@civicscore.com
+                <strong>Email:</strong> legal@civicscore.info
               </p>
             </section>
           </div>

@@ -18,7 +18,9 @@ const PrivacyPage = () => {
           <h1 className="text-4xl font-display font-bold text-foreground mb-8">Privacy Policy</h1>
           
           <div className="prose prose-lg max-w-none text-muted-foreground space-y-8">
-            <p className="text-sm text-muted-foreground">Last updated: December 9, 2024</p>
+            <p className="text-sm text-muted-foreground">
+              Effective date: July 8, 2026 · Last updated: July 8, 2026 · Governing law: State of Delaware, USA
+            </p>
             
             <section>
               <h2 className="text-2xl font-semibold text-foreground mt-8 mb-4">1. Introduction</h2>
@@ -130,7 +132,7 @@ const PrivacyPage = () => {
                 <li><strong>Opt-out:</strong> Opt out of certain data processing activities</li>
               </ul>
               <p className="mt-4">
-                To exercise these rights, please contact us at privacy@civicscore.com.
+                To exercise these rights, please contact us at privacy@civicscore.info.
               </p>
             </section>
 
@@ -181,7 +183,7 @@ const PrivacyPage = () => {
                 If you have any questions about this Privacy Policy or our data practices, please contact us at:
               </p>
               <p className="mt-4">
-                <strong>Email:</strong> privacy@civicscore.com
+                <strong>Email:</strong> privacy@civicscore.info
               </p>
               <p className="mt-4">
                 For terms of use, please see our <Link to="/terms" className="text-primary hover:underline">Terms & Conditions</Link>.

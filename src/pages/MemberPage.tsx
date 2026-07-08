@@ -44,8 +44,9 @@ import { AlignmentWidget } from "@/features/alignment";
 import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Party = "D" | "R" | "I";
 
@@ -156,6 +157,24 @@ export default function MemberPage() {
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
 
   const canBackfill = useMemo(() => Boolean(user && member?.id), [user, member?.id]);
+
+  // Fetch member level (federal vs state) — not on the domain type
+  const { data: memberMeta } = useQuery({
+    queryKey: ["member-meta", memberId],
+    queryFn: async () => {
+      if (!memberId) return null;
+      const { data } = await supabase
+        .from("members")
+        .select("level")
+        .eq("id", memberId)
+        .maybeSingle();
+      return data as { level: string | null } | null;
+    },
+    enabled: !!memberId,
+  });
+  const isStateLevel = memberMeta?.level === "state";
+
+
 
   if (isLoading) {
     return (
@@ -406,6 +425,22 @@ export default function MemberPage() {
               <p className="text-sm text-muted-foreground mt-4">
                 {chamberDisplay} · {stateName}
               </p>
+              {isStateLevel && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="mt-3 text-xs cursor-help">
+                        Provisional score
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      State-legislator scoring is provisional while OpenStates
+                      bill and vote data is backfilled. Values may change as
+                      complete data becomes available.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
         </div>
@@ -507,11 +542,12 @@ export default function MemberPage() {
           />
         </div>
 
-        {/* Recent Activity + Lobbying Context */}
-        <div className="grid gap-8 lg:grid-cols-2 mb-8">
+        {/* Recent Activity + Lobbying Context (federal only) */}
+        <div className={cn("grid gap-8 mb-8", isStateLevel ? "" : "lg:grid-cols-2")}>
           <MemberActivity memberId={member.id} />
-          <MemberLobbyingCard memberId={member.id} />
+          {!isStateLevel && <MemberLobbyingCard memberId={member.id} />}
         </div>
+
 
 
         {/* Score Breakdown and Bills Grid */}
@@ -764,10 +800,12 @@ export default function MemberPage() {
           onClose={() => setSelectedBillId(null)}
         />
 
-        {/* Financial Relationships Section */}
-        <div className="mt-8">
-          <MemberFinanceSection memberId={member.id} />
-        </div>
+        {/* Financial Relationships (federal FEC data only) */}
+        {!isStateLevel && (
+          <div className="mt-8">
+            <MemberFinanceSection memberId={member.id} />
+          </div>
+        )}
       </main>
 
       <Footer />
