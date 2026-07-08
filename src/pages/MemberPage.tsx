@@ -800,10 +800,12 @@ export default function MemberPage() {
           onClose={() => setSelectedBillId(null)}
         />
 
-        {/* Financial Relationships Section */}
-        <div className="mt-8">
-          <MemberFinanceSection memberId={member.id} />
-        </div>
+        {/* Financial Relationships (federal FEC data only) */}
+        {!isStateLevel && (
+          <div className="mt-8">
+            <MemberFinanceSection memberId={member.id} />
+          </div>
+        )}
       </main>
 
       <Footer />
