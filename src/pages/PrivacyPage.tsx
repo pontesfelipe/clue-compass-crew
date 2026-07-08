@@ -183,7 +183,7 @@ const PrivacyPage = () => {
                 If you have any questions about this Privacy Policy or our data practices, please contact us at:
               </p>
               <p className="mt-4">
-                <strong>Email:</strong> privacy@civicscore.com
+                <strong>Email:</strong> privacy@civicscore.info
               </p>
               <p className="mt-4">
                 For terms of use, please see our <Link to="/terms" className="text-primary hover:underline">Terms & Conditions</Link>.
