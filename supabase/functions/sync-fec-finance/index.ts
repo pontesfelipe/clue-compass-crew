@@ -1059,10 +1059,12 @@ Deno.serve(async (req) => {
     
     const hasMore = nextOffset < (totalActiveMembers || 0)
 
-    // Get total contributions for accurate cumulative progress
+    // Get approximate total contributions for progress display.
+    // Uses Postgres planner estimate (near-instant) instead of a full COUNT scan.
     const { count: totalContributions } = await supabase
       .from('member_contributions')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'estimated', head: true })
+
 
     // Update watermark
     await updateWatermark(supabase, { memberOffset: hasMore ? nextOffset : 0 }, totalContributions || 0)
