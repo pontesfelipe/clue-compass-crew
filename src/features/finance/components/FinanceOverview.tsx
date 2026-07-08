@@ -7,6 +7,14 @@ import type { FundingMetrics } from "../hooks/useMemberFinance";
 import { cn } from "@/lib/utils";
 import { getStateAbbr } from "@/features/states/types";
 
+interface FinanceOverviewProps {
+  finance: MemberFinance;
+  fundingMetrics?: FundingMetrics[];
+  memberState?: string | null;
+  selectedCycle?: number | null;
+}
+
+
 function ScoreGauge({ label, score, tooltip }: { label: string; score: number | null; tooltip: string }) {
   const displayScore = score ?? 50;
   const getColor = (s: number) => {
