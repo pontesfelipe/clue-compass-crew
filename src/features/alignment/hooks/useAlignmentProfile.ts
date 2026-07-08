@@ -152,22 +152,21 @@ export function useSaveAnswers() {
   return useMutation({
     mutationFn: async (answers: { question_id: string; answer_value: number }[]) => {
       if (!user) throw new Error("Not authenticated");
-      
-      // Upsert answers
-      for (const answer of answers) {
-        const { error } = await supabase
-          .from("user_answers")
-          .upsert(
-            {
-              user_id: user.id,
-              question_id: answer.question_id,
-              answer_value: answer.answer_value,
-            },
-            { onConflict: "user_id,question_id" }
-          );
-        
-        if (error) throw error;
-      }
+      if (answers.length === 0) return;
+
+      // Batch upsert all answers in a single request
+      const { error } = await supabase
+        .from("user_answers")
+        .upsert(
+          answers.map((a) => ({
+            user_id: user.id,
+            question_id: a.question_id,
+            answer_value: a.answer_value,
+          })),
+          { onConflict: "user_id,question_id" }
+        );
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alignment_profile"] });

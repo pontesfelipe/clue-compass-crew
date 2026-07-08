@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { formatCurrency, type MemberFinance } from "../types";
 import type { FundingMetrics } from "../hooks/useMemberFinance";
 import { cn } from "@/lib/utils";
+import { getStateAbbr } from "@/features/states/types";
 
 interface FinanceOverviewProps {
   finance: MemberFinance;
@@ -13,19 +14,6 @@ interface FinanceOverviewProps {
   selectedCycle?: number | null;
 }
 
-const stateAbbreviations: Record<string, string> = {
-  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
-  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
-  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
-  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
-  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
-  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
-  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-  'District of Columbia': 'DC'
-};
 
 function ScoreGauge({ label, score, tooltip }: { label: string; score: number | null; tooltip: string }) {
   const displayScore = score ?? 50;
@@ -103,7 +91,7 @@ export function FinanceOverview({ finance, fundingMetrics = [], memberState, sel
     const pctIndividuals = (individualAmt / total) * 100;
     const pctPacs = (pacAmt / total) * 100;
 
-    const stateAbbr = memberState ? (stateAbbreviations[memberState] || memberState) : null;
+    const stateAbbr = memberState ? getStateAbbr(memberState) : null;
     const inStateAmt = stateAbbr ? cycleContributions.filter(c => c.contributorState?.toUpperCase() === stateAbbr.toUpperCase()).reduce((s, c) => s + c.amount, 0) : 0;
     const outStateAmt = stateAbbr ? cycleContributions.filter(c => c.contributorState && c.contributorState.toUpperCase() !== stateAbbr.toUpperCase()).reduce((s, c) => s + c.amount, 0) : 0;
     const geoTotal = inStateAmt + outStateAmt;
