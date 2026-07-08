@@ -188,7 +188,7 @@ export default function MyMatchesPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MapPin className="h-5 w-5 text-primary" />
-                    Top Matches in {userState ? STATE_NAMES[userState] || userState : "Your State"}
+                    Top Matches in {userState ? getStateName(userState) : "Your State"}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
