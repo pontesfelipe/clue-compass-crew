@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { useMember } from "@/hooks/useMembers";
 import { stateNames, getStateAbbr } from "@/hooks/useStateData";
 import { useComparison } from "@/contexts/ComparisonContext";
-import { MemberFinanceSection } from "@/features/finance";
+import { MemberFinanceSection, MemberLobbyingCard } from "@/features/finance";
 import { MemberAISummary } from "@/components/MemberAISummary";
 import { MemberPolicyAreas } from "@/components/MemberPolicyAreas";
 import { ScoringPreferencesDialog } from "@/components/ScoringPreferencesDialog";
@@ -507,10 +507,12 @@ export default function MemberPage() {
           />
         </div>
 
-        {/* Recent Activity */}
-        <div className="mb-8">
+        {/* Recent Activity + Lobbying Context */}
+        <div className="grid gap-8 lg:grid-cols-2 mb-8">
           <MemberActivity memberId={member.id} />
+          <MemberLobbyingCard memberId={member.id} />
         </div>
+
 
         {/* Score Breakdown and Bills Grid */}
         <div className="grid gap-8 lg:grid-cols-2 mb-8">

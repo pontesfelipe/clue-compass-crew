@@ -223,13 +223,18 @@ export default function MethodologyPage() {
               <div className="bg-card rounded-xl border border-border p-6">
                 <div className="flex items-center gap-3 mb-3">
                   <TrendingUp className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-foreground">Issue Alignment</h3>
+                  <h3 className="font-semibold text-foreground">Your Alignment (personalized)</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Compares your selected priority issues with the member's voting record and sponsored legislation.
+                  Only shown when you complete a profile. Compares your selected priority issues to the member&apos;s actual votes and sponsorships — never mixed into the public overall score, so the base score stays party-blind.
                 </p>
               </div>
             </div>
+            <div className="mt-4 bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Public overall score weights</p>
+              <p>Attendance 30% · Productivity 35% · Collaboration 35%. Personalized alignment is displayed separately from the overall score, never blended in.</p>
+            </div>
+
           </section>
 
           {/* Data Updates */}
