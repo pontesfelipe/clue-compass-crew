@@ -308,8 +308,9 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
 
     console.log('Summary generated, saving to database...')
 
-    // Log AI usage
+    // Log AI usage (attributed to caller so rate-limit query works)
     await supabase.from('ai_usage_log').insert({
+      user_id: userId,
       operation_type: 'member_summary',
       tokens_used: tokensUsed,
       model: usedProvider === 'OpenAI' ? 'gpt-4o-mini' : 'google/gemini-2.5-flash',
