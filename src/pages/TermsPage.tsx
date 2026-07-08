@@ -146,7 +146,7 @@ const TermsPage = () => {
                 If you have any questions about these Terms, please contact us at:
               </p>
               <p className="mt-4">
-                <strong>Email:</strong> legal@civicscore.com
+                <strong>Email:</strong> legal@civicscore.info
               </p>
             </section>
           </div>
