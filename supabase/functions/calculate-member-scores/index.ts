@@ -337,20 +337,23 @@ Deno.serve(async (req) => {
         
         // Bipartisanship Score
         const bipartisanshipScore = Math.round(Math.min((bipartisanBills / 10) * 100, 100))
-        
-        // Issue Alignment Score (baseline)
-        const activityRatio = Math.min((billsSponsored + billsCosponsored) / 200, 1)
-        const issueAlignmentScore = Math.round(50 + (activityRatio * 35))
 
-        // Overall Score: weighted average
+        // Activity Diversity Score (LEGACY: stored in issue_alignment_score column for backward-compat,
+        // but no longer contributes to overall_score. Real per-user issue alignment lives in
+        // alignment_score, populated by compute-politician-positions.)
+        const activityRatio = Math.min((billsSponsored + billsCosponsored) / 200, 1)
+        const activityDiversityScore = Math.round(50 + (activityRatio * 35))
+
+        // Overall Score: weighted average across the three measured behaviors.
+        // Removed the fake "issue alignment" proxy from the mean — it was legislative
+        // activity relabeled, which violates the app's neutrality promise.
         const overallScore = Math.round(
-          (attendanceScore * 0.25) +
-          (productivityScore * 0.25) +
-          (bipartisanshipScore * 0.25) +
-          (issueAlignmentScore * 0.25)
+          (attendanceScore * 0.30) +
+          (productivityScore * 0.35) +
+          (bipartisanshipScore * 0.35)
         )
 
-        // Update member_scores table
+        // Update member_scores table (alignment_score left NULL — filled by compute-politician-positions per user)
         const { error: updateError } = await supabase
           .from('member_scores')
           .upsert({
@@ -360,7 +363,7 @@ Deno.serve(async (req) => {
             productivity_score: productivityScore,
             attendance_score: attendanceScore,
             bipartisanship_score: bipartisanshipScore,
-            issue_alignment_score: issueAlignmentScore,
+            issue_alignment_score: activityDiversityScore, // legacy column, activity proxy
             votes_cast: votesCast,
             votes_missed: votesMissed,
             bills_sponsored: billsSponsored,

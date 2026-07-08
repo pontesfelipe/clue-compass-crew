@@ -433,6 +433,29 @@ async function processJob(
         max: 20, // Process 20 members per run
       });
 
+    // Phase 1.3: newly-scheduled syncs
+    case 'sync-committees':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-committees', {});
+
+    case 'sync-lobbying':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-lobbying', {});
+
+    case 'sync-governors':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-governors', {});
+
+    case 'sync-state-legislators':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-state-legislators', {});
+
+    case 'sync-state-bills':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-state-bills', {});
+
+    case 'sync-state-votes':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'sync-state-votes', {});
+
+    case 'compute-positions':
+    case 'compute-politician-positions':
+      return await callEdgeFunction(supabaseUrl, supabaseKey, 'compute-politician-positions', {});
+
     default:
       console.log(`[sync-worker] Unknown job type: ${job.id}`);
       return {

@@ -31,6 +31,14 @@ const DEFAULT_JOBS: JobConfig[] = [
   { id: 'classify-issues', provider: 'internal', job_type: 'classification', frequency_minutes: 360, priority: 40 },
   { id: 'state-scores', provider: 'internal', job_type: 'state_scores', frequency_minutes: 120, priority: 30 },
   { id: 'data-healing-agent', provider: 'internal', job_type: 'healing', frequency_minutes: 30, priority: 45 },
+  // Phase 1.3: previously-orphaned syncs now scheduled
+  { id: 'sync-committees', provider: 'congress', job_type: 'committees', frequency_minutes: 1440, priority: 65 },
+  { id: 'sync-lobbying', provider: 'senate-lda', job_type: 'lobbying', frequency_minutes: 1440, priority: 55 },
+  { id: 'sync-governors', provider: 'nga', job_type: 'governors', frequency_minutes: 1440, priority: 60 },
+  { id: 'sync-state-legislators', provider: 'openstates', job_type: 'state_legislators', frequency_minutes: 10080, priority: 35 },
+  { id: 'sync-state-bills', provider: 'openstates', job_type: 'state_bills', frequency_minutes: 720, priority: 32 },
+  { id: 'sync-state-votes', provider: 'openstates', job_type: 'state_votes', frequency_minutes: 720, priority: 31 },
+  { id: 'compute-positions', provider: 'internal', job_type: 'positions', frequency_minutes: 360, priority: 38 },
 ];
 
 Deno.serve(async (req) => {
