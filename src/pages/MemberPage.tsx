@@ -542,11 +542,12 @@ export default function MemberPage() {
           />
         </div>
 
-        {/* Recent Activity + Lobbying Context */}
-        <div className="grid gap-8 lg:grid-cols-2 mb-8">
+        {/* Recent Activity + Lobbying Context (federal only) */}
+        <div className={cn("grid gap-8 mb-8", isStateLevel ? "" : "lg:grid-cols-2")}>
           <MemberActivity memberId={member.id} />
-          <MemberLobbyingCard memberId={member.id} />
+          {!isStateLevel && <MemberLobbyingCard memberId={member.id} />}
         </div>
+
 
 
         {/* Score Breakdown and Bills Grid */}
