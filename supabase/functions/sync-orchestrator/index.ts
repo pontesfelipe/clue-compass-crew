@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       }
 
       // Check dependencies before marking as due
-      const depCheck = await canRunJob(supabase, job, syncStateMap);
+      const depCheck = canRunJob(job, syncStateMap, progressMap);
 
       // Check if job is due
       const frequencyMs = (job.frequency_minutes || 60) * 60 * 1000;
@@ -160,63 +160,31 @@ Deno.serve(async (req) => {
   }
 });
 
-// Check if a job can run based on its dependencies
-async function canRunJob(
-  supabase: any,
+// Check if a job can run based on its dependencies.
+// Uses pre-fetched progressMap to avoid an N+1 query per dependency.
+function canRunJob(
   job: any,
-  syncStateMap: Map<string, any>
-): Promise<{ canRun: boolean; reason?: string }> {
-  // If job has no dependencies, can always run
+  _syncStateMap: Map<string, any>,
+  progressMap: Map<string, any>
+): { canRun: boolean; reason?: string } {
   const dependencies = job.dependencies || [];
-  if (dependencies.length === 0) {
-    return { canRun: true };
-  }
+  if (dependencies.length === 0) return { canRun: true };
+  if (job.wait_for_dependencies === false) return { canRun: true };
 
-  // If job doesn't wait for dependencies, can run
-  if (job.wait_for_dependencies === false) {
-    return { canRun: true };
-  }
-
-  // Check if all dependencies have run successfully recently
   const checkInterval = new Date();
-  checkInterval.setMinutes(checkInterval.getMinutes() - (job.frequency_minutes || 60) * 2); // 2x the interval
+  checkInterval.setMinutes(checkInterval.getMinutes() - (job.frequency_minutes || 60) * 2);
 
   for (const depName of dependencies) {
-    // Try to find the sync state for this dependency
-    let depState = null;
-    
-    // Check by progress ID first
-    const { data: depProgress } = await supabase
-      .from("sync_progress")
-      .select("last_run_at, status")
-      .eq("id", depName)
-      .maybeSingle();
-
-    if (depProgress) {
-      depState = {
-        last_sync_at: depProgress.last_run_at,
-        status: depProgress.status
-      };
-    }
-
-    if (!depState) {
-      // Dependency has never run - allow job to proceed (might be first run)
-      console.log(`Dependency '${depName}' has not run yet, allowing job to proceed`);
+    const depProgress: any = progressMap.get(depName);
+    if (!depProgress) {
+      // Dependency has never run - allow (first run)
       continue;
     }
-
-    if (depState.status === 'error' || depState.status === 'failed') {
-      return {
-        canRun: false,
-        reason: `Dependency '${depName}' last sync failed`
-      };
+    if (depProgress.status === 'error' || depProgress.status === 'failed') {
+      return { canRun: false, reason: `Dependency '${depName}' last sync failed` };
     }
-
-    if (depState.last_sync_at && new Date(depState.last_sync_at) < checkInterval) {
-      return {
-        canRun: false,
-        reason: `Dependency '${depName}' data is stale`
-      };
+    if (depProgress.last_run_at && new Date(depProgress.last_run_at) < checkInterval) {
+      return { canRun: false, reason: `Dependency '${depName}' data is stale` };
     }
   }
 

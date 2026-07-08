@@ -49,8 +49,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { memberId, force } = await req.json()
-    
+    // Require authenticated caller — prevents anonymous unbounded OpenAI spend
+    const authHeader = req.headers.get('Authorization') || ''
+    const jwt = authHeader.replace(/^Bearer\s+/i, '')
+    if (!jwt) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { memberId } = await req.json()
+
     if (!memberId) {
       return new Response(
         JSON.stringify({ error: 'Member ID is required' }),
@@ -60,7 +70,7 @@ Deno.serve(async (req) => {
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-    
+
     if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
       throw new Error('No AI API key configured (need OPENAI_API_KEY or LOVABLE_API_KEY)')
     }
@@ -69,32 +79,59 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    console.log(`Generating summary for member: ${memberId}`)
+    // Validate JWT and identify user
+    const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } }
+    })
+    const { data: userData, error: userErr } = await anonClient.auth.getUser()
+    const userId = userData?.user?.id
+    if (userErr || !userId) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-    // Check if summary was generated within the last 24 hours (unless force=true)
-    if (!force) {
-      const { data: existingSummary } = await supabase
-        .from('member_summaries')
-        .select('generated_at, summary')
-        .eq('member_id', memberId)
-        .single()
+    // Per-user rate limit: max 10 AI summary requests per hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { count: recentCalls } = await supabase
+      .from('ai_usage_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('operation_type', 'member_summary')
+      .eq('user_id', userId)
+      .gte('created_at', oneHourAgo)
 
-      if (existingSummary) {
-        const generatedAt = new Date(existingSummary.generated_at)
-        const oneDayAgo = new Date()
-        oneDayAgo.setHours(oneDayAgo.getHours() - 24)
-        
-        if (generatedAt > oneDayAgo) {
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              summary: existingSummary.summary,
-              cached: true,
-              message: 'Using cached summary (generated within 24 hours)'
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
+    if ((recentCalls || 0) >= 10) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded (10 summaries/hour). Please try again later.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(`Generating summary for member: ${memberId} (user: ${userId})`)
+
+    // Always use cached summary if generated within the last 24 hours
+    const { data: existingSummary } = await supabase
+      .from('member_summaries')
+      .select('generated_at, summary')
+      .eq('member_id', memberId)
+      .single()
+
+    if (existingSummary) {
+      const generatedAt = new Date(existingSummary.generated_at)
+      const oneDayAgo = new Date()
+      oneDayAgo.setHours(oneDayAgo.getHours() - 24)
+
+      if (generatedAt > oneDayAgo) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            summary: existingSummary.summary,
+            cached: true,
+            message: 'Using cached summary (generated within 24 hours)'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
     }
 
@@ -271,8 +308,9 @@ Keep the language simple and avoid political jargon. Focus on facts, not opinion
 
     console.log('Summary generated, saving to database...')
 
-    // Log AI usage
+    // Log AI usage (attributed to caller so rate-limit query works)
     await supabase.from('ai_usage_log').insert({
+      user_id: userId,
       operation_type: 'member_summary',
       tokens_used: tokensUsed,
       model: usedProvider === 'OpenAI' ? 'gpt-4o-mini' : 'google/gemini-2.5-flash',

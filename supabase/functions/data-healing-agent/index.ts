@@ -7,7 +7,10 @@ const corsHeaders = {
 };
 
 // Configuration
-const FEC_API_KEY = Deno.env.get("FEC_API_KEY") || "DEMO_KEY";
+const FEC_API_KEY = Deno.env.get("FEC_API_KEY");
+if (!FEC_API_KEY) {
+  console.error("FEC_API_KEY is not configured — FEC lookups will be skipped rather than using DEMO_KEY");
+}
 const FEC_API_BASE = "https://api.open.fec.gov/v1";
 const MAX_RUNTIME_MS = 50000; // 50 seconds max runtime
 const CONTRIBUTION_THRESHOLD = 101; // If less than this, might be incomplete

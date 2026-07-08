@@ -240,10 +240,18 @@ Deno.serve(async (req) => {
           chamber = 'house'
         } else {
           const anySenate = terms.some((t: any) => (t.chamber || '').toLowerCase().includes('senate'))
-          if (anySenate) {
+          const anyHouse = terms.some((t: any) => {
+            const c = (t.chamber || '').toLowerCase()
+            return c.includes('house') || c.includes('representative')
+          })
+          if (anySenate && !anyHouse) {
             chamber = 'senate'
+          } else if (anyHouse && !anySenate) {
+            chamber = 'house'
           } else {
-            chamber = 'senate'
+            // Ambiguous — infer from district presence in any term, default to house
+            const anyTermHasDistrict = terms.some((t: any) => t.district !== undefined && t.district !== null && t.district !== '')
+            chamber = anyTermHasDistrict ? 'house' : 'senate'
           }
         }
       }
