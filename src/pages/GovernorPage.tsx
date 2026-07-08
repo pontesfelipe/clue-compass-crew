@@ -18,6 +18,7 @@ import {
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useGovernor } from "@/features/governors";
+import { Progress } from "@/components/ui/progress";
 
 const partyColors: Record<string, string> = {
   D: "bg-democrat text-democrat-foreground",
