@@ -7,7 +7,10 @@ const corsHeaders = {
 }
 
 const FEC_API_BASE = "https://api.open.fec.gov/v1"
-const FEC_API_KEY = Deno.env.get('FEC_API_KEY') || "DEMO_KEY"
+const FEC_API_KEY = Deno.env.get('FEC_API_KEY')
+if (!FEC_API_KEY) {
+  console.error('FEC_API_KEY is not configured — refusing to fall back to DEMO_KEY (1k/day limit)')
+}
 const PROVIDER = 'fec'
 const DATASET = 'contributions'
 const JOB_ID = "fec-finance"
