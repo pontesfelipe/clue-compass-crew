@@ -7,35 +7,72 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
 export default function DataSourcesPage() {
+  const { data: status } = useDataStatus();
+
+  const fmt = (ts: string | null | undefined) =>
+    ts ? `${formatDistanceToNow(new Date(ts))} ago` : "Not yet synced";
+
   const sources = [
     {
       name: "Congress.gov API",
       icon: FileText,
       description: "The official source for congressional information including member details, bill text, sponsorships, and legislative actions.",
       url: "https://api.congress.gov/",
-      dataTypes: ["Member profiles", "Bill information", "Sponsorships", "Legislative actions"]
+      dataTypes: ["Member profiles", "Bill information", "Sponsorships", "Legislative actions"],
+      lastSync: status?.congress_bills_last_synced_at,
+      syncStatus: status?.congress_bills_status,
+      recordCount: status?.congress_bills_total,
     },
     {
-      name: "House Clerk Roll Call Votes",
+      name: "House Clerk & Senate Roll Call Votes",
       icon: Vote,
-      description: "Official House of Representatives voting records with detailed roll call information for every vote.",
+      description: "Official chamber voting records with detailed roll call information for every vote.",
       url: "https://clerk.house.gov/Votes",
-      dataTypes: ["House roll call votes", "Member vote positions", "Vote totals", "Vote dates"]
-    },
-    {
-      name: "Senate.gov Vote Records",
-      icon: Vote,
-      description: "Official Senate voting records with comprehensive roll call data for all Senate votes.",
-      url: "https://www.senate.gov/legislative/votes.htm",
-      dataTypes: ["Senate roll call votes", "Senator positions", "Vote results"]
+      dataTypes: ["Roll call votes", "Member positions", "Vote totals", "Vote dates"],
+      lastSync: status?.congress_votes_last_synced_at,
+      syncStatus: status?.congress_votes_status,
+      recordCount: status?.congress_votes_total,
     },
     {
       name: "Federal Election Commission (FEC)",
       icon: DollarSign,
       description: "Campaign finance data including individual contributions, PAC donations, and expenditure reports.",
       url: "https://www.fec.gov/data/",
-      dataTypes: ["Campaign contributions", "Donor information", "PAC data", "Expenditures"]
-    }
+      dataTypes: ["Campaign contributions", "Donor information", "PAC data", "Expenditures"],
+      lastSync: status?.fec_funding_last_synced_at,
+      syncStatus: status?.fec_funding_status,
+      recordCount: status?.fec_funding_total,
+    },
+    {
+      name: "OpenStates API",
+      icon: Building2,
+      description: "State legislature data including state legislators, bills, and votes across all 50 states.",
+      url: "https://openstates.org/",
+      dataTypes: ["State legislators", "State bills", "State votes", "Governors"],
+      lastSync: null as string | null,
+      syncStatus: "scheduled",
+      recordCount: undefined as number | undefined,
+    },
+    {
+      name: "Senate LDA (Lobbying Disclosure)",
+      icon: Landmark,
+      description: "Lobbying registrations and quarterly filings disclosed under the Lobbying Disclosure Act.",
+      url: "https://lda.senate.gov/api/",
+      dataTypes: ["Lobbying filings", "Industry activity", "Registrants"],
+      lastSync: null as string | null,
+      syncStatus: "scheduled",
+      recordCount: undefined as number | undefined,
+    },
+    {
+      name: "unitedstates/congress-legislators",
+      icon: Users,
+      description: "Curated dataset for congressional committee assignments and legislator biographical data.",
+      url: "https://github.com/unitedstates/congress-legislators",
+      dataTypes: ["Committee assignments", "Bioguide identifiers"],
+      lastSync: null as string | null,
+      syncStatus: "scheduled",
+      recordCount: undefined as number | undefined,
+    },
   ];
 
   return (
