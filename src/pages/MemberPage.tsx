@@ -44,8 +44,9 @@ import { AlignmentWidget } from "@/features/alignment";
 import { useMemberTracking } from "@/hooks/useMemberTracking";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Party = "D" | "R" | "I";
 
