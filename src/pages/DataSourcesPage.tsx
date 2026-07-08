@@ -117,10 +117,28 @@ export default function DataSourcesPage() {
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       </div>
-                      <p className="text-muted-foreground mb-4">{source.description}</p>
+                      <p className="text-muted-foreground mb-3">{source.description}</p>
+                      <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                        <Badge variant="outline" className="gap-1">
+                          <Clock className="h-3 w-3" />
+                          {fmt(source.lastSync)}
+                        </Badge>
+                        {source.syncStatus && (
+                          <Badge
+                            variant={source.syncStatus === "success" || source.syncStatus === "idle" ? "secondary" : "outline"}
+                          >
+                            {source.syncStatus}
+                          </Badge>
+                        )}
+                        {typeof source.recordCount === "number" && source.recordCount > 0 && (
+                          <Badge variant="secondary">
+                            {source.recordCount.toLocaleString()} records
+                          </Badge>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {source.dataTypes.map((type) => (
-                          <span 
+                          <span
                             key={type}
                             className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
                           >
@@ -130,6 +148,12 @@ export default function DataSourcesPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          {/* end sources list */}
+
                 </div>
               ))}
             </div>
