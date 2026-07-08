@@ -154,10 +154,6 @@ export default function DataSourcesPage() {
           </section>
           {/* end sources list */}
 
-                </div>
-              ))}
-            </div>
-          </section>
 
           {/* Data Update Notes */}
           <section className="mb-12">
