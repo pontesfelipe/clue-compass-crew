@@ -20,8 +20,10 @@ export function useIssues() {
 }
 
 export function useIssueQuestions(issueIds: string[]) {
+  // Stable cache key regardless of array reference/order
+  const stableKey = [...issueIds].sort().join(",");
   return useQuery({
-    queryKey: ["issue_questions", issueIds],
+    queryKey: ["issue_questions", stableKey],
     queryFn: async () => {
       if (!issueIds.length) return [];
       
@@ -181,12 +183,21 @@ export function useCompleteProfile() {
   return useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      
+
+      // Read current version and increment so downstream caches see a fresh version
+      const { data: current } = await supabase
+        .from("profiles")
+        .select("profile_version")
+        .eq("user_id", user.id)
+        .single();
+
+      const nextVersion = (current?.profile_version ?? 0) + 1;
+
       const { error } = await supabase
         .from("profiles")
         .update({
           profile_complete: true,
-          profile_version: 1,
+          profile_version: nextVersion,
         })
         .eq("user_id", user.id);
       
@@ -220,6 +231,15 @@ export function useDeleteProfile() {
         supabase.from("user_issue_priorities").delete().eq("user_id", user.id),
       ]);
       
+      // Read current version and increment so cache consumers see a version bump on reset
+      const { data: current } = await supabase
+        .from("profiles")
+        .select("profile_version")
+        .eq("user_id", user.id)
+        .single();
+
+      const nextVersion = (current?.profile_version ?? 0) + 1;
+
       // Reset profile fields
       const { error } = await supabase
         .from("profiles")
@@ -227,7 +247,7 @@ export function useDeleteProfile() {
           zip_code: null,
           age_range: null,
           profile_complete: false,
-          profile_version: 1,
+          profile_version: nextVersion,
         })
         .eq("user_id", user.id);
       

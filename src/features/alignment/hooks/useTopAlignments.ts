@@ -30,12 +30,13 @@ export function useTopAlignments(limit = 5) {
         return { inState: [], outOfState: [] };
       }
 
-      // Get all cached alignments for this user
+      // Get top cached alignments for this user (server-side ordered + capped)
       const { data: alignments, error: alignError } = await supabase
         .from("user_politician_alignment")
         .select("politician_id, overall_alignment")
         .eq("user_id", user.id)
-        .order("overall_alignment", { ascending: false });
+        .order("overall_alignment", { ascending: false })
+        .limit(200);
 
       if (alignError) throw alignError;
       if (!alignments?.length) {
