@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     // Get votes without bill_id (or all if force)
     const query = supabase
       .from('votes')
-      .select('id, description, question, congress')
+      .select('id, description, question, congress, vote_date')
       .order('vote_date', { ascending: false })
       .limit(batchSize)
     
@@ -98,56 +98,54 @@ Deno.serve(async (req) => {
     // Pre-fetch all bills for efficiency
     const { data: bills } = await supabase
       .from('bills')
-      .select('id, bill_type, bill_number, congress, policy_area')
+      .select('id, bill_type, bill_number, congress')
+      .eq('level', 'federal')
 
-    const billMap = new Map<string, { id: string; policyArea: string | null }>()
+    const billMap = new Map<string, string>()
     for (const bill of bills || []) {
-      const key = `${bill.bill_type}-${bill.bill_number}-${bill.congress}`
-      billMap.set(key, { id: bill.id, policyArea: bill.policy_area })
+      billMap.set(`${bill.bill_type}-${bill.bill_number}-${bill.congress}`, bill.id)
     }
     console.log(`Loaded ${billMap.size} bills for matching`)
+
+    // Derive congress from a vote_date (year >= 2025 => 119, 2023-2024 => 118, etc.)
+    const congressFromDate = (dateStr: string | null): number => {
+      if (!dateStr) return 119
+      const year = new Date(dateStr).getUTCFullYear()
+      return Math.floor((year - 1789) / 2) + 1
+    }
 
     let linked = 0
     let notFound = 0
     const updates: { id: string; bill_id: string }[] = []
 
     for (const vote of votes) {
-      // Try to parse from description first, then question
       const ref = parseBillReference(vote.description) || parseBillReference(vote.question)
-      
-      if (!ref) {
-        notFound++
-        continue
+      if (!ref) { notFound++; continue }
+
+      const primaryCongress = vote.congress || congressFromDate(vote.vote_date)
+      const candidates = [primaryCongress, primaryCongress - 1, primaryCongress + 1]
+      let matchedId: string | null = null
+      for (const c of candidates) {
+        const id = billMap.get(`${ref.billType}-${ref.billNumber}-${c}`)
+        if (id) { matchedId = id; break }
       }
-
-      // Use vote's congress or default
-      const congress = vote.congress || ref.congress
-      const key = `${ref.billType}-${ref.billNumber}-${congress}`
-      const bill = billMap.get(key)
-
-      if (bill) {
-        updates.push({ id: vote.id, bill_id: bill.id })
+      if (matchedId) {
+        updates.push({ id: vote.id, bill_id: matchedId })
         linked++
       } else {
-        // Try adjacent congress (some votes reference previous congress bills)
-        const altKey = `${ref.billType}-${ref.billNumber}-${congress - 1}`
-        const altBill = billMap.get(altKey)
-        if (altBill) {
-          updates.push({ id: vote.id, bill_id: altBill.id })
-          linked++
-        } else {
-          notFound++
-        }
+        notFound++
       }
     }
 
-    // Batch update votes with bill_id
-    for (const update of updates) {
-      await supabase
-        .from('votes')
-        .update({ bill_id: update.bill_id })
-        .eq('id', update.id)
+    // Parallel batched updates (chunks of 25)
+    const chunkSize = 25
+    for (let i = 0; i < updates.length; i += chunkSize) {
+      const chunk = updates.slice(i, i + chunkSize)
+      await Promise.all(chunk.map((u) =>
+        supabase.from('votes').update({ bill_id: u.bill_id }).eq('id', u.id)
+      ))
     }
+
 
     const result = {
       success: true,
