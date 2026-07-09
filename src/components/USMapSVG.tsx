@@ -13,23 +13,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
-// Score color scale: higher = more green (better score)
+// Score color scale calibrated to real distribution (avg ~58, range ~40-74)
 const getScoreColor = (score: number | null): string => {
-  if (score === null) return "#d1d5db"; // muted gray
-  if (score >= 81) return "#16a34a";  // Excellent - dark green
-  if (score >= 71) return "#22c55e";  // Good - light green
-  if (score >= 66) return "#f59e0b";  // Average - amber
-  if (score >= 61) return "#f97316";  // Below average - orange
-  return "#dc2626";                    // Below 60 - red
+  if (score === null) return "#d1d5db";
+  if (score >= 70) return "#15803d";  // Top - deep green
+  if (score >= 64) return "#4ade80";  // Upper - light green
+  if (score >= 60) return "#facc15";  // Mid - yellow
+  if (score >= 55) return "#fb923c";  // Lower - orange
+  return "#dc2626";                    // Bottom - red
 };
 
-// HSL version for tiles
 const getScoreColorHSL = (score: number | null): string => {
   if (score === null) return "hsl(var(--muted))";
-  if (score >= 81) return "hsl(142 76% 36%)";
-  if (score >= 71) return "hsl(142 71% 45%)";
-  if (score >= 66) return "hsl(38 92% 50%)";
-  if (score >= 61) return "hsl(25 95% 53%)";
+  if (score >= 70) return "hsl(142 72% 29%)";
+  if (score >= 64) return "hsl(142 76% 58%)";
+  if (score >= 60) return "hsl(48 96% 53%)";
+  if (score >= 55) return "hsl(27 96% 61%)";
   return "hsl(0 72% 51%)";
 };
 
