@@ -412,11 +412,11 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
             <div className="space-y-1.5">
               {[
-                { color: "#16a34a", range: "81+", label: "Excellent" },
-                { color: "#22c55e", range: "71-80", label: "Good" },
-                { color: "#f59e0b", range: "66-70", label: "Average" },
-                { color: "#f97316", range: "61-65", label: "Below avg" },
-                { color: "#dc2626", range: "≤60", label: "Needs work" },
+                { color: "#15803d", range: "70+", label: "Top tier" },
+                { color: "#4ade80", range: "64-69", label: "Above avg" },
+                { color: "#facc15", range: "60-63", label: "Average" },
+                { color: "#fb923c", range: "55-59", label: "Below avg" },
+                { color: "#dc2626", range: "<55", label: "Bottom tier" },
               ].map((item) => (
                 <div key={item.range} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
