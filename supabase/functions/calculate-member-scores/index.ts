@@ -457,31 +457,11 @@ async function runScoreCalculation(supabase: any, congressApiKey: string, useRea
         }
       }, { onConflict: 'id' })
 
-    const result = {
-      success: true,
-      scoresUpdated,
-      errors: errors.slice(0, 10),
-      message: `Successfully calculated scores for ${scoresUpdated} members`
-    }
-
-    console.log('Score calculation completed:', result)
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
+    console.log(`Score calculation completed: ${scoresUpdated} scores updated, ${errors.length} errors`)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Score calculation error:', errorMessage)
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: errorMessage 
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    )
+    throw error
   }
-})
+}
+
