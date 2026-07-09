@@ -773,6 +773,36 @@ export type Database = {
         }
         Relationships: []
       }
+      job_locks: {
+        Row: {
+          created_at: string
+          expires_at: string
+          job_id: string
+          lock_token: string
+          locked_at: string
+          locked_by: string
+          metadata: Json | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          job_id: string
+          lock_token?: string
+          locked_at?: string
+          locked_by: string
+          metadata?: Json | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          job_id?: string
+          lock_token?: string
+          locked_at?: string
+          locked_by?: string
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
       member_committees: {
         Row: {
           chamber: string
@@ -2346,7 +2376,23 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_job_lock: {
+        Args: {
+          p_duration_seconds?: number
+          p_job_id: string
+          p_locked_by: string
+        }
+        Returns: string
+      }
       cleanup_user_activity_logs: { Args: never; Returns: undefined }
+      extend_job_lock: {
+        Args: {
+          p_additional_seconds?: number
+          p_job_id: string
+          p_lock_token: string
+        }
+        Returns: boolean
+      }
       get_chamber_score_aggregates: {
         Args: never
         Returns: {
@@ -2392,6 +2438,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      release_job_lock: {
+        Args: { p_job_id: string; p_lock_token: string }
         Returns: boolean
       }
     }
