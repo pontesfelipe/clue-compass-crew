@@ -95,6 +95,7 @@ async function processStateBills(
 
     const data = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
     maxPage = data.pagination?.max_page ?? 1;
+    console.log(`[${state.abbr}] page=${page} results=${(data.results||[]).length} maxPage=${maxPage} keys=${Object.keys(data||{}).join(',')} sample=${JSON.stringify(data).slice(0,300)}`);
 
     const rows = (data.results as OSBill[] || []).map((b) => {
       if (b.updated_at && (!latestUpdate || b.updated_at > latestUpdate)) {
