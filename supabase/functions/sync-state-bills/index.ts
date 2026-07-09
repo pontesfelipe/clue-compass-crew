@@ -97,8 +97,11 @@ async function processStateBills(
     const url = `${BASE_URL}/bills?${params.toString()}`;
 
     const data = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
+    if (!data || !Array.isArray(data.results)) {
+      throw new Error(`OpenStates returned malformed response for ${state.abbr} p${page}: ${JSON.stringify(data).slice(0, 200)}`);
+    }
     maxPage = data.pagination?.max_page ?? 1;
-    const results = (data.results as OSBill[]) || [];
+    const results = data.results as OSBill[];
     console.log(`[${state.abbr}] page=${page} results=${results.length} maxPage=${maxPage}`);
 
     let hitWatermark = false;
