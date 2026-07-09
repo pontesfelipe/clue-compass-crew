@@ -96,9 +96,11 @@ async function processStateBills(
     });
     const url = `${BASE_URL}/bills?${params.toString()}`;
 
-    const data = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
+    const raw = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
+    // Some fetchJson paths / OpenStates responses wrap payload under { data: {...} }
+    const data = raw?.results ? raw : (raw?.data ?? raw);
     if (!data || !Array.isArray(data.results)) {
-      throw new Error(`OpenStates returned malformed response for ${state.abbr} p${page}: ${JSON.stringify(data).slice(0, 200)}`);
+      throw new Error(`OpenStates malformed response for ${state.abbr} p${page}: ${JSON.stringify(raw).slice(0, 200)}`);
     }
     maxPage = data.pagination?.max_page ?? 1;
     const results = data.results as OSBill[];
