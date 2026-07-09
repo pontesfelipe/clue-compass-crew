@@ -13,23 +13,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
-// Score color scale: higher = more green (better score)
+// Score color scale calibrated to real distribution (avg ~58, range ~40-74)
 const getScoreColor = (score: number | null): string => {
-  if (score === null) return "#d1d5db"; // muted gray
-  if (score >= 81) return "#16a34a";  // Excellent - dark green
-  if (score >= 71) return "#22c55e";  // Good - light green
-  if (score >= 66) return "#f59e0b";  // Average - amber
-  if (score >= 61) return "#f97316";  // Below average - orange
-  return "#dc2626";                    // Below 60 - red
+  if (score === null) return "#d1d5db";
+  if (score >= 70) return "#15803d";  // Top - deep green
+  if (score >= 64) return "#4ade80";  // Upper - light green
+  if (score >= 60) return "#facc15";  // Mid - yellow
+  if (score >= 55) return "#fb923c";  // Lower - orange
+  return "#dc2626";                    // Bottom - red
 };
 
-// HSL version for tiles
 const getScoreColorHSL = (score: number | null): string => {
   if (score === null) return "hsl(var(--muted))";
-  if (score >= 81) return "hsl(142 76% 36%)";
-  if (score >= 71) return "hsl(142 71% 45%)";
-  if (score >= 66) return "hsl(38 92% 50%)";
-  if (score >= 61) return "hsl(25 95% 53%)";
+  if (score >= 70) return "hsl(142 72% 29%)";
+  if (score >= 64) return "hsl(142 76% 58%)";
+  if (score >= 60) return "hsl(48 96% 53%)";
+  if (score >= 55) return "hsl(27 96% 61%)";
   return "hsl(0 72% 51%)";
 };
 
@@ -413,11 +412,11 @@ export function USMapSVG({ onStateClick, showStats = true }: USMapSVGProps) {
             <p className="text-sm font-medium text-foreground mb-3">Score Guide</p>
             <div className="space-y-1.5">
               {[
-                { color: "#16a34a", range: "81+", label: "Excellent" },
-                { color: "#22c55e", range: "71-80", label: "Good" },
-                { color: "#f59e0b", range: "66-70", label: "Average" },
-                { color: "#f97316", range: "61-65", label: "Below avg" },
-                { color: "#dc2626", range: "≤60", label: "Needs work" },
+                { color: "#15803d", range: "70+", label: "Top tier" },
+                { color: "#4ade80", range: "64-69", label: "Above avg" },
+                { color: "#facc15", range: "60-63", label: "Average" },
+                { color: "#fb923c", range: "55-59", label: "Below avg" },
+                { color: "#dc2626", range: "<55", label: "Bottom tier" },
               ].map((item) => (
                 <div key={item.range} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
