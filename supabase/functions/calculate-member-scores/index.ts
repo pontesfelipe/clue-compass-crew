@@ -65,30 +65,64 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  const congressApiKey = Deno.env.get('CONGRESS_GOV_API_KEY')
+  if (!congressApiKey) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'CONGRESS_GOV_API_KEY is not configured' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  if (await isSyncPaused(supabase)) {
+    console.log('Sync paused - skipping member score calculation')
+    return new Response(
+      JSON.stringify({ success: false, message: 'Syncs are currently paused', paused: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  const url = new URL(req.url)
+  const useRealVoteData = url.searchParams.get('useRealVotes') !== 'false'
+  const runSync = url.searchParams.get('sync') === 'true'
+
+  // Long-running job: run in background and return immediately so cron/pg_net
+  // doesn't time out with HTTP 504. Pass ?sync=true when the caller needs the full result.
+  const work = (async () => {
+    try {
+      await runScoreCalculation(supabase, congressApiKey, useRealVoteData)
+    } catch (e) {
+      console.error('Background score calculation failed:', e instanceof Error ? e.message : e)
+    }
+  })()
+
+  if (runSync) {
+    await work
+    return new Response(
+      JSON.stringify({ success: true, message: 'Score calculation completed' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // @ts-ignore EdgeRuntime is defined in the Supabase edge runtime
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+    // @ts-ignore
+    EdgeRuntime.waitUntil(work)
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, background: true, message: 'Score calculation started in background' }),
+    { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+})
+
+async function runScoreCalculation(supabase: any, congressApiKey: string, useRealVoteData: boolean) {
   try {
-    const congressApiKey = Deno.env.get('CONGRESS_GOV_API_KEY')
-    if (!congressApiKey) {
-      throw new Error('CONGRESS_GOV_API_KEY is not configured')
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Check if syncs are paused
-    if (await isSyncPaused(supabase)) {
-      console.log('Sync paused - skipping member score calculation')
-      return new Response(
-        JSON.stringify({ success: false, message: 'Syncs are currently paused', paused: true }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Parse query params
-    const url = new URL(req.url)
-    const useRealVoteData = url.searchParams.get('useRealVotes') !== 'false'
-
     console.log(`Starting member score calculation (useRealVotes: ${useRealVoteData})...`)
+
 
     // Get api_sources id for congress_gov
     const { data: sourceData } = await supabase
