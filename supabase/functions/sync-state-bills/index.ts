@@ -83,22 +83,36 @@ async function processStateBills(
   let latestUpdate: string | null = null;
 
   while (budget.shouldContinue()) {
+    // NOTE: OpenStates v3 /bills currently 502s when using OCD jurisdiction id or
+    // sort=updated_desc / updated_since. Use the jurisdiction *name* and
+    // sort=latest_action_desc, which are responsive. Stop early once we page
+    // past our watermark (latest_action_date <= updatedSince).
     const params = new URLSearchParams({
-      jurisdiction: state.ocd,
-      sort: "updated_desc",
+      jurisdiction: state.name,
+      sort: "latest_action_desc",
       page: String(page),
       per_page: "20",
       apikey: apiKey,
     });
-    if (updatedSince) params.set("updated_since", updatedSince);
     const url = `${BASE_URL}/bills?${params.toString()}`;
 
-    const data = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
+    const raw = await fetchJson<any>(url, {}, PROVIDER, {}, budget);
+    // Some fetchJson paths / OpenStates responses wrap payload under { data: {...} }
+    const data = raw?.results ? raw : (raw?.data ?? raw);
+    if (!data || !Array.isArray(data.results)) {
+      throw new Error(`OpenStates malformed response for ${state.abbr} p${page}: ${JSON.stringify(raw).slice(0, 200)}`);
+    }
     maxPage = data.pagination?.max_page ?? 1;
+    const results = data.results as OSBill[];
+    console.log(`[${state.abbr}] page=${page} results=${results.length} maxPage=${maxPage}`);
 
-    const rows = (data.results as OSBill[] || []).map((b) => {
+    let hitWatermark = false;
+    const rows = results.map((b) => {
       if (b.updated_at && (!latestUpdate || b.updated_at > latestUpdate)) {
         latestUpdate = b.updated_at;
+      }
+      if (updatedSince && b.latest_action_date && b.latest_action_date < updatedSince.slice(0, 10)) {
+        hitWatermark = true;
       }
       return {
         openstates_id: b.id,
@@ -129,7 +143,9 @@ async function processStateBills(
       upserted += rows.length;
     }
 
-    if (page >= maxPage) return { upserted, nextPage: null, latestUpdate };
+    if (page >= maxPage || hitWatermark || results.length === 0) {
+      return { upserted, nextPage: null, latestUpdate };
+    }
     page++;
   }
 
