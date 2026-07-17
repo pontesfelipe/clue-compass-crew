@@ -130,25 +130,14 @@ export function DataHealthPanel() {
   const { data: dataGaps, isLoading: loadingGaps, refetch: refetchGaps } = useQuery({
     queryKey: ["admin-data-gaps"],
     queryFn: async (): Promise<DataGaps> => {
-      // Run multiple queries in parallel
+      // Run high-level totals in parallel. Distinct-member gaps are
+      // computed below via count queries — PostgREST cannot run raw
+      // subqueries inside not.in(), so we approximate with totals.
       const [
-        missingContributions,
-        missingScores,
-        missingCommittees,
-        missingPositions,
         totalMembers,
         totalBills,
-        billsClassified
+        billsClassified,
       ] = await Promise.all([
-        supabase.from("members").select("id", { count: "exact", head: true })
-          .not("fec_candidate_id", "is", null)
-          .not("id", "in", `(SELECT DISTINCT member_id FROM member_contributions)`),
-        supabase.from("members").select("id", { count: "exact", head: true })
-          .not("id", "in", `(SELECT DISTINCT member_id FROM member_scores WHERE user_id IS NULL)`),
-        supabase.from("members").select("id", { count: "exact", head: true })
-          .not("id", "in", `(SELECT DISTINCT member_id FROM member_committees)`),
-        supabase.from("members").select("id", { count: "exact", head: true })
-          .not("id", "in", `(SELECT DISTINCT politician_id FROM politician_issue_positions)`),
         supabase.from("members").select("id", { count: "exact", head: true }),
         supabase.from("bills").select("id", { count: "exact", head: true }),
         supabase.from("issue_signals").select("id", { count: "exact", head: true })
