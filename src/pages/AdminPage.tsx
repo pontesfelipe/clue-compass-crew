@@ -401,6 +401,18 @@ export default function AdminPage() {
                 <HeartPulse className="h-4 w-4" />
                 Data Health
               </TabsTrigger>
+              <TabsTrigger value="deepdive" className="flex items-center gap-2">
+                <UserSearch className="h-4 w-4" />
+                User Deep Dive
+              </TabsTrigger>
+              <TabsTrigger value="jobs" className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Jobs
+              </TabsTrigger>
+              <TabsTrigger value="missing" className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Missing Data
+              </TabsTrigger>
               <TabsTrigger value="docs" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 Documentation
