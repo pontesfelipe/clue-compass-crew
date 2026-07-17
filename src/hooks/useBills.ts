@@ -112,7 +112,9 @@ export function useCongressSessions() {
       // was silently capped at PostgREST's 1000-row default.
       const { data, error } = await supabase.rpc("get_congress_sessions");
       if (error) throw error;
-      return (data as { congress: number }[] | null)?.map((r) => r.congress) ?? [];
+      return (data as { congress: number | null }[] | null)
+        ?.map((r) => r.congress)
+        .filter((c): c is number => c !== null && c !== undefined) ?? [];
     },
   });
 }
