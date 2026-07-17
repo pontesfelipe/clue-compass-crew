@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity, Brain, BookOpen, HeartPulse } from "lucide-react";
+import { Loader2, Users, Database, RefreshCw, Shield, BarChart3, Search, ToggleLeft, FileSearch, Pencil, Trash2, Activity, Brain, BookOpen, HeartPulse, UserSearch, Briefcase, AlertTriangle } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { SyncStatusCard } from "@/components/admin/SyncStatusCard";
 import { DataInspectorContent } from "@/components/admin/DataInspectorContent";
@@ -21,6 +21,9 @@ import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import { UserActivityLog } from "@/components/admin/UserActivityLog";
 import { DocumentationContent } from "@/components/admin/DocumentationContent";
 import { DataHealthPanel } from "@/components/admin/DataHealthPanel";
+import { UserDeepDive } from "@/components/admin/UserDeepDive";
+import { JobsPanel } from "@/components/admin/JobsPanel";
+import { MissingDataPanel } from "@/components/admin/MissingDataPanel";
 import {
   Select,
   SelectContent,
@@ -398,6 +401,18 @@ export default function AdminPage() {
                 <HeartPulse className="h-4 w-4" />
                 Data Health
               </TabsTrigger>
+              <TabsTrigger value="deepdive" className="flex items-center gap-2">
+                <UserSearch className="h-4 w-4" />
+                User Deep Dive
+              </TabsTrigger>
+              <TabsTrigger value="jobs" className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Jobs
+              </TabsTrigger>
+              <TabsTrigger value="missing" className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Missing Data
+              </TabsTrigger>
               <TabsTrigger value="docs" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 Documentation
@@ -770,6 +785,18 @@ export default function AdminPage() {
 
             <TabsContent value="health">
               <DataHealthPanel />
+            </TabsContent>
+
+            <TabsContent value="deepdive">
+              <UserDeepDive />
+            </TabsContent>
+
+            <TabsContent value="jobs">
+              <JobsPanel />
+            </TabsContent>
+
+            <TabsContent value="missing">
+              <MissingDataPanel />
             </TabsContent>
 
             <TabsContent value="docs">
