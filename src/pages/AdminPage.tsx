@@ -787,6 +787,18 @@ export default function AdminPage() {
               <DataHealthPanel />
             </TabsContent>
 
+            <TabsContent value="deepdive">
+              <UserDeepDive />
+            </TabsContent>
+
+            <TabsContent value="jobs">
+              <JobsPanel />
+            </TabsContent>
+
+            <TabsContent value="missing">
+              <MissingDataPanel />
+            </TabsContent>
+
             <TabsContent value="docs">
               <DocumentationContent />
             </TabsContent>
